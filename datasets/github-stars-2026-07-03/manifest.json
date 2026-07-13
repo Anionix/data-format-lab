@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "dataset_id": "github-stars-2026-07-03",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.1.0",
+    "name": "github-stars-2026-07-03.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 135332,
+    "compressed_sha256": "7ec5d63fef91c2655fc5ff3ee89d719689ee0c33081f02669224be96e1d2b9c2"
+  },
+  "source_sha256": "39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e",
+  "canonical_hash": "1bf35022cce6d752f7959907b6a60d4024123e045a270f4aa286acbefbe4ca39",
+  "rows": 2331,
+  "columns": [
+    {"name": "group", "arrow_type": "string", "nullable": true},
+    {"name": "category", "arrow_type": "string", "nullable": true},
+    {"name": "micro_category", "arrow_type": "string", "nullable": true},
+    {"name": "classification_score", "arrow_type": "float64", "nullable": true},
+    {"name": "matched_terms", "arrow_type": "string", "nullable": true},
+    {"name": "full_name", "arrow_type": "string", "nullable": true},
+    {"name": "html_url", "arrow_type": "string", "nullable": true},
+    {"name": "language", "arrow_type": "string", "nullable": true},
+    {"name": "repo_stars", "arrow_type": "int64", "nullable": true},
+    {"name": "fork", "arrow_type": "bool", "nullable": true},
+    {"name": "archived", "arrow_type": "bool", "nullable": true},
+    {"name": "topics", "arrow_type": "string", "nullable": true},
+    {"name": "description", "arrow_type": "string", "nullable": true}
+  ],
+  "expected_counts": {
+    "rows": 2331,
+    "group_ai_llm": 119,
+    "repo_stars_gt_100000": 15,
+    "full_name_anomalyco_opencode": 1
+  },
+  "provenance": {
+    "source_endpoint": "https://api.github.com/users/steipete/starred?per_page=100",
+    "captured_on": "2026-07-03",
+    "api_version": null,
+    "raw_api_response_retained": false,
+    "classification_generator_retained": false
+  }
+}
