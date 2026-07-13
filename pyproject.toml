@@ -8,10 +8,9 @@ version = "0.1.0"
 description = "Evidence-first benchmarks for data formats and format-native claims"
 requires-python = "==3.12.*"
 dependencies = [
-  "pyarrow==19.0.1",
+  "pyarrow==23.0.1",
   "pylance==8.0.0",
   "tiktoken==0.12.0",
-  "tsfile==2.3.1",
   "vortex-data==0.76.0",
   "zstandard==0.25.0",
 ]
@@ -20,7 +19,7 @@ dependencies = [
 research = ["pyfastlanes==0.1.3.post9"]
 
 [dependency-groups]
-dev = ["pytest==9.0.2"]
+dev = ["pytest==9.0.3"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/format_bench"]
