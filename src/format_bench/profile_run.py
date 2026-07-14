@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Callable
 
 from .canonical import read_csv
+from .claims.fastlanes import run_fastlanes_claim
 from .claims.tsfile import run_tsfile_claim
 from .claims.vortex import run_vortex_stress
 from .formats.lance import build_fts, query_fts
-from .model import Comparability, ExecutionState, Lane, transition
+from .model import Comparability, ExecutionState, Lane, TargetTier, transition
 from .prompt import token_metrics, write_prompt_artifacts
 from .research import load_research_records
 from .runner import environment_info
@@ -45,8 +46,17 @@ def _finish(root: Path, run_dir: Path, run: dict, profile: Lane, evidence: dict)
     return path
 
 
-def _attempt(comparability: Comparability, invoke: Callable[[], dict]) -> dict:
-    base = {"lane": Lane.CLAIMS, "comparability": comparability, "failure_reason": None}
+def _attempt(
+    comparability: Comparability,
+    invoke: Callable[[], dict],
+    target_tier: TargetTier = TargetTier.CORE,
+) -> dict:
+    base = {
+        "lane": Lane.CLAIMS,
+        "comparability": comparability,
+        "target_tier": target_tier,
+        "failure_reason": None,
+    }
     try:
         evidence = invoke()
         returned_status = evidence.get("status")
@@ -121,7 +131,7 @@ def run_claims(
             ),
         ),
         "tsfile_time_series": _attempt(
-            Comparability.FULL_COMPARABLE,
+            Comparability.ADAPTED,
             lambda: run_tsfile_claim(
                 claims_dir / "tsfile-time-series",
                 devices=ts_devices,
@@ -129,6 +139,16 @@ def run_claims(
                 warmups=min(3, warmups),
                 iterations=min(10, iterations),
             ),
+            TargetTier.EXPERIMENTAL,
+        ),
+        "fastlanes_official": _attempt(
+            Comparability.PARTIAL,
+            lambda: run_fastlanes_claim(
+                claims_dir / "fastlanes-official",
+                numeric_rows=1024 if run["fixture"] else 1_000_000,
+                timeout_seconds=30 if run["fixture"] else 900,
+            ),
+            TargetTier.EXPERIMENTAL,
         ),
         "negative_research": load_research_records(root),
     }
