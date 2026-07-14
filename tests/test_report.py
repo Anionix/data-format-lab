@@ -22,6 +22,7 @@ def test_prompt_report_is_deterministic_and_includes_exact_tokens(tmp_path: Path
         },
         "results": {
             "prompt_v1": {
+                "state": "BENCHMARKED",
                 "metrics": {
                     "corpus": {
                         "compact_tsv": {
@@ -50,7 +51,9 @@ def test_prompt_report_is_deterministic_and_includes_exact_tokens(tmp_path: Path
     assert "| compact_tsv | 10 | 4 | 2 | 16 | 3 | 4 |" in first
     assert "Direct token counts for binary formats are N/A." in first
     assert json.loads((tmp_path / "manifest.json").read_text())["state"] == "REPORTED"
-    assert json.loads((tmp_path / "results.json").read_text())["state"] == "REPORTED"
+    reported = json.loads((tmp_path / "results.json").read_text())
+    assert reported["state"] == "REPORTED"
+    assert reported["results"]["prompt_v1"]["state"] == "REPORTED"
     assert render_report(tmp_path).read_text() == first
 
 
@@ -105,3 +108,50 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     report = render_report(tmp_path).read_text()
 
     assert "| csv | read_all | 1 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
+    reported = json.loads((tmp_path / "manifest.json").read_text())
+    assert reported["formats"][0]["state"] == "REPORTED"
+
+
+def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
+    manifest = {"state": "BENCHMARKED", "dataset_id": "fixture", "formats": []}
+    results = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "run_id": "claims-fixture",
+        "profile": "claims",
+        "environment": {
+            "git_commit": "abc",
+            "flake_lock_sha256": "def",
+            "platform": "test-os",
+            "machine": "test-cpu",
+            "python": "3.12.0",
+        },
+        "results": {
+            "measured": {
+                "comparability": "FULL_COMPARABLE",
+                "state": "BENCHMARKED",
+                "failure_reason": None,
+            },
+            "unsupported": {
+                "comparability": "ADAPTED",
+                "state": "UNSUPPORTED",
+                "failure_reason": "missing dependency",
+            },
+            "negative_research": {
+                "partial": {
+                    "comparability": "PARTIAL",
+                    "state": "FAILED",
+                    "attempts": [{"result": "failed build"}],
+                }
+            },
+        },
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "results.json").write_text(json.dumps(results))
+
+    render_report(tmp_path)
+
+    reported = json.loads((tmp_path / "results.json").read_text())["results"]
+    assert reported["measured"]["state"] == "REPORTED"
+    assert reported["unsupported"]["state"] == "UNSUPPORTED"
+    assert reported["negative_research"]["partial"]["state"] == "FAILED"

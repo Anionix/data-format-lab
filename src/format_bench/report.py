@@ -184,6 +184,22 @@ def _prompt(results: dict) -> list[str]:
     ]
 
 
+def _report_observations(manifest: dict, results: dict) -> None:
+    for entry in manifest.get("formats", []):
+        if entry.get("state") == ExecutionState.BENCHMARKED:
+            entry["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
+    for observation in results.get("results", {}).values():
+        if (
+            isinstance(observation, dict)
+            and observation.get("state") == ExecutionState.BENCHMARKED
+        ):
+            observation["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
+
+
 def render_report(run_dir: Path) -> Path:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
@@ -213,6 +229,7 @@ def render_report(run_dir: Path) -> Path:
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
+    _report_observations(manifest, results)
     for payload, json_path in (
         (manifest, run_dir / "manifest.json"),
         (results, run_dir / "results.json"),
