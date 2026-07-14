@@ -33,16 +33,21 @@ def run_request(request_path: Path) -> dict:
     manifest = _safe(root, request["manifest"])
     artifact = _safe(root, request["artifact"])
     adapter = adapter_map()[target]
+    details = {}
     try:
         if expectation is RobustnessExpectation.MUST_ROUNDTRIP:
-            verification = adapter.verify_roundtrip(
-                artifact, json.loads(manifest.read_text(encoding="utf-8"))
-            )
-            observed = (
-                ObservedOutcome.ROUNDTRIP_EQUAL
-                if verification["passed"]
-                else ObservedOutcome.VALUE_MISMATCH
-            )
+            effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+            adapter.read(artifact, effective_manifest)
+            try:
+                verification = adapter.verify_roundtrip(artifact, effective_manifest)
+                observed = (
+                    ObservedOutcome.ROUNDTRIP_EQUAL
+                    if verification["passed"]
+                    else ObservedOutcome.VALUE_MISMATCH
+                )
+            except ValueError as error:
+                observed = ObservedOutcome.VALUE_MISMATCH
+                details = {"error_type": type(error).__name__, "message": str(error)[-500:]}
         else:
             effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
             robustness_target = target_map().get(target)
@@ -57,7 +62,7 @@ def run_request(request_path: Path) -> dict:
     except Exception as error:  # Target errors are evidence, not parent-process failures.
         observed = ObservedOutcome.REJECTED
         return {"schema_version": "1", "case_id": case_id, "observed": observed, "details": {"error_type": type(error).__name__, "message": str(error)[-500:]}}
-    return {"schema_version": "1", "case_id": case_id, "observed": observed, "details": {}}
+    return {"schema_version": "1", "case_id": case_id, "observed": observed, "details": details}
 
 
 def main() -> None:
