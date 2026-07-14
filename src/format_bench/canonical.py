@@ -57,7 +57,12 @@ def _normalize_row(row: dict, column_names: list[str]) -> dict:
 def canonical_hash(table: pa.Table) -> str:
     rows = [_normalize_row(row, table.column_names) for row in table.to_pylist()]
     sort_column = "full_name" if "full_name" in table.column_names else table.column_names[0]
-    rows.sort(key=lambda row: row[sort_column] or "")
+    rows.sort(
+        key=lambda row: (
+            row[sort_column] or "",
+            json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+        )
+    )
     payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

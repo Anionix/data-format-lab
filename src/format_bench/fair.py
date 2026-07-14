@@ -78,5 +78,9 @@ def result_evidence(table: pa.Table) -> dict:
     return {
         "rows": table.num_rows,
         "columns": table.column_names,
+        "schema": [
+            {"name": field.name, "type": str(field.type), "nullable": field.nullable}
+            for field in table.schema
+        ],
         "normalized_hash": canonical_hash(table),
     }

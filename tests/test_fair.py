@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
 
 from format_bench.canonical import read_csv
@@ -9,6 +10,18 @@ from format_bench.formats.lance import LanceAdapter
 from format_bench.formats.parquet import ParquetAdapter
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
 from format_bench.formats.vortex import VortexAdapter
+
+
+def test_result_evidence_includes_type_and_nullability() -> None:
+    nullable = pa.Table.from_arrays(
+        [pa.array([1], type=pa.int64())],
+        schema=pa.schema([pa.field("value", pa.int64(), nullable=True)]),
+    )
+    required = pa.Table.from_arrays(
+        [pa.array([1], type=pa.int64())],
+        schema=pa.schema([pa.field("value", pa.int64(), nullable=False)]),
+    )
+    assert result_evidence(nullable)["schema"] != result_evidence(required)["schema"]
 
 
 @pytest.mark.parametrize(
