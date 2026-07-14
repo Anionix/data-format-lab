@@ -59,7 +59,8 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         item
         for item in formats
         if item["comparability"] == Comparability.FULL_COMPARABLE
-        and item["state"] == ExecutionState.BENCHMARKED
+        and item["state"]
+        in {ExecutionState.BENCHMARKED, ExecutionState.REPORTED}
     ]
     output.extend(["", "## Storage Ordering", ""])
     if not manifest["rankable"]:
@@ -184,6 +185,22 @@ def _prompt(results: dict) -> list[str]:
     ]
 
 
+def _report_observations(manifest: dict, results: dict) -> None:
+    for entry in manifest.get("formats", []):
+        if entry.get("state") == ExecutionState.BENCHMARKED:
+            entry["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
+    for observation in results.get("results", {}).values():
+        if (
+            isinstance(observation, dict)
+            and observation.get("state") == ExecutionState.BENCHMARKED
+        ):
+            observation["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
+
+
 def render_report(run_dir: Path) -> Path:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
@@ -192,6 +209,8 @@ def render_report(run_dir: Path) -> Path:
         raise ValueError("report requires benchmarked or reported manifest and results")
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("manifest and results dataset mismatch")
+    # Project observation transitions into the report; persist only after it exists.
+    _report_observations(manifest, results)
     profile = results["profile"]
     sections = {
         "fair": lambda: _fair(manifest, results),
