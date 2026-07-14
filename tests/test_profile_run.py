@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 
 from format_bench.formats.text import CsvAdapter
-from format_bench.profile_run import run_claims, run_prompt
+from format_bench.model import Comparability
+from format_bench.profile_run import _attempt, run_claims, run_prompt
 from format_bench.workflow import prepare_run, verify_run
 
 
@@ -49,3 +50,12 @@ def test_claim_run_isolates_each_claim_and_negative_record(tmp_path: Path) -> No
     assert results["vortex_stress"]["state"] == "BENCHMARKED"
     assert results["tsfile_time_series"]["state"] in {"BENCHMARKED", "UNSUPPORTED"}
     assert set(results["negative_research"]) == {"anyblox", "fastlanes", "nimble"}
+
+
+def test_claim_returned_failure_stays_terminal() -> None:
+    result = _attempt(
+        Comparability.FULL_COMPARABLE,
+        lambda: {"status": "FAILED", "reason": "result mismatch"},
+    )
+    assert result["state"] == "FAILED"
+    assert result["failure_reason"] == "result mismatch"
