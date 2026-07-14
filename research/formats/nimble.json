@@ -8,6 +8,7 @@
   "attempted_on": "2026-07-14",
   "comparability": "UNAVAILABLE",
   "state": "UNSUPPORTED",
+  "claim_summary": "official CMake generation did not complete",
   "attempts": [
     {
       "entrypoint": "official CMake build with Velox and OpenZL submodules",

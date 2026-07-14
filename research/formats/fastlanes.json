@@ -8,6 +8,7 @@
   "attempted_on": "2026-07-14",
   "comparability": "PARTIAL",
   "state": "FAILED",
+  "claim_summary": "numeric data round-tripped; partial-vector string dictionary lookup failed",
   "correction": "the earlier numeric -11 result used comma-separated input against the official pipe-delimited reader and is superseded",
   "attempts": [
     {

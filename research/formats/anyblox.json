@@ -11,6 +11,7 @@
   "attempted_on": "2026-07-14",
   "comparability": "PARTIAL",
   "state": "FAILED",
+  "claim_summary": "reproducibility artifact did not build with stable Rust",
   "attempts": [
     {
       "entrypoint": "official bundler and anyblox2csv Cargo targets",

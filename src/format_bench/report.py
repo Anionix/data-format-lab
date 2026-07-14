@@ -122,7 +122,7 @@ def _claims(results: dict) -> list[str]:
         if name == "negative_research":
             for research_name, record in sorted(item.items()):
                 rows.append(
-                    [research_name, record["comparability"], record["state"], record["attempts"][-1]["result"]]
+                    [research_name, record["comparability"], record["state"], record["claim_summary"]]
                 )
         else:
             rows.append([name, item["comparability"], item["state"], item.get("failure_reason")])
@@ -131,7 +131,7 @@ def _claims(results: dict) -> list[str]:
         "",
         "Claims use workload-specific contracts and are not a universal format ranking.",
         "",
-        *_table(["Claim", "Comparability", "State", "Failure or last result"], rows),
+        *_table(["Claim", "Comparability", "State", "Failure or claim result"], rows),
     ]
 
 
