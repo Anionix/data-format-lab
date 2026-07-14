@@ -55,15 +55,23 @@ jobs:
       - name: Synchronize frozen Python environment
         run: nix develop --command uv sync --frozen
 
+      - name: Install isolated TsFile claim dependencies
+        if: inputs.profile == 'claims'
+        run: |
+          nix develop --command uv pip install --python .venv/bin/python \
+            pytz==2026.2 tzdata==2026.3
+          nix develop --command uv pip install --python .venv/bin/python --no-deps \
+            pandas==2.2.3 tsfile==2.3.1
+
       - name: Run selected benchmark lane
         id: benchmark
         run: |
-          result=$(nix develop --command uv run --frozen format-bench run \
+          result=$(nix develop --command .venv/bin/format-bench run \
             --profile "${{ inputs.profile }}" \
             --dataset github-stars-2026-07-03)
           run_dir=$(dirname "$result")
-          nix develop --command uv run --frozen format-bench report --run-dir "$run_dir"
-          archive=$(nix develop --command uv run --frozen format-bench package \
+          nix develop --command .venv/bin/format-bench report --run-dir "$run_dir"
+          archive=$(nix develop --command .venv/bin/format-bench package \
             --run-dir "$run_dir" \
             --platform linux-x86_64)
           echo "archive=$archive" >> "$GITHUB_OUTPUT"

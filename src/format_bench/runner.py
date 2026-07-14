@@ -145,7 +145,17 @@ def _sha256(path: Path) -> str:
 
 def environment_info(root: Path) -> dict:
     packages = {}
-    for name in ("pyarrow", "pylance", "tiktoken", "vortex-data", "zstandard"):
+    for name in (
+        "pandas",
+        "pyarrow",
+        "pylance",
+        "pytz",
+        "tiktoken",
+        "tsfile",
+        "tzdata",
+        "vortex-data",
+        "zstandard",
+    ):
         try:
             packages[name] = version(name)
         except PackageNotFoundError:
