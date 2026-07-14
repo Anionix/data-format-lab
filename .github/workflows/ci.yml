@@ -46,10 +46,12 @@ jobs:
             run_smoke() {
               local profile="$1"
               local log="$2"
+              local run_dir="runs/ci-smoke-$profile-$BASHPID"
               {
                 result=$(.venv/bin/format-bench run \
                   --profile "$profile" \
                   --dataset github-stars-2026-07-03 \
+                  --run-dir "$run_dir" \
                   --fixture)
                 run_dir=$(dirname "$result")
                 report=$(.venv/bin/format-bench report --run-dir "$run_dir")
