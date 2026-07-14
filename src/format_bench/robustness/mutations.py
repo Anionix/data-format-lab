@@ -4,17 +4,18 @@ import hashlib
 import json
 import random
 from dataclasses import dataclass
-from typing import Any
+
+MutationValue = int | str
 
 
 @dataclass(frozen=True)
 class MutationRecipe:
     mutation_id: str
     operation: str
-    parameters: tuple[tuple[str, Any], ...] = ()
+    parameters: tuple[tuple[str, MutationValue], ...] = ()
 
     @property
-    def options(self) -> dict[str, Any]:
+    def options(self) -> dict[str, MutationValue]:
         return dict(self.parameters)
 
 
@@ -23,10 +24,10 @@ def mutation_recipes(size: int, seed: int, count: int) -> tuple[MutationRecipe, 
         raise ValueError("mutation size and count must be non-negative")
     rng = random.Random(seed)
     operations = ("empty", "truncate", "flip_header", "flip_middle", "flip_footer", "zero_range", "append")
-    recipes = []
+    recipes: list[MutationRecipe] = []
     for index in range(count):
         operation = operations[index % len(operations)]
-        parameters: dict[str, Any] = {}
+        parameters: dict[str, MutationValue] = {}
         if operation == "truncate":
             parameters["offset"] = rng.randint(0, size)
         elif operation.startswith("flip_"):
@@ -61,17 +62,31 @@ def apply_mutation(data: bytes, recipe: MutationRecipe) -> bytes:
     if recipe.operation == "empty":
         return b""
     if recipe.operation == "truncate":
-        return data[: options["offset"]]
+        return data[: _int_option(options, "offset")]
     if recipe.operation == "append":
-        return data + bytes.fromhex(options["hex"])
+        return data + bytes.fromhex(_str_option(options, "hex"))
     if not recipe.operation.startswith("flip_") and recipe.operation != "zero_range":
         raise ValueError(f"unknown mutation operation: {recipe.operation}")
     mutated = bytearray(data)
-    offset = options["offset"]
+    offset = _int_option(options, "offset")
     if recipe.operation.startswith("flip_"):
         if offset < len(mutated):
-            mutated[offset] ^= options["mask"]
+            mutated[offset] ^= _int_option(options, "mask")
     elif recipe.operation == "zero_range":
-        stop = min(len(mutated), offset + options["length"])
+        stop = min(len(mutated), offset + _int_option(options, "length"))
         mutated[offset:stop] = b"\0" * (stop - offset)
     return bytes(mutated)
+
+
+def _int_option(options: dict[str, MutationValue], name: str) -> int:
+    value = options[name]
+    if not isinstance(value, int):
+        raise TypeError(f"mutation option {name} must be an integer")
+    return value
+
+
+def _str_option(options: dict[str, MutationValue], name: str) -> str:
+    value = options[name]
+    if not isinstance(value, str):
+        raise TypeError(f"mutation option {name} must be a string")
+    return value

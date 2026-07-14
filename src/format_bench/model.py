@@ -89,7 +89,9 @@ _ACTIVE = frozenset(
 
 
 def transition(current: ExecutionState, target: ExecutionState) -> ExecutionState:
-    allowed = _NEXT[current] | (_FAILURES if current in _ACTIVE else frozenset())
+    allowed: frozenset[ExecutionState] = _NEXT[current]
+    if current in _ACTIVE:
+        allowed = allowed | _FAILURES
     if target not in allowed:
         raise ValueError(f"illegal evidence transition: {current} -> {target}")
     return target

@@ -16,7 +16,7 @@ from format_bench.model import (
     RobustnessVerdict,
 )
 from format_bench.profile_run import _finish, _load
-from format_bench.robustness.cases import generated_cases, materialize_case, named_cases
+from format_bench.robustness.cases import CaseSpec, generated_cases, materialize_case, named_cases
 from format_bench.robustness.evidence import ArtifactBudgetExceeded, EvidenceStore
 from format_bench.robustness.mutations import apply_mutation, mutation_recipes
 from format_bench.robustness.paths import reject_symlink_tree
@@ -97,7 +97,7 @@ def _execute(
     mutation_index: int | None = None,
     mutation_count: int = 0,
     seed: int = 0,
-) -> dict:
+) -> dict[str, object]:
     with (
         tempfile.TemporaryDirectory() as temporary,
         tempfile.TemporaryDirectory(dir=run_dir) as process_directory,
@@ -180,7 +180,7 @@ def _execute(
     if mutation is not None:
         result["mutation"] = mutation
     store.store_bytes(prefix / "result.json", _json(result))
-    return result
+    return dict(result)
 
 
 def _incomplete(target, case_id, expectation, observed, error) -> dict:
@@ -225,7 +225,7 @@ def run_bounded(
     observations: list[dict] = []
     exhausted = False
     for target in targets or core_targets():
-        work = [(case, None) for case in cases]
+        work: list[tuple[CaseSpec | None, int | None]] = [(case, None) for case in cases]
         work.extend((None, index) for index in range(mutation_count))
         for case, mutation_index in work:
             case_id = case.case_id if case else f"mutation-{mutation_index:03d}"
@@ -235,12 +235,21 @@ def run_bounded(
                 else RobustnessExpectation.MUST_NOT_CRASH
             )
             try:
-                table = (
-                    base
-                    if mutation_index is not None
+                if (
+                    mutation_index is not None
                     or expectation is not RobustnessExpectation.MUST_ROUNDTRIP
-                    else materialize_case(base, case)
-                )
+                ):
+                    table = base
+                else:
+                    assert case is not None
+                    table = materialize_case(base, case)
+                malformed = None
+                if (
+                    case is not None
+                    and mutation_index is None
+                    and expectation is not RobustnessExpectation.MUST_ROUNDTRIP
+                ):
+                    malformed = case.category
                 observations.append(
                     _execute(
                         run_dir,
@@ -251,12 +260,7 @@ def run_bounded(
                         table,
                         dataset,
                         timeout_seconds,
-                        malformed=(
-                            None
-                            if mutation_index is not None
-                            or expectation is RobustnessExpectation.MUST_ROUNDTRIP
-                            else case.category
-                        ),
+                        malformed=malformed,
                         mutation_index=mutation_index,
                         mutation_count=mutation_count,
                         seed=seed,

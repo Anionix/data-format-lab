@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Sequence
+from typing import BinaryIO, NotRequired, Sequence, TypedDict, cast
 
 from format_bench.model import (
     ObservedOutcome,
@@ -17,6 +17,93 @@ from format_bench.model import (
     robustness_verdict,
 )
 from format_bench.robustness.paths import reject_symlink_tree
+
+
+class ProcessEvidence(TypedDict):
+    exit_code: int | None
+    signal: int | None
+    timed_out: bool
+    duration_ms: float
+    stdout_bytes: int
+    stderr_bytes: int
+    stdout_truncated: bool
+    stderr_truncated: bool
+    output_budget_bytes: int | None
+    output_exhausted: bool
+
+
+class RequestPayload(TypedDict):
+    schema_version: str
+    contract_version: str
+    case_id: str
+    target: str
+    expectation: str
+    manifest: str
+    artifact: str
+
+
+class WorkerResponse(TypedDict):
+    observed: str
+    details: dict[str, object]
+
+
+class CaseResult(TypedDict):
+    case_id: str
+    target: str
+    expectation: RobustnessExpectation
+    observed: ObservedOutcome
+    verdict: RobustnessVerdict
+    details: dict[str, object]
+    process: ProcessEvidence
+    stdout: str
+    stderr: str
+    schema_version: NotRequired[str]
+    contract_version: NotRequired[str]
+    tier: NotRequired[object]
+    input_canonical_hash: NotRequired[str]
+    input_arrow: NotRequired[object]
+    artifact_records: NotRequired[object]
+    mutation: NotRequired[object]
+
+
+def _json_object(value: object, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be a JSON object")
+    mapping = cast(dict[object, object], value)
+    if not all(isinstance(key, str) for key in mapping):
+        raise TypeError(f"{label} keys must be strings")
+    return cast(dict[str, object], mapping)
+
+
+def _string_field(value: dict[str, object], name: str) -> str:
+    field = value.get(name)
+    if not isinstance(field, str):
+        raise TypeError(f"{name} must be a string")
+    return field
+
+
+def _request_payload(path: Path) -> RequestPayload:
+    value: object = json.loads(path.read_text(encoding="utf-8"))
+    payload = _json_object(value, "request")
+    return {
+        "schema_version": _string_field(payload, "schema_version"),
+        "contract_version": _string_field(payload, "contract_version"),
+        "case_id": _string_field(payload, "case_id"),
+        "target": _string_field(payload, "target"),
+        "expectation": _string_field(payload, "expectation"),
+        "manifest": _string_field(payload, "manifest"),
+        "artifact": _string_field(payload, "artifact"),
+    }
+
+
+def _worker_response(stdout: str) -> WorkerResponse:
+    value: object = json.loads(stdout.strip())
+    response = _json_object(value, "worker response")
+    details: object = response.get("details", {})
+    return {
+        "observed": _string_field(response, "observed"),
+        "details": _json_object(details, "worker response details"),
+    }
 
 
 def _relative(root: Path, value: str | Path) -> Path:
@@ -39,7 +126,7 @@ def _save(path: Path, content: str) -> str:
     return path.relative_to(path.parents[2]).as_posix()
 
 
-def _tail(handle, size: int, limit: int) -> str:
+def _tail(handle: BinaryIO, size: int, limit: int) -> str:
     handle.seek(max(0, size - limit))
     return handle.read(limit).decode("utf-8", errors="ignore")
 
@@ -49,7 +136,7 @@ def _process(
     cwd: Path,
     timeout: float,
     output_budget_bytes: int | None = None,
-) -> tuple[dict, str, str]:
+) -> tuple[ProcessEvidence, str, str]:
     if output_budget_bytes is not None and output_budget_bytes < 0:
         raise ValueError("output budget must be non-negative")
     started = time.perf_counter_ns()
@@ -96,12 +183,15 @@ def _process(
     }, stdout, stderr
 
 
-def _outcome(process: dict, stdout: str) -> tuple[ObservedOutcome, dict]:
+def _outcome(
+    process: ProcessEvidence, stdout: str
+) -> tuple[ObservedOutcome, dict[str, object]]:
     if process["timed_out"]:
         return ObservedOutcome.TIMED_OUT, {}
-    if process["signal"] is not None:
+    signal_number = process["signal"]
+    if signal_number is not None:
         try:
-            name = signal.Signals(process["signal"]).name
+            name = signal.Signals(signal_number).name
         except ValueError:
             name = None
         return ObservedOutcome.CRASHED, {"signal_name": name}
@@ -110,8 +200,8 @@ def _outcome(process: dict, stdout: str) -> tuple[ObservedOutcome, dict]:
     if process["exit_code"] != 0:
         return ObservedOutcome.HARNESS_FAILED, {}
     try:
-        response = json.loads(stdout.strip())
-        return ObservedOutcome(response["observed"]), response.get("details", {})
+        response = _worker_response(stdout)
+        return ObservedOutcome(response["observed"]), response["details"]
     except (json.JSONDecodeError, KeyError, ValueError, TypeError):
         return ObservedOutcome.HARNESS_FAILED, {}
 
@@ -123,11 +213,11 @@ def run_case(
     timeout_seconds: float = 30.0,
     command: Sequence[str] | None = None,
     output_budget_bytes: int | None = None,
-) -> dict:
+) -> CaseResult:
     root = run_dir.resolve()
     request_path = _relative(root, request)
     output_path = _relative(root, output_dir)
-    payload = json.loads(request_path.read_text(encoding="utf-8"))
+    payload = _request_payload(request_path)
     _relative(root, payload["manifest"])
     _relative(root, payload["artifact"])
     expectation = RobustnessExpectation(payload["expectation"])
