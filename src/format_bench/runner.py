@@ -116,6 +116,10 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
             return {"status": "FAILED", "reason": "worker result count mismatch"}
         processes.append(result)
 
+    evidence = processes[-1].get("evidence")
+    if any(process.get("evidence") != evidence for process in processes):
+        return {"status": "FAILED", "reason": "worker evidence changed between processes"}
+
     warm = [sample for process in processes for sample in process["samples_ms"]]
     first = [process["first_open_ms"] for process in processes]
     rss = [process["max_rss_bytes"] for process in processes]
@@ -125,6 +129,7 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
         "warm": stats_ms(warm),
         "max_rss_bytes_p50": int(statistics.median(rss)),
         "result": processes[-1]["result"],
+        "evidence": evidence,
     }
 
 

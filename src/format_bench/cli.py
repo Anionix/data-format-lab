@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from .datasets import capture_github_stars, fetch_dataset
+from .fair_run import run_fair
 from .workflow import prepare_run, verify_run
 
 
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = subcommands.add_parser("verify")
     verify.add_argument("--run-dir", type=Path, required=True)
+
+    run = subcommands.add_parser("run")
+    run.add_argument("--profile", choices=["fair", "claims", "prompt"], required=True)
+    run.add_argument("--dataset", required=True)
+    run.add_argument("--run-dir", type=Path)
     return parser
 
 
@@ -42,6 +48,13 @@ def main(argv: list[str] | None = None) -> None:
             path = capture_github_stars(args.user, args.output)
     elif args.command == "prepare":
         path = prepare_run(root, args.dataset, args.run_dir, fixture=args.fixture)
-    else:
+    elif args.command == "verify":
         path = verify_run(args.run_dir)
+    else:
+        if args.profile != "fair":
+            raise ValueError(f"profile is not implemented yet: {args.profile}")
+        run_dir = args.run_dir or prepare_run(root, args.dataset)
+        if args.run_dir is None:
+            verify_run(run_dir)
+        path = run_fair(root, run_dir)
     print(path)
