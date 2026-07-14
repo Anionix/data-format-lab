@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -17,6 +18,7 @@ from format_bench.model import (
 from format_bench.profile_run import _finish, _load
 from format_bench.robustness.cases import generated_cases, materialize_case, named_cases
 from format_bench.robustness.evidence import ArtifactBudgetExceeded, EvidenceStore
+from format_bench.robustness.mutations import apply_mutation, mutation_recipes
 from format_bench.robustness.paths import reject_symlink_tree
 from format_bench.robustness.runner import run_case
 from format_bench.robustness.targets import (
@@ -59,6 +61,20 @@ def _artifact_files(path: Path) -> list[Path]:
     return files
 
 
+def _mutate(path: Path, seed: int, count: int, index: int):
+    victim = _artifact_files(path)[0]
+    data = victim.read_bytes()
+    recipe = mutation_recipes(len(data), seed, count)[index]
+    mutated = apply_mutation(data, recipe)
+    victim.write_bytes(mutated)
+    member = victim.name if path.is_file() else victim.relative_to(path).as_posix()
+    return recipe, member, {
+        "member_size_bytes": len(data),
+        "before_sha256": hashlib.sha256(data).hexdigest(),
+        "after_sha256": hashlib.sha256(mutated).hexdigest(),
+    }
+
+
 def _record(record) -> dict:
     return {
         "path": f"robustness/{record.relative_path}",
@@ -78,6 +94,9 @@ def _execute(
     timeout: float,
     *,
     malformed: str | None = None,
+    mutation_index: int | None = None,
+    mutation_count: int = 0,
+    seed: int = 0,
 ) -> dict:
     with (
         tempfile.TemporaryDirectory() as temporary,
@@ -105,6 +124,19 @@ def _execute(
                     "operation": "truncate",
                     "parameters": {"offset": offset},
                     "member": member,
+                }
+            elif mutation_index is not None:
+                recipe, member, digests = _mutate(
+                    artifact, seed, mutation_count, mutation_index
+                )
+                case_id = f"mutation-{mutation_index:03d}-{recipe.operation}"
+                mutation = {
+                    "id": case_id,
+                    "recipe_id": recipe.mutation_id,
+                    "operation": recipe.operation,
+                    "parameters": recipe.options,
+                    "member": member,
+                    **digests,
                 }
 
         prefix = Path("cases") / target.name / case_id
@@ -144,6 +176,8 @@ def _execute(
         stderr=f"robustness/{stderr.relative_path}",
         artifact_records=[_record(item) for item in artifact_records],
     )
+    if mutation is not None:
+        result["mutation"] = mutation
     store.store_bytes(prefix / "result.json", _json(result))
     return result
 
@@ -168,10 +202,13 @@ def run_bounded(
     *,
     seed: int = 20260703,
     generated_count: int = 32,
+    mutations_per_target: int = 64,
     timeout_seconds: float = 30,
     artifact_budget_mib: int = 1024,
     targets: tuple[RobustnessTarget, ...] | None = None,
 ) -> Path:
+    if mutations_per_target < 0:
+        raise ValueError("mutations_per_target must be non-negative")
     run, dataset = _load(run_dir)
     base = read_csv(run_dir / run["input"]["source"], dataset)
     cases = list(named_cases()) + list(generated_cases(seed, generated_count))
@@ -182,17 +219,25 @@ def run_bounded(
             for case in cases
             if case.case_id in keep or case.case_id.startswith("generated-000-")
         ]
+    mutation_count = min(mutations_per_target, 1) if run["fixture"] else mutations_per_target
     store = EvidenceStore(run_dir / "robustness", artifact_budget_mib * 1024 * 1024)
     observations: list[dict] = []
     exhausted = False
     for target in targets or core_targets():
-        for case in cases:
-            case_id = case.case_id
-            expectation = case.expectation
+        work = [(case, None) for case in cases]
+        work.extend((None, index) for index in range(mutation_count))
+        for case, mutation_index in work:
+            case_id = case.case_id if case else f"mutation-{mutation_index:03d}"
+            expectation = (
+                case.expectation
+                if case
+                else RobustnessExpectation.MUST_NOT_CRASH
+            )
             try:
                 table = (
                     base
-                    if expectation is not RobustnessExpectation.MUST_ROUNDTRIP
+                    if mutation_index is not None
+                    or expectation is not RobustnessExpectation.MUST_ROUNDTRIP
                     else materialize_case(base, case)
                 )
                 observations.append(
@@ -207,9 +252,13 @@ def run_bounded(
                         timeout_seconds,
                         malformed=(
                             None
-                            if expectation is RobustnessExpectation.MUST_ROUNDTRIP
+                            if mutation_index is not None
+                            or expectation is RobustnessExpectation.MUST_ROUNDTRIP
                             else case.category
                         ),
+                        mutation_index=mutation_index,
+                        mutation_count=mutation_count,
+                        seed=seed,
                     )
                 )
             except ArtifactBudgetExceeded as error:
@@ -244,6 +293,8 @@ def run_bounded(
                 "effective_generated_cases": sum(
                     case.case_id.startswith("generated-") for case in cases
                 ),
+                "mutations_per_target": mutations_per_target,
+                "effective_mutations_per_target": mutation_count,
                 "case_timeout_seconds": timeout_seconds,
                 "artifact_budget_mib": artifact_budget_mib,
             },
