@@ -2,6 +2,7 @@ from .base import Artifact, FormatAdapter, FormatDescription
 from .lance import LanceAdapter, build_fts, lance_components, query_fts
 from .parquet import ParquetAdapter
 from .text import CsvAdapter, ObjectJsonlAdapter
+from .vortex import VortexAdapter
 
 __all__ = [
     "Artifact",
@@ -14,4 +15,5 @@ __all__ = [
     "build_fts",
     "lance_components",
     "query_fts",
+    "VortexAdapter",
 ]
