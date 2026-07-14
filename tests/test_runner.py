@@ -7,6 +7,7 @@ import pytest
 from format_bench.runner import (
     Job,
     MeasurementConfig,
+    environment_info,
     measure_callable,
     run_job,
     stats_ms,
@@ -47,3 +48,8 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     assert result["fresh_process"]["samples"] == 2
     assert result["warm"]["samples"] == 4
     assert result["max_rss_bytes_p50"] == 100
+
+
+def test_environment_records_isolated_claim_dependencies() -> None:
+    packages = environment_info(Path(__file__).parents[1])["packages"]
+    assert {"pandas", "pytz", "tsfile", "tzdata"} <= packages.keys()
