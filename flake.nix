@@ -43,6 +43,7 @@
             env = {
               PYTHONNOUSERSITE = "1";
               UV_PYTHON = "${pkgs.python312}/bin/python3.12";
+              UV_NO_EDITABLE = "1";
             };
           };
         });
