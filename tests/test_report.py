@@ -48,6 +48,8 @@ def test_prompt_report_is_deterministic_and_includes_exact_tokens(tmp_path: Path
     first = path.read_text()
     assert "| compact_tsv | 10 | 4 | 14 | 3 | 4 |" in first
     assert "Direct token counts for binary formats are N/A." in first
+    assert json.loads((tmp_path / "manifest.json").read_text())["state"] == "REPORTED"
+    assert json.loads((tmp_path / "results.json").read_text())["state"] == "REPORTED"
     assert render_report(tmp_path).read_text() == first
 
 

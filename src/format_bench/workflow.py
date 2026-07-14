@@ -64,6 +64,8 @@ def prepare_run(
     _write_json(input_dir / "manifest.json", effective)
 
     entries = []
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # Active evidence may terminate as UNSUPPORTED or FAILED; terminal evidence never ranks.
     for adapter in selected or adapters():
         description = adapter.describe()
         artifact_path = destination / "artifacts" / (
@@ -116,6 +118,7 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
         (run_dir / run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
     )
     registered = selected or adapter_map()
+    # LLM contract: only ENCODED evidence can advance to ROUNDTRIP_VERIFIED here.
     for entry in run_manifest["formats"]:
         if entry["state"] != ExecutionState.ENCODED:
             continue

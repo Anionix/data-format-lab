@@ -27,6 +27,10 @@ def test_lifecycle_rejects_skipped_or_terminal_transitions() -> None:
         transition(ExecutionState.DISCOVERED, ExecutionState.BENCHMARKED)
     with pytest.raises(ValueError, match="illegal evidence transition"):
         transition(ExecutionState.FAILED, ExecutionState.DISCOVERED)
+    with pytest.raises(ValueError, match="illegal evidence transition"):
+        transition(ExecutionState.REPORTED, ExecutionState.FAILED)
+    with pytest.raises(ValueError, match="illegal evidence transition"):
+        transition(ExecutionState.REPORTED, ExecutionState.UNSUPPORTED)
 
 
 def test_failure_is_available_from_an_active_state() -> None:
@@ -45,6 +49,8 @@ def test_dataset_asset_path_stays_under_the_run_root() -> None:
         expected_counts={"rows": 1},
     )
     assert spec.asset_path(Path("datasets")) == Path("datasets/source.csv")
+    with pytest.raises(TypeError):
+        spec.expected_counts["rows"] = 2
 
     unsafe = DatasetSpec(**{**spec.__dict__, "asset_name": "../source.csv"})
     with pytest.raises(ValueError, match="safe relative path"):
