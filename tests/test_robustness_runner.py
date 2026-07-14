@@ -14,7 +14,8 @@ def _request(root: Path, expectation: str = "MUST_NOT_CRASH") -> None:
     (root / "input" / "manifest.json").write_text("{}")
     (root / "input" / "data.bin").write_bytes(b"data")
     (root / "request.json").write_text(json.dumps({
-        "schema_version": "1", "case_id": "case-1", "target": "csv",
+        "schema_version": "1", "contract_version": "1",
+        "case_id": "case-1", "target": "csv",
         "expectation": expectation, "manifest": "input/manifest.json", "artifact": "input/data.bin",
     }))
 
@@ -51,6 +52,11 @@ def test_runner_classifies_signal_and_timeout(tmp_path: Path) -> None:
 def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: Path) -> None:
     invalid = _run(tmp_path / "invalid", "print('partial')")
     assert invalid["observed"] is ObservedOutcome.HARNESS_FAILED
+    wrong_shape = _run(
+        tmp_path / "wrong-shape",
+        "import json; print(json.dumps({'observed': 7, 'details': []}))",
+    )
+    assert wrong_shape["observed"] is ObservedOutcome.HARNESS_FAILED
     valid = _run(tmp_path / "valid", "import json; print(json.dumps({'observed':'REJECTED'}))", "MUST_ROUNDTRIP")
     assert valid["verdict"] is RobustnessVerdict.FAIL
 
@@ -59,6 +65,15 @@ def test_runner_rejects_unsafe_request_paths(tmp_path: Path) -> None:
     _request(tmp_path)
     with pytest.raises(ValueError, match="safe relative"):
         run_case(tmp_path, "../request.json", "evidence")
+
+
+def test_runner_rejects_invalid_request_field_types(tmp_path: Path) -> None:
+    _request(tmp_path)
+    request = json.loads((tmp_path / "request.json").read_text())
+    request["manifest"] = 7
+    (tmp_path / "request.json").write_text(json.dumps(request))
+    with pytest.raises(TypeError, match="manifest must be a string"):
+        run_case(tmp_path, "request.json", "evidence/case-1")
 
 
 def test_runner_rejects_symlinks_inside_directory_artifacts(tmp_path: Path) -> None:

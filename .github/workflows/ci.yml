@@ -29,6 +29,15 @@ jobs:
       - name: Synchronize frozen Python environment
         run: nix develop --command uv sync --frozen
 
+      - name: Run blocking Python quality gates
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            ruff --version
+            pyright --version
+            ruff check src tests
+            pyright
+          '
+
       - name: Run tests and smoke lanes concurrently
         run: |
           # shellcheck disable=SC2016
@@ -95,4 +104,12 @@ jobs:
               fi
             done
             exit "$failed"
+          '
+
+      - name: Observe ty diagnostics
+        continue-on-error: true
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            ty version
+            ty check src/format_bench
           '

@@ -15,6 +15,9 @@
             packages = with pkgs; [
               python312
               uv
+              ruff
+              pyright
+              ty
               duckdb
               cmake
               ninja

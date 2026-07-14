@@ -30,3 +30,22 @@ packages = ["src/format_bench"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B"]
+
+[tool.pyright]
+include = [
+  "src/format_bench/model.py",
+  "src/format_bench/robustness/evidence.py",
+  "src/format_bench/robustness/mutations.py",
+  "src/format_bench/robustness/paths.py",
+  "src/format_bench/robustness/runner.py",
+]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
