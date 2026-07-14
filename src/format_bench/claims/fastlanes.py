@@ -19,6 +19,7 @@ STRING_BOUNDARIES = (1023, 1024, 1025, 2048, 2049)
 
 
 def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> dict:
+    directory = directory.resolve()
     case_dir = directory / name
     case_dir.mkdir(parents=True, exist_ok=True)
     command = (
@@ -80,6 +81,19 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
     return result
 
 
+def _fatal_cases(numeric: dict, strings: dict[str, dict], malformed: dict) -> list[dict]:
+    fatal = []
+    if numeric.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
+        fatal.append(numeric)
+    fatal.extend(
+        item
+        for item in (*strings.values(), malformed)
+        if item.get("outcome")
+        in {ObservedOutcome.TIMED_OUT, ObservedOutcome.HARNESS_FAILED}
+    )
+    return fatal
+
+
 def run_fastlanes_claim(
     directory: Path,
     *,
@@ -102,12 +116,7 @@ def run_fastlanes_claim(
         f"{rows}={item.get('outcome', item.get('status', 'UNKNOWN'))}"
         for rows, item in strings.items()
     )
-    fatal = [
-        item
-        for item in (numeric, *strings.values(), malformed)
-        if item.get("outcome")
-        in {ObservedOutcome.TIMED_OUT, ObservedOutcome.HARNESS_FAILED}
-    ]
+    fatal = _fatal_cases(numeric, strings, malformed)
     root = directory.parent.parent
     return {
         "status": "FAILED" if fatal else "MEASURED",
