@@ -11,6 +11,7 @@ class Lane(StrEnum):
     FAIR = "fair"
     CLAIMS = "claims"
     PROMPT = "prompt"
+    ROBUSTNESS = "robustness"
 
 
 class Comparability(StrEnum):
@@ -28,6 +29,41 @@ class ExecutionState(StrEnum):
     REPORTED = "REPORTED"
     UNSUPPORTED = "UNSUPPORTED"
     FAILED = "FAILED"
+
+
+class RobustnessExpectation(StrEnum):
+    MUST_ROUNDTRIP = "MUST_ROUNDTRIP"
+    MUST_REJECT = "MUST_REJECT"
+    MUST_NOT_CRASH = "MUST_NOT_CRASH"
+
+
+class ObservedOutcome(StrEnum):
+    ROUNDTRIP_EQUAL = "ROUNDTRIP_EQUAL"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    VALUE_MISMATCH = "VALUE_MISMATCH"
+    CRASHED = "CRASHED"
+    TIMED_OUT = "TIMED_OUT"
+    UNSUPPORTED = "UNSUPPORTED"
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+    HARNESS_FAILED = "HARNESS_FAILED"
+
+
+class RobustnessVerdict(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    INCOMPLETE = "INCOMPLETE"
+
+
+class Applicability(StrEnum):
+    APPLICABLE = "APPLICABLE"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+
+
+class TargetTier(StrEnum):
+    CORE = "CORE"
+    EXPERIMENTAL = "EXPERIMENTAL"
 
 
 # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
@@ -57,6 +93,32 @@ def transition(current: ExecutionState, target: ExecutionState) -> ExecutionStat
     if target not in allowed:
         raise ValueError(f"illegal evidence transition: {current} -> {target}")
     return target
+
+
+def robustness_verdict(
+    expectation: RobustnessExpectation,
+    observed: ObservedOutcome,
+    applicability: Applicability = Applicability.APPLICABLE,
+) -> RobustnessVerdict:
+    if applicability is Applicability.NOT_APPLICABLE:
+        return RobustnessVerdict.NOT_APPLICABLE
+    if observed in {
+        ObservedOutcome.UNSUPPORTED,
+        ObservedOutcome.BUDGET_EXHAUSTED,
+        ObservedOutcome.HARNESS_FAILED,
+    }:
+        return RobustnessVerdict.INCOMPLETE
+    if expectation is RobustnessExpectation.MUST_ROUNDTRIP:
+        passed = observed is ObservedOutcome.ROUNDTRIP_EQUAL
+    elif expectation is RobustnessExpectation.MUST_REJECT:
+        passed = observed is ObservedOutcome.REJECTED
+    else:
+        passed = observed in {
+            ObservedOutcome.ROUNDTRIP_EQUAL,
+            ObservedOutcome.ACCEPTED,
+            ObservedOutcome.REJECTED,
+        }
+    return RobustnessVerdict.PASS if passed else RobustnessVerdict.FAIL
 
 
 @dataclass(frozen=True)
