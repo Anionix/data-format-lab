@@ -26,7 +26,14 @@ class EvidenceStore:
             raise ValueError("evidence root must not be a symlink")
         self.root = root.resolve()
         self.budget_bytes = budget_bytes
-        self.used_bytes = 0
+        existing = list(self.root.rglob("*"))
+        if any(item.is_symlink() for item in existing):
+            raise ValueError("evidence root must not contain symlinks")
+        self.used_bytes = sum(item.stat().st_size for item in existing if item.is_file())
+        if self.used_bytes > self.budget_bytes:
+            raise ArtifactBudgetExceeded(
+                f"existing artifacts exceed budget: used {self.used_bytes}, budget {self.budget_bytes}"
+            )
 
     def _target(self, relative: str | Path) -> Path:
         relative = Path(relative)

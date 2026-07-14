@@ -36,6 +36,10 @@ def test_evidence_store_records_relative_paths_digests_and_budget(tmp_path: Path
         store.store_bytes("cases/two/input.bin", b"de")
     assert store.used_bytes == 3
     assert (store.root / record.relative_path).read_bytes() == b"abc"
+    reopened = EvidenceStore(store.root, budget_bytes=4)
+    assert reopened.used_bytes == 3
+    with pytest.raises(ArtifactBudgetExceeded, match="remaining 1"):
+        reopened.store_bytes("cases/three/input.bin", b"de")
 
 
 def test_evidence_store_imports_file_and_directory(tmp_path: Path) -> None:
