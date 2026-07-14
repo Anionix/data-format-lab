@@ -49,6 +49,14 @@ def _attempt(comparability: Comparability, invoke: Callable[[], dict]) -> dict:
     base = {"lane": Lane.CLAIMS, "comparability": comparability, "failure_reason": None}
     try:
         evidence = invoke()
+        returned_status = evidence.get("status")
+        if returned_status in {ExecutionState.FAILED, ExecutionState.UNSUPPORTED}:
+            return {
+                **base,
+                "state": ExecutionState(returned_status),
+                "failure_reason": evidence.get("reason", f"claim returned {returned_status}"),
+                "evidence": evidence,
+            }
         state = transition(ExecutionState.DISCOVERED, ExecutionState.ENCODED)
         state = transition(state, ExecutionState.ROUNDTRIP_VERIFIED)
         state = transition(state, ExecutionState.BENCHMARKED)

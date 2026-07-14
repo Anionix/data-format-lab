@@ -29,6 +29,18 @@ def test_measure_callable_validates_result_count() -> None:
         measure_callable(lambda: 2, expected=3, warmups=0, iterations=1)
 
 
+@pytest.mark.parametrize(
+    ("values", "warmups", "iterations"),
+    [([3, 2, 3], 1, 1), ([3, 3, 2, 3], 0, 3)],
+)
+def test_measure_callable_rejects_any_intermediate_mismatch(
+    values: list[int], warmups: int, iterations: int
+) -> None:
+    results = iter(values)
+    with pytest.raises(ValueError, match="unexpected operation result"):
+        measure_callable(lambda: next(results), 3, warmups, iterations)
+
+
 def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     payload = json.dumps(
         {

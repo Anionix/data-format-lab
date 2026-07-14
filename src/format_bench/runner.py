@@ -61,19 +61,25 @@ def stats_ms(values: list[float]) -> dict[str, float | int]:
 def measure_callable(
     invoke: Callable[[], int], expected: int, warmups: int, iterations: int
 ) -> dict:
+    def checked_invoke() -> int:
+        result = invoke()
+        if result != expected:
+            raise ValueError(
+                f"unexpected operation result: expected {expected}, got {result}"
+            )
+        return result
+
     started = time.perf_counter_ns()
-    first_result = invoke()
+    first_result = checked_invoke()
     first_open_ms = (time.perf_counter_ns() - started) / 1_000_000
     for _ in range(warmups):
-        invoke()
+        checked_invoke()
     samples: list[float] = []
     result = first_result
     for _ in range(iterations):
         started = time.perf_counter_ns()
-        result = invoke()
+        result = checked_invoke()
         samples.append((time.perf_counter_ns() - started) / 1_000_000)
-    if result != expected:
-        raise ValueError(f"unexpected operation result: expected {expected}, got {result}")
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if sys.platform != "darwin":
         rss *= 1024
