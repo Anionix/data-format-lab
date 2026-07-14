@@ -109,6 +109,9 @@ def test_worker_reports_value_mismatch_when_verification_returns_false(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class MismatchingAdapter:
+        def read(self, path, manifest):
+            return None
+
         def verify_roundtrip(self, path, manifest):
             return {"passed": False}
 
@@ -125,3 +128,25 @@ def test_worker_reports_value_mismatch_when_verification_returns_false(
     monkeypatch.chdir(tmp_path)
 
     assert run_request(Path("request.json"))["observed"] is ObservedOutcome.VALUE_MISMATCH
+
+
+def test_worker_reports_raised_builtin_verification_as_value_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, table = _fixture()
+    manifest["canonical_hash"] = "not-the-table-hash"
+    manifest["expected_counts"] = query_counts(table)
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    encode_valid(target_map()["csv"], table, tmp_path / "artifact.csv")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "raised-mismatch",
+        "target": "csv",
+        "expectation": "MUST_ROUNDTRIP",
+        "manifest": "manifest.json",
+        "artifact": "artifact.csv",
+    }))
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+    assert result["observed"] is ObservedOutcome.VALUE_MISMATCH
+    assert result["details"]["error_type"] == "ValueError"
