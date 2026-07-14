@@ -40,9 +40,14 @@ def _save(path: Path, content: str) -> str:
 
 def _process(command: Sequence[str], cwd: Path, timeout: float) -> tuple[dict, str, str]:
     started = time.perf_counter_ns()
+    env = os.environ.copy()
+    source_root = str(Path(__file__).parents[2])
+    env["PYTHONPATH"] = os.pathsep.join(
+        item for item in (source_root, env.get("PYTHONPATH")) if item
+    )
     process = subprocess.Popen(
         list(command), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, start_new_session=True,
+        text=True, start_new_session=True, env=env,
     )
     timed_out = False
     try:
