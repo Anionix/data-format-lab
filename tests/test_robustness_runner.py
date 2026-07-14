@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from format_bench.model import ObservedOutcome, RobustnessVerdict
-from format_bench.robustness.runner import run_case
+from format_bench.robustness.runner import _process, run_case
 
 
 def _request(root: Path, expectation: str = "MUST_NOT_CRASH") -> None:
@@ -64,3 +64,13 @@ def test_runner_rejects_symlinks_inside_directory_artifacts(tmp_path: Path) -> N
     (tmp_path / "request.json").write_text(json.dumps(request))
     with pytest.raises(ValueError, match="symlink"):
         run_case(tmp_path, "request.json", "evidence/case-1")
+
+
+def test_runner_exposes_source_package_to_child(tmp_path: Path) -> None:
+    process, stdout, _ = _process(
+        (sys.executable, "-c", "import format_bench; print(format_bench.__name__)"),
+        tmp_path,
+        1,
+    )
+    assert process["exit_code"] == 0
+    assert stdout.strip() == "format_bench"

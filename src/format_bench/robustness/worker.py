@@ -35,8 +35,14 @@ def run_request(request_path: Path) -> dict:
     adapter = adapter_map()[target]
     try:
         if expectation is RobustnessExpectation.MUST_ROUNDTRIP:
-            adapter.verify_roundtrip(artifact, json.loads(manifest.read_text(encoding="utf-8")))
-            observed = ObservedOutcome.ROUNDTRIP_EQUAL
+            verification = adapter.verify_roundtrip(
+                artifact, json.loads(manifest.read_text(encoding="utf-8"))
+            )
+            observed = (
+                ObservedOutcome.ROUNDTRIP_EQUAL
+                if verification["passed"]
+                else ObservedOutcome.VALUE_MISMATCH
+            )
         else:
             effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
             robustness_target = target_map().get(target)

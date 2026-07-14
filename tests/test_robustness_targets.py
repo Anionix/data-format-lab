@@ -5,6 +5,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
+import format_bench.robustness.worker as worker
 from format_bench.canonical import canonical_hash, query_counts, read_csv
 from format_bench.model import ObservedOutcome
 from format_bench.robustness import (
@@ -102,3 +103,25 @@ def test_malformed_column_cases_are_rejected_by_worker(
     }))
     result = run_request(request)
     assert result["observed"] is ObservedOutcome.REJECTED
+
+
+def test_worker_reports_value_mismatch_when_verification_returns_false(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MismatchingAdapter:
+        def verify_roundtrip(self, path, manifest):
+            return {"passed": False}
+
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "mismatch",
+        "target": "mismatch",
+        "expectation": "MUST_ROUNDTRIP",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+    }))
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"mismatch": MismatchingAdapter()})
+    monkeypatch.chdir(tmp_path)
+
+    assert run_request(Path("request.json"))["observed"] is ObservedOutcome.VALUE_MISMATCH
