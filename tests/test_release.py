@@ -3,6 +3,7 @@ import json
 import tarfile
 from pathlib import Path
 
+import pytest
 import zstandard as zstd
 
 from format_bench.release import package_run
@@ -67,7 +68,9 @@ def test_release_rejects_missing_referenced_artifact(tmp_path: Path) -> None:
             {
                 "state": "REPORTED",
                 "dataset_id": "fixture",
-                "formats": [{"artifact": "artifacts/missing.bin"}],
+                "formats": [
+                    {"artifact": "artifacts/missing.bin", "state": "BENCHMARKED"}
+                ],
             }
         )
     )
@@ -90,3 +93,36 @@ def test_release_rejects_missing_referenced_artifact(tmp_path: Path) -> None:
         assert "artifacts/missing.bin" in str(error)
     else:
         raise AssertionError("missing artifact was accepted")
+
+
+@pytest.mark.parametrize("state", ["FAILED", "UNSUPPORTED"])
+def test_release_allows_missing_terminal_format_artifact(
+    tmp_path: Path, state: str
+) -> None:
+    run = tmp_path / state.lower()
+    (run / "input").mkdir(parents=True)
+    (run / "manifest.json").write_text(
+        json.dumps(
+            {
+                "state": "REPORTED",
+                "dataset_id": "fixture",
+                "formats": [{"artifact": "artifacts/missing.bin", "state": state}],
+            }
+        )
+    )
+    (run / "results.json").write_text(
+        json.dumps(
+            {
+                "state": "REPORTED",
+                "dataset_id": "fixture",
+                "profile": "fair",
+                "run_id": state.lower(),
+            }
+        )
+    )
+    (run / "report.md").write_text("# report\n")
+    (run / "input" / "manifest.json").write_text('{}\n')
+
+    archive = package_run(run, tmp_path / "output", "linux-x86_64")
+
+    assert archive.is_file()
