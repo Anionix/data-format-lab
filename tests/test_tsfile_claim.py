@@ -16,3 +16,9 @@ def test_tsfile_claim_matches_parquet_results(tmp_path: Path) -> None:
     assert result["timing"]["tsfile"]["result"] == 1
     assert result["timing"]["parquet"]["result"] == 1
     assert result["bytes"]["tsfile"] > 0
+    assert result["writer_settings"]["tsfile"]["default_compression_type_"] == "LZ4"
+    assert result["writer_settings"]["tsfile"]["time_encoding_type_"] == "TS_2DIFF"
+    assert result["writer_settings"]["parquet"] == {
+        "compression": "zstd",
+        "row_group_size": 10,
+    }

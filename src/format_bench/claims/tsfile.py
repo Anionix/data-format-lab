@@ -79,12 +79,56 @@ def _device_table(device_index: int, points: int) -> pa.Table:
     )
 
 
+def _configure_tsfile(schema: Any, directory: Path) -> dict[str, Any]:
+    from tsfile import (
+        Compressor,
+        TSDataType,
+        TSEncoding,
+        TsFileTableWriter,
+        get_tsfile_config,
+        set_tsfile_config,
+    )
+
+    if get_tsfile_config()["page_writer_max_point_num_"] == 0:
+        bootstrap = directory / ".tsfile-config-init"
+        with TsFileTableWriter(str(bootstrap), schema):
+            pass
+        bootstrap.unlink()
+    settings = {
+        "tsblock_mem_inc_step_size_": 8000,
+        "tsblock_max_memory_": 64000,
+        "page_writer_max_point_num_": 10000,
+        "page_writer_max_memory_bytes_": 131072,
+        "max_degree_of_index_node_": 256,
+        "tsfile_index_bloom_filter_error_percent_": 0.05,
+        "time_encoding_type_": TSEncoding.TS_2DIFF,
+        "time_data_type_": TSDataType.INT64,
+        "time_compress_type_": Compressor.LZ4,
+        "chunk_group_size_threshold_": 134217728,
+        "record_count_for_next_mem_check_": 100,
+        "encrypt_flag_": False,
+        "boolean_encoding_type_": TSEncoding.PLAIN,
+        "int32_encoding_type_": TSEncoding.TS_2DIFF,
+        "int64_encoding_type_": TSEncoding.TS_2DIFF,
+        "float_encoding_type_": TSEncoding.GORILLA,
+        "double_encoding_type_": TSEncoding.GORILLA,
+        "string_encoding_type_": TSEncoding.PLAIN,
+        "default_compression_type_": Compressor.LZ4,
+    }
+    set_tsfile_config(settings)
+    actual = get_tsfile_config()
+    if any(actual[key] != value for key, value in settings.items()):
+        raise ValueError("TsFile writer configuration did not apply")
+    return {key: getattr(value, "name", value) for key, value in actual.items()}
+
+
 def _write_datasets(
     tsfile_path: Path, parquet_path: Path, devices: int, points: int
-) -> dict[str, float]:
+) -> tuple[dict[str, float], dict[str, Any]]:
     from tsfile import Tablet, TsFileTableWriter
 
     schema, names, types = _schema()
+    tsfile_settings = _configure_tsfile(schema, tsfile_path.parent)
     started = time.perf_counter_ns()
     with TsFileTableWriter(str(tsfile_path), schema) as writer:
         for device_index in range(devices):
@@ -107,10 +151,13 @@ def _write_datasets(
     finally:
         if parquet:
             parquet.close()
-    return {
-        "tsfile": round(tsfile_ms, 3),
-        "parquet": round((time.perf_counter_ns() - started) / 1_000_000, 3),
-    }
+    return (
+        {
+            "tsfile": round(tsfile_ms, 3),
+            "parquet": round((time.perf_counter_ns() - started) / 1_000_000, 3),
+        },
+        tsfile_settings,
+    )
 
 
 def run_tsfile_claim(
@@ -125,7 +172,9 @@ def run_tsfile_claim(
 
     directory.mkdir(parents=True, exist_ok=True)
     tsfile_path, parquet_path = directory / "sensors.tsfile", directory / "sensors.parquet"
-    writes = _write_datasets(tsfile_path, parquet_path, devices, points_per_device)
+    writes, tsfile_settings = _write_datasets(
+        tsfile_path, parquet_path, devices, points_per_device
+    )
     columns = ["device", "site", "temperature", "pressure", "active", "sequence"]
     device_index = min(42, devices - 1)
     start = points_per_device // 2
@@ -158,6 +207,10 @@ def run_tsfile_claim(
         "shape": {"devices": devices, "points_per_device": points_per_device},
         "query": f"{device} and timestamp [{start}, {end})",
         "write_ms": writes,
+        "writer_settings": {
+            "tsfile": tsfile_settings,
+            "parquet": {"compression": "zstd", "row_group_size": points_per_device},
+        },
         "bytes": {"tsfile": tsfile_path.stat().st_size, "parquet": parquet_path.stat().st_size},
         "timing": {"tsfile": ts_result, "parquet": parquet_result},
     }

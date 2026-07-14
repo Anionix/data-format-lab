@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import format_bench.claims.vortex as vortex_claim
 from format_bench.canonical import canonical_hash, query_counts, read_csv
 from format_bench.claims import run_vortex_stress
 from format_bench.formats import VortexAdapter
@@ -30,9 +31,21 @@ def test_vortex_variants_roundtrip(tmp_path: Path, fixture_contract, compact: bo
     assert adapter.verify_roundtrip(path, manifest)["passed"] is True
 
 
-def test_vortex_stress_keeps_results_equal(tmp_path: Path, fixture_contract) -> None:
+def test_vortex_stress_keeps_results_equal(
+    tmp_path: Path, fixture_contract, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _, table = fixture_contract
+    real_open = vortex_claim.vortex.open
+    open_count = 0
+
+    def tracked_open(path: str):
+        nonlocal open_count
+        open_count += 1
+        return real_open(path)
+
+    monkeypatch.setattr(vortex_claim.vortex, "open", tracked_open)
     result = run_vortex_stress(table, tmp_path, rows=8, warmups=0, iterations=1)
     for variant in ("sorted", "unsorted"):
         for operation in result[variant]["operations"].values():
             assert operation["parquet"]["result"] == operation["vortex"]["result"]
+    assert open_count == 8
