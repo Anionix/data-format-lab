@@ -5,6 +5,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Sequence
@@ -38,32 +39,60 @@ def _save(path: Path, content: str) -> str:
     return path.relative_to(path.parents[2]).as_posix()
 
 
-def _process(command: Sequence[str], cwd: Path, timeout: float) -> tuple[dict, str, str]:
+def _tail(handle, size: int, limit: int) -> str:
+    handle.seek(max(0, size - limit))
+    return handle.read(limit).decode("utf-8", errors="ignore")
+
+
+def _process(
+    command: Sequence[str],
+    cwd: Path,
+    timeout: float,
+    output_budget_bytes: int | None = None,
+) -> tuple[dict, str, str]:
+    if output_budget_bytes is not None and output_budget_bytes < 0:
+        raise ValueError("output budget must be non-negative")
     started = time.perf_counter_ns()
     env = os.environ.copy()
     source_root = str(Path(__file__).parents[2])
     env["PYTHONPATH"] = os.pathsep.join(
         item for item in (source_root, env.get("PYTHONPATH")) if item
     )
-    process = subprocess.Popen(
-        list(command), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, start_new_session=True, env=env,
-    )
-    timed_out = False
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as error:
-        timed_out = True
-        os.killpg(process.pid, signal.SIGKILL)
-        stdout, stderr = process.communicate()
-        stdout = (error.stdout or "") + stdout
-        stderr = (error.stderr or "") + stderr
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            list(command), cwd=cwd, stdout=stdout_file, stderr=stderr_file,
+            start_new_session=True, env=env,
+        )
+        timed_out = False
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        stdout_bytes = os.fstat(stdout_file.fileno()).st_size
+        stderr_bytes = os.fstat(stderr_file.fileno()).st_size
+        budget = stdout_bytes + stderr_bytes if output_budget_bytes is None else output_budget_bytes
+        stdout_limit = min(stdout_bytes, budget // 2)
+        stderr_limit = min(stderr_bytes, budget - stdout_limit)
+        remaining = budget - stdout_limit - stderr_limit
+        stdout_limit += min(stdout_bytes - stdout_limit, remaining)
+        remaining = budget - stdout_limit - stderr_limit
+        stderr_limit += min(stderr_bytes - stderr_limit, remaining)
+        stdout = _tail(stdout_file, stdout_bytes, stdout_limit)
+        stderr = _tail(stderr_file, stderr_bytes, stderr_limit)
     duration_ms = round((time.perf_counter_ns() - started) / 1_000_000, 3)
     return {
         "exit_code": process.returncode if not timed_out else None,
         "signal": -process.returncode if process.returncode is not None and process.returncode < 0 else None,
         "timed_out": timed_out,
         "duration_ms": duration_ms,
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+        "stdout_truncated": stdout_limit < stdout_bytes,
+        "stderr_truncated": stderr_limit < stderr_bytes,
+        "output_budget_bytes": output_budget_bytes,
+        "output_exhausted": stdout_limit + stderr_limit < stdout_bytes + stderr_bytes,
     }, stdout, stderr
 
 
@@ -76,6 +105,8 @@ def _outcome(process: dict, stdout: str) -> tuple[ObservedOutcome, dict]:
         except ValueError:
             name = None
         return ObservedOutcome.CRASHED, {"signal_name": name}
+    if process["output_exhausted"]:
+        return ObservedOutcome.BUDGET_EXHAUSTED, {}
     if process["exit_code"] != 0:
         return ObservedOutcome.HARNESS_FAILED, {}
     try:
@@ -91,6 +122,7 @@ def run_case(
     output_dir: str | Path,
     timeout_seconds: float = 30.0,
     command: Sequence[str] | None = None,
+    output_budget_bytes: int | None = None,
 ) -> dict:
     root = run_dir.resolve()
     request_path = _relative(root, request)
@@ -102,7 +134,9 @@ def run_case(
     command = command or (
         sys.executable, "-m", "format_bench.robustness.worker", "--request", Path(request).as_posix()
     )
-    process, stdout, stderr = _process(command, root, timeout_seconds)
+    process, stdout, stderr = _process(
+        command, root, timeout_seconds, output_budget_bytes
+    )
     stdout_path = output_path / "stdout.txt"
     stderr_path = output_path / "stderr.txt"
     _save(stdout_path, stdout)

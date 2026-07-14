@@ -163,6 +163,7 @@ def _execute(
             f"robustness/{request_record.relative_path}",
             output.relative_to(run_dir),
             timeout,
+            output_budget_bytes=max(0, store.budget_bytes - store.used_bytes),
         )
         stdout = store.store_bytes(prefix / "stdout.txt", (run_dir / result["stdout"]).read_bytes())
         stderr = store.store_bytes(prefix / "stderr.txt", (run_dir / result["stderr"]).read_bytes())
