@@ -154,6 +154,7 @@ def environment_info(root: Path) -> dict:
     for name in (
         "pandas",
         "pyarrow",
+        "pyfastlanes",
         "pylance",
         "pytz",
         "tiktoken",

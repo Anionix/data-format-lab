@@ -13,7 +13,7 @@ The first case study is a frozen, 2,331-row snapshot of public GitHub Stars meta
 | Lane | Question | Current examples |
 | --- | --- | --- |
 | `fair` | What happens when every format stores the same typed Arrow table and returns the same rows? | CSV, object JSONL, Parquet, Lance, Vortex, adapted TsFile |
-| `claims` | Does a format's stated strength appear under a workload suited to that claim? | Lance FTS, Vortex scans, TsFile time ranges |
+| `claims` | Does a format's stated strength appear under a workload suited to that claim? | Lance FTS, Vortex scans, adapted TsFile time ranges, experimental FastLanes evidence |
 | `prompt` | How many exact model tokens represent the same seven projected fields? | Compact TSV, object JSONL, array JSONL |
 
 Results never rank across lanes or hardware runs. Only `FULL_COMPARABLE` evidence can enter an ordering inside its own lane. DuckDB is treated as a query engine, not as a file format.

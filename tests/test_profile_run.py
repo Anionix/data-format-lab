@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
 
+import format_bench.profile_run as profile_run
 from format_bench.formats.text import CsvAdapter
-from format_bench.model import Comparability
+from format_bench.model import Comparability, TargetTier
 from format_bench.profile_run import _attempt, run_claims, run_prompt
 from format_bench.workflow import prepare_run, verify_run
 
@@ -33,9 +34,20 @@ def test_prompt_run_records_exact_metrics_and_relative_artifacts(tmp_path: Path)
     assert all(not Path(value).is_absolute() for value in result["artifacts"].values())
 
 
-def test_claim_run_isolates_each_claim_and_negative_record(tmp_path: Path) -> None:
+def test_claim_run_isolates_each_claim_and_negative_record(
+    tmp_path: Path, monkeypatch
+) -> None:
     root = Path(__file__).parents[1]
     run_dir = _fixture_run(root, tmp_path / "claims-run")
+    monkeypatch.setattr(
+        profile_run,
+        "run_fastlanes_claim",
+        lambda *args, **kwargs: {
+            "status": "MEASURED",
+            "numeric": {"rows": 1024},
+            "summary": "numeric=ROUNDTRIP_EQUAL",
+        },
+    )
     path = run_claims(
         root,
         run_dir,
@@ -49,6 +61,12 @@ def test_claim_run_isolates_each_claim_and_negative_record(tmp_path: Path) -> No
     assert results["lance_fts"]["state"] == "BENCHMARKED"
     assert results["vortex_stress"]["state"] == "BENCHMARKED"
     assert results["tsfile_time_series"]["state"] in {"BENCHMARKED", "UNSUPPORTED"}
+    assert results["tsfile_time_series"]["comparability"] == Comparability.ADAPTED
+    assert results["tsfile_time_series"]["target_tier"] == TargetTier.EXPERIMENTAL
+    assert results["fastlanes_official"]["state"] == "BENCHMARKED"
+    assert results["fastlanes_official"]["comparability"] == Comparability.PARTIAL
+    assert results["fastlanes_official"]["target_tier"] == TargetTier.EXPERIMENTAL
+    assert results["fastlanes_official"]["evidence"]["summary"] == "numeric=ROUNDTRIP_EQUAL"
     assert set(results["negative_research"]) == {"anyblox", "fastlanes", "nimble"}
 
 
