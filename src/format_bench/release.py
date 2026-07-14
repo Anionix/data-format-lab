@@ -27,9 +27,10 @@ def _safe_slug(value: str) -> str:
     return value
 
 
-def _artifact_references(manifest: dict, results: dict) -> list[str]:
+def _artifact_references(manifest: dict, results: dict) -> list[tuple[str, bool]]:
+    terminal_failures = {ExecutionState.FAILED, ExecutionState.UNSUPPORTED}
     references = [
-        entry["artifact"]
+        (entry["artifact"], entry.get("state") not in terminal_failures)
         for entry in manifest.get("formats", [])
         if isinstance(entry.get("artifact"), str)
     ]
@@ -41,27 +42,33 @@ def _artifact_references(manifest: dict, results: dict) -> list[str]:
             if not isinstance(source, dict):
                 continue
             if isinstance(source.get("artifact"), str):
-                references.append(source["artifact"])
+                references.append((source["artifact"], True))
             if isinstance(source.get("artifacts"), dict):
                 references.extend(
-                    item for item in source["artifacts"].values() if isinstance(item, str)
+                    (item, True)
+                    for item in source["artifacts"].values()
+                    if isinstance(item, str)
                 )
     return references
 
 
 def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
-    required = [run_dir / relative for relative in EVIDENCE_FILES]
-    missing = [str(path.relative_to(run_dir)) for path in required if not path.is_file()]
+    required_files = [run_dir / relative for relative in EVIDENCE_FILES]
+    missing = [
+        str(path.relative_to(run_dir)) for path in required_files if not path.is_file()
+    ]
     if missing:
         raise FileNotFoundError(f"release evidence missing: {', '.join(missing)}")
 
     run_root = run_dir.resolve()
     referenced_files = set()
-    for value in _artifact_references(manifest, results):
+    for value, must_exist in _artifact_references(manifest, results):
         relative = Path(value)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"release artifact path is unsafe: {value}")
         target = run_dir / relative
+        if not target.exists() and not must_exist:
+            continue
         if not target.exists() or not target.resolve().is_relative_to(run_root):
             raise FileNotFoundError(f"release artifact missing or unsafe: {value}")
         if target.is_file():
@@ -69,7 +76,7 @@ def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
         else:
             referenced_files.update(path for path in target.rglob("*") if path.is_file())
 
-    files = set(required) | referenced_files
+    files = set(required_files) | referenced_files
     for name in ARTIFACT_ROOTS:
         root = run_dir / name
         if root.exists():
