@@ -34,20 +34,52 @@ jobs:
 
       - name: Smoke all benchmark lanes
         run: |
+          # shellcheck disable=SC2016
           nix develop --command bash -euo pipefail -c '
-            for profile in fair claims prompt; do
-              result=$(uv run --frozen format-bench run \
-                --profile "$profile" \
-                --dataset github-stars-2026-07-03 \
-                --fixture)
-              run_dir=$(dirname "$result")
-              report=$(uv run --frozen format-bench report --run-dir "$run_dir")
-              before=$(sha256sum "$report")
-              uv run --frozen format-bench report --run-dir "$run_dir" >/dev/null
-              after=$(sha256sum "$report")
-              test "$before" = "$after"
-              uv run --frozen python -c \
-                "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
-                "$run_dir/manifest.json"
+            tmp_dir=$(mktemp -d)
+            trap "rm -rf \"$tmp_dir\"" EXIT
+
+            profiles=(fair claims prompt)
+            pids=()
+
+            # Each profile creates an independent run directory, so the smoke lanes can overlap.
+            run_smoke() {
+              local profile="$1"
+              local log="$2"
+              {
+                result=$(.venv/bin/format-bench run \
+                  --profile "$profile" \
+                  --dataset github-stars-2026-07-03 \
+                  --fixture)
+                run_dir=$(dirname "$result")
+                report=$(.venv/bin/format-bench report --run-dir "$run_dir")
+                before=$(sha256sum "$report")
+                .venv/bin/format-bench report --run-dir "$run_dir" >/dev/null
+                after=$(sha256sum "$report")
+                test "$before" = "$after"
+                .venv/bin/python -c \
+                  "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
+                  "$run_dir/manifest.json"
+              } >"$log" 2>&1
+            }
+
+            for profile in "${profiles[@]}"; do
+              run_smoke "$profile" "$tmp_dir/$profile.log" &
+              pids+=("$!")
             done
+
+            failed=0
+            for i in "${!profiles[@]}"; do
+              if wait "${pids[$i]}"; then
+                echo "${profiles[$i]} smoke passed"
+              else
+                status=$?
+                echo "::group::${profiles[$i]} smoke failed"
+                cat "$tmp_dir/${profiles[$i]}.log"
+                echo "::endgroup::"
+                echo "${profiles[$i]} smoke exited with status $status"
+                failed=1
+              fi
+            done
+            exit "$failed"
           '
