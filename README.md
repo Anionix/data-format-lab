@@ -63,6 +63,8 @@ The default fair protocol uses 10 fresh processes per format and operation. Each
 
 Release assets are the distribution boundary for the frozen dataset, raw results, checksums, and binary artifacts. Git contains only schemas, manifests, a small fixture, generated Markdown summaries, and code.
 
+Start with the [`v0.1.0` evidence summary](reports/v0.1.0/README.md), then open the platform report or raw Release asset for the measurement details.
+
 macOS ARM and Linux x86_64 are separate runs. Their values must not be combined into a machine ranking. Direct corpus token counts apply only to text; binary formats report `N/A`. Lance data, index, metadata, logical directory size, and external zstd transport size are recorded separately.
 
 The Stars Data Card documents the Apple-heavy source bias, the fact that classifications are not ground truth, and missing historical raw API/classifier provenance. See [`datasets/github-stars-2026-07-03/DATA_CARD.md`](datasets/github-stars-2026-07-03/DATA_CARD.md).
