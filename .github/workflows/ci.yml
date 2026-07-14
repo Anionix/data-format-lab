@@ -47,7 +47,7 @@ jobs:
               after=$(sha256sum "$report")
               test "$before" = "$after"
               uv run --frozen python -c \
-                "import json,sys; m=json.load(open(sys.argv[1])); assert m['fixture'] and not m['rankable']" \
+                "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
                 "$run_dir/manifest.json"
             done
           '
