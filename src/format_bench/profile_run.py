@@ -75,6 +75,10 @@ def run_claims(
 ) -> Path:
     run, dataset = _load(run_dir)
     table = read_csv(run_dir / run["input"]["source"], dataset)
+    if run["fixture"]:
+        stress_rows = table.num_rows * 2
+        ts_devices, ts_points = 2, 10
+        warmups, iterations = 0, 1
     claims_dir = run_dir / "claims"
     claims_dir.mkdir()
 

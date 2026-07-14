@@ -34,7 +34,7 @@ def _fixture_manifest(manifest: dict, table, source: Path) -> dict:
 
 
 def _default_run_dir(root: Path, dataset_id: str) -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     return root / "runs" / f"{dataset_id}-{stamp}"
 
 

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Evaluate pinned environments
+        run: nix flake check --no-build --all-systems
+
+      - name: Synchronize frozen Python environment
+        run: nix develop --command uv sync --frozen
+
+      - name: Run tests
+        run: nix develop --command uv run --frozen pytest
+
+      - name: Smoke all benchmark lanes
+        run: |
+          nix develop --command bash -euo pipefail -c '
+            for profile in fair claims prompt; do
+              result=$(uv run --frozen format-bench run \
+                --profile "$profile" \
+                --dataset github-stars-2026-07-03 \
+                --fixture)
+              run_dir=$(dirname "$result")
+              report=$(uv run --frozen format-bench report --run-dir "$run_dir")
+              before=$(sha256sum "$report")
+              uv run --frozen format-bench report --run-dir "$run_dir" >/dev/null
+              after=$(sha256sum "$report")
+              test "$before" = "$after"
+              uv run --frozen python -c \
+                "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
+                "$run_dir/manifest.json"
+            done
+          '

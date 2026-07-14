@@ -17,7 +17,11 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
     dataset_manifest = json.loads(
         (run_dir / run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
     )
-    measurement = config or MeasurementConfig()
+    measurement = config or (
+        MeasurementConfig(fresh_processes=1, warmups=0, iterations=1)
+        if run_manifest["fixture"]
+        else MeasurementConfig()
+    )
     entries = {
         entry["format"]: entry
         for entry in run_manifest["formats"]
@@ -70,5 +74,6 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
                 ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
             )
     run_manifest["state"] = ExecutionState.BENCHMARKED
+    run_manifest["profile"] = "fair"
     manifest_path.write_text(json.dumps(run_manifest, indent=2, sort_keys=True) + "\n")
     return results_path

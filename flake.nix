@@ -43,6 +43,9 @@
             env = {
               PYTHONNOUSERSITE = "1";
               UV_PYTHON = "${pkgs.python312}/bin/python3.12";
+              UV_NO_EDITABLE = "1";
+            } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
             };
           };
         });
