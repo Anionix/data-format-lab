@@ -8,17 +8,23 @@
   "attempted_on": "2026-07-14",
   "comparability": "PARTIAL",
   "state": "FAILED",
+  "correction": "the earlier numeric -11 result used comma-separated input against the official pipe-delimited reader and is superseded",
   "attempts": [
     {
-      "entrypoint": "pyfastlanes==0.1.3.post9 CSV conversion",
-      "workload": "2,331 rows and 13 Stars columns",
-      "result": "TypedCast rejected a non-numeric string in a VARCHAR column"
+      "entrypoint": "official pipe-delimited numeric conversion",
+      "workload": "1,000,000 rows and 8 numeric columns",
+      "result": "round-trip succeeded"
     },
     {
-      "entrypoint": "official numeric conversion",
-      "workload": "1,000,000 rows and 8 numeric columns",
-      "result": "process exited -11"
+      "entrypoint": "official pipe-delimited string conversion",
+      "workload": "string dictionary at 1,023, 1,024, 1,025, 2,048, and 2,049 rows",
+      "result": "1,024 and 2,048 succeeded; partial vectors failed dictionary lookup"
+    },
+    {
+      "entrypoint": "official reader with invalid comma-delimited input",
+      "workload": "malformed delimiter input",
+      "result": "process exited -11; retained as robustness evidence"
     }
   ],
-  "retry_when": "the official Python writer round-trips mixed string/numeric tables without a process crash"
+  "retry_when": "the official reader round-trips partial-vector string dictionaries and rejects malformed input without terminating the process"
 }
