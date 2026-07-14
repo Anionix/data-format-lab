@@ -46,6 +46,21 @@ def _write_compact(table: pa.Table, path: Path) -> None:
     vortex.io.VortexWriteOptions.compact().write(reader, str(path))
 
 
+def _vortex_scan(
+    path: Path,
+    *,
+    expr=None,
+    indices=None,
+) -> int:
+    source = vortex.open(str(path))
+    return (
+        source.scan(PROJECTION, expr=expr, indices=indices)
+        .read_all()
+        .to_arrow_table()
+        .num_rows
+    )
+
+
 def _variant(
     name: str, table: pa.Table, directory: Path, warmups: int, iterations: int, seed: int
 ) -> dict:
@@ -58,36 +73,33 @@ def _variant(
     started = time.perf_counter_ns()
     _write_compact(table, vortex_path)
     vortex_write_ms = (time.perf_counter_ns() - started) / 1_000_000
-    vxf = vortex.open(str(vortex_path))
     sample_size = min(1000, table.num_rows)
     indices = sorted(random.Random(seed).sample(range(table.num_rows), sample_size))
     vortex_indices = vortex.array(pa.array(indices, type=pa.uint64()))
     operations = {
         "full_projection": (
             lambda: pq.read_table(parquet_path, columns=PROJECTION).num_rows,
-            lambda: vxf.scan(PROJECTION).read_all().to_arrow_table().num_rows,
+            lambda: _vortex_scan(vortex_path),
         ),
         "filter_popular": (
             lambda: pq.read_table(
                 parquet_path, columns=PROJECTION, filters=[("repo_stars", ">", 100000)]
             ).num_rows,
-            lambda: vxf.scan(
-                PROJECTION, expr=ve.column("repo_stars") > 100000
-            ).read_all().to_arrow_table().num_rows,
+            lambda: _vortex_scan(
+                vortex_path, expr=ve.column("repo_stars") > 100000
+            ),
         ),
         "filter_none": (
             lambda: pq.read_table(
                 parquet_path, columns=PROJECTION, filters=[("repo_stars", ">", 99_999_999)]
             ).num_rows,
-            lambda: vxf.scan(
-                PROJECTION, expr=ve.column("repo_stars") > 99_999_999
-            ).read_all().to_arrow_table().num_rows,
+            lambda: _vortex_scan(
+                vortex_path, expr=ve.column("repo_stars") > 99_999_999
+            ),
         ),
         "random_1000": (
             lambda: _parquet_random_take(parquet_path, indices),
-            lambda: vxf.scan(
-                PROJECTION, indices=vortex_indices
-            ).read_all().to_arrow_table().num_rows,
+            lambda: _vortex_scan(vortex_path, indices=vortex_indices),
         ),
     }
     measured = {}
