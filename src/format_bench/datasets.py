@@ -13,6 +13,7 @@ import zstandard as zstd
 
 
 API_VERSION = "2026-03-10"
+_GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -85,8 +86,15 @@ def capture_github_stars(
     *,
     captured_at: str | None = None,
 ) -> Path:
+    if _GITHUB_LOGIN.fullmatch(user) is None:
+        raise ValueError("GitHub user must be a valid login")
     timestamp = captured_at or datetime.now(timezone.utc).isoformat()
-    destination = output / f"github-stars-{user}-{timestamp[:10]}"
+    timestamp_slug = re.sub(r"[^A-Za-z0-9]+", "-", timestamp).strip("-")
+    if not timestamp_slug:
+        raise ValueError("capture timestamp must contain a letter or digit")
+    destination = output / f"github-stars-{user}-{timestamp_slug}"
+    if destination.exists():
+        raise FileExistsError(destination)
     records = _github_star_pages(user, os.environ.get("GITHUB_TOKEN"))
     destination.mkdir(parents=True, exist_ok=False)
     endpoint = f"https://api.github.com/users/{quote(user)}/starred?per_page=100"

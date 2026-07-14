@@ -46,12 +46,12 @@ def prepare_run(
     fixture: bool = False,
     selected: Iterable[FormatAdapter] | None = None,
 ) -> Path:
+    manifest = load_manifest(root, dataset_id)
     destination = run_dir or _default_run_dir(root, dataset_id)
     destination.mkdir(parents=True, exist_ok=False)
     input_dir = destination / "input"
     input_dir.mkdir()
 
-    manifest = load_manifest(root, dataset_id)
     source = (
         root / "datasets" / dataset_id / "fixture.csv"
         if fixture
