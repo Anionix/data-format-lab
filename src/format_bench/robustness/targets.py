@@ -90,6 +90,8 @@ def _text_malformed(data: bytes, target: str, kind: str) -> bytes:
 
             return "".join(append_column(line) for line in lines).encode()
     if target == "object_jsonl":
+        if kind not in {"missing_column", "extra_column"}:
+            raise ValueError(f"unsupported text target or malformed case: {target}/{kind}")
         lines = data.decode("utf-8").splitlines(keepends=True)
         if lines:
             row = json.loads(lines[0])

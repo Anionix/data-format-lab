@@ -73,10 +73,11 @@ def test_column_shape_cases_are_constructed_for_each_core_target(tmp_path: Path,
         assert artifact.native_bytes > 0
 
 
-def test_malformed_constructor_rejects_unknown_cases(tmp_path: Path) -> None:
+@pytest.mark.parametrize("target", core_targets(), ids=lambda item: item.name)
+def test_malformed_constructor_rejects_unknown_cases(tmp_path: Path, target) -> None:
     _, base = _fixture()
     with pytest.raises(ValueError, match="unsupported"):
-        encode_malformed(core_targets()[0], base, tmp_path / "bad.csv", "truncated")
+        encode_malformed(target, base, tmp_path / f"bad{target.adapter.describe().extension}", "truncated")
 
 
 @pytest.mark.parametrize("target", core_targets(), ids=lambda item: item.name)
