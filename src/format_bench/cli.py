@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from .datasets import capture_github_stars, fetch_dataset
+from .workflow import prepare_run, verify_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,14 +21,27 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("source", choices=["github-stars"])
     capture.add_argument("--user", required=True)
     capture.add_argument("--output", type=Path, default=Path(".data/captures"))
+
+    prepare = subcommands.add_parser("prepare")
+    prepare.add_argument("--dataset", required=True)
+    prepare.add_argument("--run-dir", type=Path)
+    prepare.add_argument("--fixture", action="store_true")
+
+    verify = subcommands.add_parser("verify")
+    verify.add_argument("--run-dir", type=Path, required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     root = Path.cwd()
-    if args.dataset_command == "fetch":
-        path = fetch_dataset(root, args.dataset_id, args.output)
+    if args.command == "dataset":
+        if args.dataset_command == "fetch":
+            path = fetch_dataset(root, args.dataset_id, args.output)
+        else:
+            path = capture_github_stars(args.user, args.output)
+    elif args.command == "prepare":
+        path = prepare_run(root, args.dataset, args.run_dir, fixture=args.fixture)
     else:
-        path = capture_github_stars(args.user, args.output)
+        path = verify_run(args.run_dir)
     print(path)
