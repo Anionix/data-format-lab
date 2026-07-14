@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   benchmark:
+    permissions:
+      contents: write # Draft Release assets require write-scoped repository access.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
