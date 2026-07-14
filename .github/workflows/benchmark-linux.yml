@@ -8,10 +8,10 @@ on:
         required: true
         type: choice
         options: [fair, claims, prompt]
-      release_tag:
-        description: Draft or published release containing the fixed dataset
+      release_id:
+        description: Numeric draft or published Release ID containing the fixed dataset
         required: true
-        default: v0.1.0
+        default: "353517336"
         type: string
 
 permissions:
@@ -33,9 +33,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p incoming .data/github-stars-2026-07-03
-          gh release download "${{ inputs.release_tag }}" \
-            --pattern github-stars-2026-07-03.csv.zst \
-            --dir incoming
+          asset_id=$(gh api \
+            "repos/$GITHUB_REPOSITORY/releases/${{ inputs.release_id }}" \
+            --jq '.assets[] | select(.name == "github-stars-2026-07-03.csv.zst") | .id')
+          test -n "$asset_id"
+          gh api -H "Accept: application/octet-stream" \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+            > incoming/github-stars-2026-07-03.csv.zst
           echo "7ec5d63fef91c2655fc5ff3ee89d719689ee0c33081f02669224be96e1d2b9c2  incoming/github-stars-2026-07-03.csv.zst" \
             | sha256sum -c -
           cp incoming/github-stars-2026-07-03.csv.zst \
