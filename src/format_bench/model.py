@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 
 
 class Lane(StrEnum):
@@ -40,10 +42,18 @@ _NEXT: dict[ExecutionState, frozenset[ExecutionState]] = {
     ExecutionState.FAILED: frozenset(),
 }
 _FAILURES = frozenset({ExecutionState.UNSUPPORTED, ExecutionState.FAILED})
+_ACTIVE = frozenset(
+    {
+        ExecutionState.DISCOVERED,
+        ExecutionState.ENCODED,
+        ExecutionState.ROUNDTRIP_VERIFIED,
+        ExecutionState.BENCHMARKED,
+    }
+)
 
 
 def transition(current: ExecutionState, target: ExecutionState) -> ExecutionState:
-    allowed = _NEXT[current] | (_FAILURES if current not in _FAILURES else frozenset())
+    allowed = _NEXT[current] | (_FAILURES if current in _ACTIVE else frozenset())
     if target not in allowed:
         raise ValueError(f"illegal evidence transition: {current} -> {target}")
     return target
@@ -65,7 +75,12 @@ class DatasetSpec:
     canonical_hash: str
     rows: int
     columns: tuple[ColumnSpec, ...]
-    expected_counts: dict[str, int]
+    expected_counts: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "expected_counts", MappingProxyType(dict(self.expected_counts))
+        )
 
     def asset_path(self, root: Path) -> Path:
         path = Path(self.asset_name)

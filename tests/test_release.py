@@ -11,9 +11,9 @@ from format_bench.release import EVIDENCE_FILES, package_run
 def test_release_package_is_deterministic_and_relative(tmp_path: Path) -> None:
     run = tmp_path / "run"
     (run / "input").mkdir(parents=True)
-    manifest = {"state": "BENCHMARKED", "dataset_id": "fixture"}
+    manifest = {"state": "REPORTED", "dataset_id": "fixture"}
     results = {
-        "state": "BENCHMARKED",
+        "state": "REPORTED",
         "dataset_id": "fixture",
         "profile": "fair",
         "run_id": "run-1",

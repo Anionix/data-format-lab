@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .model import Comparability, ExecutionState
+from .model import Comparability, ExecutionState, transition
 
 
 def _cell(value: object) -> str:
@@ -164,8 +164,9 @@ def _prompt(results: dict) -> list[str]:
 def render_report(run_dir: Path) -> Path:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
-    if manifest["state"] != ExecutionState.BENCHMARKED or results["state"] != ExecutionState.BENCHMARKED:
-        raise ValueError("report requires benchmarked manifest and results")
+    reportable = {ExecutionState.BENCHMARKED, ExecutionState.REPORTED}
+    if manifest["state"] not in reportable or results["state"] not in reportable:
+        raise ValueError("report requires benchmarked or reported manifest and results")
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("manifest and results dataset mismatch")
     profile = results["profile"]
@@ -188,4 +189,14 @@ def render_report(run_dir: Path) -> Path:
     ]
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
+    # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
+    for payload, json_path in (
+        (manifest, run_dir / "manifest.json"),
+        (results, run_dir / "results.json"),
+    ):
+        if payload["state"] == ExecutionState.BENCHMARKED:
+            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+        json_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     return path

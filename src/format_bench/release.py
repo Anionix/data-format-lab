@@ -29,10 +29,10 @@ def _safe_slug(value: str) -> str:
 def package_run(run_dir: Path, output: Path, platform: str) -> Path:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
-    if manifest["state"] != ExecutionState.BENCHMARKED:
-        raise ValueError("release packaging requires benchmarked evidence")
-    if results["state"] != ExecutionState.BENCHMARKED:
-        raise ValueError("release packaging requires benchmarked results")
+    if manifest["state"] != ExecutionState.REPORTED:
+        raise ValueError("release packaging requires reported evidence")
+    if results["state"] != ExecutionState.REPORTED:
+        raise ValueError("release packaging requires reported results")
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("release manifest and results dataset mismatch")
 
