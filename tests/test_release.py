@@ -21,6 +21,11 @@ def test_release_package_is_deterministic_and_relative(tmp_path: Path) -> None:
         "dataset_id": "fixture",
         "profile": "fair",
         "run_id": "run-1",
+        "results": {
+            "negative_research": {
+                "source_commits": {"artifact": "not-a-run-path"}
+            }
+        },
     }
     payloads = {
         "manifest.json": json.dumps(manifest),

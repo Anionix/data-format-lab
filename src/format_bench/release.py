@@ -27,18 +27,25 @@ def _safe_slug(value: str) -> str:
     return value
 
 
-def _artifact_references(payload: object) -> list[str]:
-    references = []
-    if isinstance(payload, dict):
-        for key, value in payload.items():
-            if key == "artifact" and isinstance(value, str):
-                references.append(value)
-            elif key == "artifacts" and isinstance(value, dict):
-                references.extend(item for item in value.values() if isinstance(item, str))
-            references.extend(_artifact_references(value))
-    elif isinstance(payload, list):
-        for value in payload:
-            references.extend(_artifact_references(value))
+def _artifact_references(manifest: dict, results: dict) -> list[str]:
+    references = [
+        entry["artifact"]
+        for entry in manifest.get("formats", [])
+        if isinstance(entry.get("artifact"), str)
+    ]
+    for observation in results.get("results", {}).values():
+        if not isinstance(observation, dict):
+            continue
+        evidence = observation.get("evidence", {})
+        for source in (observation, evidence):
+            if not isinstance(source, dict):
+                continue
+            if isinstance(source.get("artifact"), str):
+                references.append(source["artifact"])
+            if isinstance(source.get("artifacts"), dict):
+                references.extend(
+                    item for item in source["artifacts"].values() if isinstance(item, str)
+                )
     return references
 
 
@@ -50,7 +57,7 @@ def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
 
     run_root = run_dir.resolve()
     referenced_files = set()
-    for value in _artifact_references(manifest) + _artifact_references(results):
+    for value in _artifact_references(manifest, results):
         relative = Path(value)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"release artifact path is unsafe: {value}")
