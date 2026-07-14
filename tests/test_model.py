@@ -3,9 +3,16 @@ from pathlib import Path
 import pytest
 
 from format_bench.model import (
+    Applicability,
     ColumnSpec,
     DatasetSpec,
     ExecutionState,
+    Lane,
+    ObservedOutcome,
+    RobustnessExpectation,
+    RobustnessVerdict,
+    TargetTier,
+    robustness_verdict,
     transition,
 )
 
@@ -35,6 +42,49 @@ def test_lifecycle_rejects_skipped_or_terminal_transitions() -> None:
 
 def test_failure_is_available_from_an_active_state() -> None:
     assert transition(ExecutionState.ENCODED, ExecutionState.FAILED) is ExecutionState.FAILED
+
+
+def test_robustness_contract_exposes_the_public_vocabulary() -> None:
+    assert Lane.ROBUSTNESS == "robustness"
+    assert {tier.value for tier in TargetTier} == {"CORE", "EXPERIMENTAL"}
+    assert {verdict.value for verdict in RobustnessVerdict} == {
+        "PASS",
+        "FAIL",
+        "NOT_APPLICABLE",
+        "INCOMPLETE",
+    }
+
+
+@pytest.mark.parametrize(
+    ("expectation", "observed", "verdict"),
+    [
+        ("MUST_ROUNDTRIP", "ROUNDTRIP_EQUAL", "PASS"),
+        ("MUST_ROUNDTRIP", "REJECTED", "FAIL"),
+        ("MUST_REJECT", "REJECTED", "PASS"),
+        ("MUST_REJECT", "ACCEPTED", "FAIL"),
+        ("MUST_NOT_CRASH", "ACCEPTED", "PASS"),
+        ("MUST_NOT_CRASH", "REJECTED", "PASS"),
+        ("MUST_NOT_CRASH", "CRASHED", "FAIL"),
+        ("MUST_NOT_CRASH", "TIMED_OUT", "FAIL"),
+        ("MUST_NOT_CRASH", "UNSUPPORTED", "INCOMPLETE"),
+        ("MUST_NOT_CRASH", "BUDGET_EXHAUSTED", "INCOMPLETE"),
+        ("MUST_NOT_CRASH", "HARNESS_FAILED", "INCOMPLETE"),
+    ],
+)
+def test_robustness_verdict_is_derived_from_expectation_and_observation(
+    expectation: str, observed: str, verdict: str
+) -> None:
+    assert robustness_verdict(
+        RobustnessExpectation(expectation), ObservedOutcome(observed)
+    ) is RobustnessVerdict(verdict)
+
+
+def test_not_applicable_takes_precedence_over_observation() -> None:
+    assert robustness_verdict(
+        RobustnessExpectation.MUST_ROUNDTRIP,
+        ObservedOutcome.CRASHED,
+        Applicability.NOT_APPLICABLE,
+    ) is RobustnessVerdict.NOT_APPLICABLE
 
 
 def test_dataset_asset_path_stays_under_the_run_root() -> None:
