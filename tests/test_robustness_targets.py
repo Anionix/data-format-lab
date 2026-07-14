@@ -6,6 +6,7 @@ import pyarrow as pa
 import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
+from format_bench.model import ObservedOutcome
 from format_bench.robustness import (
     core_targets,
     encode_malformed,
@@ -14,6 +15,7 @@ from format_bench.robustness import (
     named_cases,
     target_map,
 )
+from format_bench.robustness.worker import run_request
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -65,3 +67,27 @@ def test_malformed_constructor_rejects_unknown_cases(tmp_path: Path) -> None:
     _, base = _fixture()
     with pytest.raises(ValueError, match="unsupported"):
         encode_malformed(core_targets()[0], base, tmp_path / "bad.csv", "truncated")
+
+
+@pytest.mark.parametrize("target", core_targets(), ids=lambda item: item.name)
+@pytest.mark.parametrize("kind", ["missing_column", "extra_column"])
+def test_malformed_column_cases_are_rejected_by_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target, kind: str
+) -> None:
+    manifest, base = _fixture()
+    manifest["canonical_hash"] = canonical_hash(base)
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / f"malformed{target.adapter.describe().extension}"
+    encode_malformed(target, base, path, kind)
+    request = tmp_path / "request.json"
+    request.write_text(json.dumps({
+        "schema_version": "1",
+        "case_id": f"{target.name}-{kind}",
+        "target": target.name,
+        "expectation": "MUST_REJECT",
+        "manifest": "manifest.json",
+        "artifact": path.name,
+    }))
+    result = run_request(request)
+    assert result["observed"] is ObservedOutcome.REJECTED

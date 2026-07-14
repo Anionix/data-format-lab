@@ -6,6 +6,7 @@ from pathlib import Path
 
 from format_bench.model import ObservedOutcome, RobustnessExpectation
 from format_bench.registry import adapter_map
+from format_bench.robustness.targets import read_robustness, target_map
 
 
 def _safe(root: Path, value: str) -> Path:
@@ -35,7 +36,12 @@ def run_request(request_path: Path) -> dict:
             adapter.verify_roundtrip(artifact, json.loads(manifest.read_text(encoding="utf-8")))
             observed = ObservedOutcome.ROUNDTRIP_EQUAL
         else:
-            adapter.read(artifact, json.loads(manifest.read_text(encoding="utf-8")))
+            effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+            robustness_target = target_map().get(target)
+            if robustness_target is None:
+                adapter.read(artifact, effective_manifest)
+            else:
+                read_robustness(robustness_target, artifact, effective_manifest)
             observed = ObservedOutcome.ACCEPTED
     except ModuleNotFoundError as error:
         observed = ObservedOutcome.UNSUPPORTED
