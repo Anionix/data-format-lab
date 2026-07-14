@@ -3,12 +3,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Protocol
 
 import pyarrow as pa
 import zstandard as zstd
 
 from format_bench.model import Comparability, Lane
+
+if TYPE_CHECKING:
+    from format_bench.fair import FairOperation
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,8 @@ class FormatAdapter(Protocol):
     def read(self, path: Path, manifest: dict) -> pa.Table: ...
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict: ...
+
+    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table: ...
 
 
 def write_artifact(path: Path, writer: Callable[[], None]) -> Artifact:
