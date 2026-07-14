@@ -6,6 +6,7 @@ from pathlib import Path
 
 from format_bench.model import ObservedOutcome, RobustnessExpectation
 from format_bench.registry import adapter_map
+from format_bench.robustness.paths import reject_symlink_tree
 from format_bench.robustness.targets import read_robustness, target_map
 
 
@@ -19,6 +20,7 @@ def _safe(root: Path, value: str) -> Path:
     target = candidate.resolve()
     if not target.is_relative_to(root.resolve()) or not target.exists():
         raise ValueError("robustness artifact path is missing or unsafe")
+    reject_symlink_tree(target, "robustness artifact tree contains a symlink")
     return target
 
 
