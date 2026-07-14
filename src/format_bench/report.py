@@ -87,6 +87,7 @@ def _fair(manifest: dict, results: dict) -> list[str]:
                 evidence["warm"]["p95_ms"],
                 evidence["warm"]["iqr_ms"],
                 evidence["result"],
+                evidence["evidence"]["normalized_hash"],
                 evidence["max_rss_bytes_p50"],
             ]
         )
@@ -96,7 +97,17 @@ def _fair(manifest: dict, results: dict) -> list[str]:
             "## Fair Operations",
             "",
             *_table(
-                ["Format", "Operation", "Fresh p50 ms", "Warm p50 ms", "Warm p95 ms", "IQR ms", "Rows", "RSS bytes"],
+                [
+                    "Format",
+                    "Operation",
+                    "Fresh p50 ms",
+                    "Warm p50 ms",
+                    "Warm p95 ms",
+                    "IQR ms",
+                    "Rows",
+                    "Result hash",
+                    "RSS bytes",
+                ],
                 timings,
             ),
         ]
@@ -130,6 +141,7 @@ def _prompt(results: dict) -> list[str]:
             name,
             item["payload_bytes"],
             item["taxonomy_bytes"],
+            item.get("schema_bytes", 0),
             item["total_bytes"],
             item["tokens"]["o200k_base"],
             item["tokens"]["cl100k_base"],
@@ -151,7 +163,18 @@ def _prompt(results: dict) -> list[str]:
     return [
         "## Prompt Corpus",
         "",
-        *_table(["Format", "Payload bytes", "Taxonomy bytes", "Total bytes", "o200k", "cl100k"], corpus),
+        *_table(
+            [
+                "Format",
+                "Payload bytes",
+                "Taxonomy bytes",
+                "Schema bytes",
+                "Total bytes",
+                "o200k",
+                "cl100k",
+            ],
+            corpus,
+        ),
         "",
         "## Retrieval Payload",
         "",
