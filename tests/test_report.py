@@ -142,7 +142,8 @@ def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
                 "partial": {
                     "comparability": "PARTIAL",
                     "state": "FAILED",
-                    "attempts": [{"result": "failed build"}],
+                    "claim_summary": "failed build",
+                    "attempts": [{"result": "robustness crash"}],
                 }
             },
         },
@@ -156,3 +157,5 @@ def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
     assert reported["measured"]["state"] == "REPORTED"
     assert reported["unsupported"]["state"] == "UNSUPPORTED"
     assert reported["negative_research"]["partial"]["state"] == "FAILED"
+    assert "failed build" in (tmp_path / "report.md").read_text()
+    assert "robustness crash" not in (tmp_path / "report.md").read_text()
