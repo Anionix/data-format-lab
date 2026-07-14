@@ -42,17 +42,17 @@ Nix pins Python 3.12 and native tools. `uv.lock` pins the Python environment.
 ```bash
 nix develop
 uv sync --frozen
-format-bench run --profile prompt --dataset github-stars-2026-07-03 --fixture
+uv run --frozen format-bench run --profile prompt --dataset github-stars-2026-07-03 --fixture
 ```
 
 The fixture command is a non-rankable smoke test. For the full published dataset:
 
 ```bash
-format-bench dataset fetch github-stars-2026-07-03
-format-bench prepare --dataset github-stars-2026-07-03 --run-dir runs/fair-local
-format-bench verify --run-dir runs/fair-local
-format-bench run --profile fair --dataset github-stars-2026-07-03 --run-dir runs/fair-local
-format-bench report --run-dir runs/fair-local
+uv run --frozen format-bench dataset fetch github-stars-2026-07-03
+uv run --frozen format-bench prepare --dataset github-stars-2026-07-03 --run-dir runs/fair-local
+uv run --frozen format-bench verify --run-dir runs/fair-local
+uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-03 --run-dir runs/fair-local
+uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
 Run `claims` and `prompt` in separate run directories. Omitting `--run-dir` makes `run` prepare and verify a new timestamped directory automatically.

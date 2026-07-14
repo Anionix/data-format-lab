@@ -36,17 +36,17 @@ DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED
 ```bash
 nix develop
 uv sync --frozen
-format-bench run --profile prompt --dataset github-stars-2026-07-03 --fixture
+uv run --frozen format-bench run --profile prompt --dataset github-stars-2026-07-03 --fixture
 ```
 
 `--fixture`は順位対象外のsmoke testです。公開Releaseの全データを使う場合は次の順です。
 
 ```bash
-format-bench dataset fetch github-stars-2026-07-03
-format-bench prepare --dataset github-stars-2026-07-03 --run-dir runs/fair-local
-format-bench verify --run-dir runs/fair-local
-format-bench run --profile fair --dataset github-stars-2026-07-03 --run-dir runs/fair-local
-format-bench report --run-dir runs/fair-local
+uv run --frozen format-bench dataset fetch github-stars-2026-07-03
+uv run --frozen format-bench prepare --dataset github-stars-2026-07-03 --run-dir runs/fair-local
+uv run --frozen format-bench verify --run-dir runs/fair-local
+uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-03 --run-dir runs/fair-local
+uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
 測定値そのものはCIの合否に使いません。公開測定はmacOS ARMとLinux x86_64を別runにし、入力hash、commit、flake lock、依存版、seed、writer設定、失敗理由とともに保存します。
