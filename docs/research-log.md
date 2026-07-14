@@ -26,6 +26,8 @@ The investigation then asked whether vendor and project claims were plausible, a
 
 [FastLanes](https://github.com/cwida/FastLanes), [Nimble](https://github.com/facebookincubator/nimble), and [AnyBlox](https://github.com/AnyBlox/vldb-2025) were attempted from pinned source commits. Mixed-column conversion, official build, or toolchain reproduction did not complete. Their failures are versioned evidence with retry conditions, not blank table cells.
 
+Correction: the FastLanes numeric failure was caused by the lab writing comma-separated input to a reader configured for a pipe delimiter. With `|`, one million rows by eight numeric columns round-trip. Separate string tests still show a partial-vector boundary: 1,024 and 2,048 rows succeed while 1,023, 1,025, and 2,049 fail dictionary lookup. Invalid comma input can also terminate the process. The robustness lane records these as distinct harness, conformance, and crash-resistance observations rather than one format verdict.
+
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
 ## Token questions
