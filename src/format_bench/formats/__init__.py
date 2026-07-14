@@ -1,4 +1,5 @@
 from .base import Artifact, FormatAdapter, FormatDescription
+from .parquet import ParquetAdapter
 from .text import CsvAdapter, ObjectJsonlAdapter
 
 __all__ = [
@@ -7,4 +8,5 @@ __all__ = [
     "FormatAdapter",
     "FormatDescription",
     "ObjectJsonlAdapter",
+    "ParquetAdapter",
 ]
