@@ -39,6 +39,14 @@ def test_canonical_hash_is_independent_of_row_order() -> None:
     assert canonical_hash(table) == canonical_hash(table.take(pa.array([3, 2, 1, 0])))
 
 
+def test_canonical_hash_breaks_duplicate_keys_with_the_full_row() -> None:
+    table = pa.table(
+        {"full_name": ["same/repo", "same/repo"], "value": [2, 1]}
+    )
+    reversed_table = table.take(pa.array([1, 0]))
+    assert canonical_hash(table) == canonical_hash(reversed_table)
+
+
 def test_verify_table_checks_hash_schema_rows_and_queries() -> None:
     manifest, table = fixture_contract()
     assert verify_table(table, manifest)["passed"] is True
