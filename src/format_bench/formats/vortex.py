@@ -6,6 +6,7 @@ import pyarrow as pa
 import vortex
 
 from format_bench.canonical import arrow_schema, verify_table
+from format_bench.fair import FairOperation, arrow_filter, columns_for, limit_for
 from format_bench.model import Comparability, Lane
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -45,3 +46,9 @@ class VortexAdapter:
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
+
+    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+        dataset = vortex.open(str(path)).to_dataset()
+        limit = limit_for(operation, manifest["rows"])
+        kwargs = {"columns": columns_for(operation), "filter": arrow_filter(operation)}
+        return dataset.head(limit, **kwargs) if limit is not None else dataset.to_table(**kwargs)

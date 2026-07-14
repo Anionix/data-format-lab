@@ -11,6 +11,7 @@ import pyarrow as pa
 import zstandard as zstd
 
 from format_bench.canonical import arrow_schema, verify_table
+from format_bench.fair import FairOperation, columns_for, lance_filter, limit_for
 from format_bench.model import Comparability, Lane
 from format_bench.runner import stats_ms
 
@@ -79,6 +80,13 @@ class LanceAdapter:
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
+
+    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+        return lance.dataset(path).to_table(
+            columns=columns_for(operation),
+            filter=lance_filter(operation),
+            limit=limit_for(operation, manifest["rows"]),
+        )
 
 
 def _search_table(table: pa.Table) -> pa.Table:
