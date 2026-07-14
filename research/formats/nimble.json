@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "name": "nimble",
+  "repository": "https://github.com/facebookincubator/nimble",
+  "source_commits": {"core": "9da673156acfed828991be52cb393be564108ce0"},
+  "primary_source": "https://github.com/facebookincubator/nimble",
+  "claim": "extensible columnar storage for datasets with thousands of columns",
+  "attempted_on": "2026-07-14",
+  "comparability": "UNAVAILABLE",
+  "state": "UNSUPPORTED",
+  "attempts": [
+    {
+      "entrypoint": "official CMake build with Velox and OpenZL submodules",
+      "workload": "configure a release build before the planned 1,024-column projection test",
+      "result": "CMake generation could not resolve protobuf::libprotobuf and fmt::fmt in sibling Nimble directories"
+    }
+  ],
+  "retry_when": "the pinned official tree configures with documented dependency targets or a standalone reader/writer is published"
+}

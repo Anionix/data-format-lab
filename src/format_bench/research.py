@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from .model import Comparability, ExecutionState
+
+
+def load_research_records(root: Path) -> dict[str, dict]:
+    records = {}
+    for path in sorted((root / "research" / "formats").glob("*.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        name = record["name"]
+        if path.stem != name:
+            raise ValueError(f"research filename does not match name: {path}")
+        Comparability(record["comparability"])
+        state = ExecutionState(record["state"])
+        if state not in {ExecutionState.UNSUPPORTED, ExecutionState.FAILED}:
+            raise ValueError(f"negative evidence must have a terminal state: {name}")
+        if any(len(commit) != 40 for commit in record["source_commits"].values()):
+            raise ValueError(f"research commit is not a full SHA: {name}")
+        if str(root) in json.dumps(record):
+            raise ValueError(f"research evidence leaks a local path: {name}")
+        records[name] = record
+    return records

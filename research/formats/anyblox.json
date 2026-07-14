@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "name": "anyblox",
+  "repository": "https://github.com/AnyBlox/vldb-2025",
+  "source_commits": {
+    "artifact": "3cf5008b4af5165761021b9f6f24d326d83d2a56",
+    "core": "02447f8b5dff3cee53ecc82f2992355b0600fa05"
+  },
+  "primary_source": "https://www.vldb.org/pvldb/vol18/p4017-gienieczko.pdf",
+  "claim": "embed a WebAssembly decoder so readers can consume previously unknown formats",
+  "attempted_on": "2026-07-14",
+  "comparability": "PARTIAL",
+  "state": "FAILED",
+  "attempts": [
+    {
+      "entrypoint": "official bundler and anyblox2csv Cargo targets",
+      "workload": "build the VLDB 2025 reproducibility artifact with all submodules",
+      "result": "vendored Vortex code required unversioned nightly Rust features; stable Rust failed with E0554/E0599"
+    }
+  ],
+  "retry_when": "the artifact pins a reproducible nightly toolchain or builds on stable Rust"
+}
