@@ -1,0 +1,72 @@
+name: Benchmark Linux x86_64
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Benchmark lane
+        required: true
+        type: choice
+        options: [fair, claims, prompt]
+      release_tag:
+        description: Draft or published release containing the fixed dataset
+        required: true
+        default: v0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out public commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Download fixed dataset from Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p incoming .data/github-stars-2026-07-03
+          gh release download "${{ inputs.release_tag }}" \
+            --pattern github-stars-2026-07-03.csv.zst \
+            --dir incoming
+          echo "7ec5d63fef91c2655fc5ff3ee89d719689ee0c33081f02669224be96e1d2b9c2  incoming/github-stars-2026-07-03.csv.zst" \
+            | sha256sum -c -
+          cp incoming/github-stars-2026-07-03.csv.zst \
+            .data/github-stars-2026-07-03/github-stars-2026-07-03.csv.zst
+          nix develop --command zstd -d \
+            incoming/github-stars-2026-07-03.csv.zst \
+            -o .data/github-stars-2026-07-03/source.csv
+          echo "39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e  .data/github-stars-2026-07-03/source.csv" \
+            | sha256sum -c -
+
+      - name: Synchronize frozen Python environment
+        run: nix develop --command uv sync --frozen
+
+      - name: Run selected benchmark lane
+        id: benchmark
+        run: |
+          result=$(nix develop --command uv run --frozen format-bench run \
+            --profile "${{ inputs.profile }}" \
+            --dataset github-stars-2026-07-03)
+          run_dir=$(dirname "$result")
+          nix develop --command uv run --frozen format-bench report --run-dir "$run_dir"
+          archive=$(nix develop --command uv run --frozen format-bench package \
+            --run-dir "$run_dir" \
+            --platform linux-x86_64)
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: data-format-lab-${{ inputs.profile }}-linux-x86_64
+          path: |
+            ${{ steps.benchmark.outputs.archive }}
+            ${{ steps.benchmark.outputs.archive }}.sha256
+          if-no-files-found: error
