@@ -29,10 +29,7 @@ jobs:
       - name: Synchronize frozen Python environment
         run: nix develop --command uv sync --frozen
 
-      - name: Run tests
-        run: nix develop --command uv run --frozen pytest
-
-      - name: Smoke all benchmark lanes
+      - name: Run tests and smoke lanes concurrently
         run: |
           # shellcheck disable=SC2016
           nix develop --command bash -euo pipefail -c '
@@ -41,6 +38,9 @@ jobs:
 
             profiles=(fair claims prompt)
             pids=()
+
+            .venv/bin/pytest >"$tmp_dir/tests.log" 2>&1 &
+            test_pid="$!"
 
             # Each profile creates an independent run directory, so the smoke lanes can overlap.
             run_smoke() {
@@ -69,6 +69,17 @@ jobs:
             done
 
             failed=0
+            if wait "$test_pid"; then
+              echo "tests passed"
+              tail -n 5 "$tmp_dir/tests.log"
+            else
+              status="$?"
+              echo "::group::tests failed"
+              cat "$tmp_dir/tests.log"
+              echo "::endgroup::"
+              echo "tests exited with status $status"
+              failed=1
+            fi
             for i in "${!profiles[@]}"; do
               if wait "${pids[$i]}"; then
                 echo "${profiles[$i]} smoke passed"
