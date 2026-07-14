@@ -33,18 +33,18 @@ All ranked formats returned 2,331 rows, 119 AI/LLM rows, 15 repositories above
 
 | Rank | Format | Native bytes | Warm read-all p50 ms |
 | ---: | --- | ---: | ---: |
-| 1 | Parquet zstd-19 | 176,713 | 1.165 |
-| 2 | Vortex compact | 183,576 | 1.363 |
-| 3 | Parquet default | 200,031 | 1.139 |
-| 4 | Vortex default | 286,416 | 0.963 |
-| 5 | Lance base | 314,300 | 2.072 |
-| 6 | CSV | 658,439 | 1.260 |
-| 7 | object JSONL | 1,049,957 | 2.996 |
+| 1 | Parquet zstd-19 | 176,713 | 1.449 |
+| 2 | Vortex compact | 183,576 | 1.991 |
+| 3 | Parquet default | 200,031 | 1.403 |
+| 4 | Vortex default | 286,416 | 1.523 |
+| 5 | Lance base | 315,004 | 2.425 |
+| 6 | CSV | 658,439 | 1.536 |
+| 7 | object JSONL | 1,049,957 | 4.914 |
 
 Native size and read latency answer different questions. zstd-19 produced the
 smallest artifact here but had a substantially higher write cost than default
-Parquet. Parquet default had the lowest warm read-all p50 in the final macOS
-run; Vortex default did in the current Linux run.
+Parquet. Parquet default had the lowest warm read-all p50 in both final
+platform runs.
 
 ## Claim workloads
 
@@ -56,14 +56,14 @@ These results are comparable only inside each workload and platform.
 | macOS ARM | Vortex sorted full projection | Parquet 6.236 ms; Vortex 3.013 ms |
 | macOS ARM | Vortex unsorted random 1,000 | Parquet 20.431 ms; Vortex 2.560 ms |
 | macOS ARM | TsFile time range | Parquet 2.364 ms; TsFile 1.999 ms; 1,000 rows each |
-| Linux x86_64 | Lance FTS | 944,578 logical bytes; 418,696 index bytes; `agent` p50 1.566 ms |
-| Linux x86_64 | Vortex sorted full projection | Parquet 14.072 ms; Vortex 4.283 ms |
-| Linux x86_64 | Vortex unsorted random 1,000 | Parquet 25.169 ms; Vortex 3.973 ms |
-| Linux x86_64 | TsFile time range | Parquet 4.129 ms; TsFile 2.767 ms; 1,000 rows each |
+| Linux x86_64 | Lance FTS | 940,418 logical bytes; 418,696 index bytes; `agent` p50 1.403 ms |
+| Linux x86_64 | Vortex sorted full projection | Parquet 12.990 ms; Vortex 4.685 ms |
+| Linux x86_64 | Vortex unsorted random 1,000 | Parquet 24.829 ms; Vortex 4.453 ms |
+| Linux x86_64 | TsFile time range | Parquet 3.875 ms; TsFile 2.674 ms; 1,000 rows each |
 
 The TsFile claim used 1,000,000 time-series rows. TsFile was 313,744 bytes and
 Parquet was 5,777,023 bytes in every run, but TsFile writes were much slower:
-6.34 s versus 0.48 s on macOS run 1 and 10.10 s versus 0.74 s on Linux run 1.
+6.34 s versus 0.48 s on macOS run 1 and 9.25 s versus 0.72 s on Linux run 1.
 
 The Vortex stress artifacts were deterministic. Sorted Parquet/Vortex sizes
 were 2,761,465/2,026,488 bytes; unsorted sizes were
@@ -90,10 +90,11 @@ to the same Compact TSV before token measurement.
   42 fair operations. Non-Lance fair artifact sizes were identical between runs.
 - macOS fair warm p50 changed by 1.98% at the median and 8.29% at the maximum;
   fresh-process p50 changed by 2.36% at the median and 11.38% at the maximum.
-  Linux warm p50 changed by 25.15% at the median and 64.35% at the maximum, so
-  timings are observations rather than stable constants.
-- Lance base changed from 315,515 to 314,043 bytes on macOS and from 314,300 to
-  315,516 bytes on Linux. Indexed logical size also changed, while the FTS index
+  Linux warm p50 changed by 2.00% at the median and 11.83% at the maximum;
+  fresh-process p50 changed by 2.45% at the median and 7.82% at the maximum.
+  Timings remain observations rather than stable constants.
+- Lance base changed from 315,515 to 314,043 bytes on macOS and from 315,004 to
+  313,787 bytes on Linux. Indexed logical size also changed, while the FTS index
   stayed exactly 418,696 bytes.
 - An earlier exploratory run observed a 704-byte Lance delta. Its raw artifact
   was not retained, so it is a research-log concern rather than release evidence.
