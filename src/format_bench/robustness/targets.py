@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import lance
+import vortex
 import zstandard as zstd
 
 from format_bench.canonical import arrow_schema
@@ -25,7 +28,15 @@ def core_targets() -> tuple[RobustnessTarget, ...]:
     registered = adapter_map()
     return tuple(
         RobustnessTarget(name, registered[name])
-        for name in ("csv", "object_jsonl", "parquet_default", "parquet_zstd19")
+        for name in (
+            "csv",
+            "object_jsonl",
+            "parquet_default",
+            "parquet_zstd19",
+            "lance_base",
+            "vortex_default",
+            "vortex_compact",
+        )
     )
 
 
@@ -35,7 +46,12 @@ def target_map() -> dict[str, RobustnessTarget]:
 
 def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.Table:
     expected = arrow_schema(manifest).names
-    if target.name == "object_jsonl":
+    if target.name == "csv":
+        with path.open(encoding="utf-8", newline="") as handle:
+            physical = next(csv.reader(handle), [])
+        if physical != expected:
+            raise ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
+    elif target.name == "object_jsonl":
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             value = json.loads(line)
             if not isinstance(value, dict) or set(value) != set(expected):
@@ -44,6 +60,14 @@ def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.
         physical = pq.ParquetFile(path).schema_arrow.names
         if physical != expected:
             raise ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
+    elif target.name == "lance_base":
+        physical = lance.dataset(path).schema.names
+        if physical != expected:
+            raise ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
+    elif target.name.startswith("vortex_"):
+        physical = vortex.open(str(path)).to_dataset().schema.names
+        if physical != expected:
+            raise ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
     return target.adapter.read(path, manifest)
 
 
@@ -60,8 +84,11 @@ def _text_malformed(data: bytes, target: str, kind: str) -> bytes:
             newline = "\n" if lines[0].endswith("\n") else ""
             return (lines[0].rstrip("\r\n").rsplit(",", 1)[0] + newline + "".join(lines[1:])).encode()
         if kind == "extra_column" and len(lines) > 1:
-            line = lines[1].rstrip("\r\n") + ",unexpected\n"
-            return lines[0].encode() + line.encode() + b"".join(item.encode() for item in lines[2:])
+            def append_column(line: str) -> str:
+                newline = "\n" if line.endswith("\n") else ""
+                return line.rstrip("\r\n") + ",unexpected" + newline
+
+            return "".join(append_column(line) for line in lines).encode()
     if target == "object_jsonl":
         lines = data.decode("utf-8").splitlines(keepends=True)
         if lines:

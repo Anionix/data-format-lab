@@ -32,7 +32,13 @@ def _fixture() -> tuple[dict, pa.Table]:
 
 def test_core_targets_reuse_registered_adapters() -> None:
     assert [target.name for target in core_targets()] == [
-        "csv", "object_jsonl", "parquet_default", "parquet_zstd19"
+        "csv",
+        "object_jsonl",
+        "parquet_default",
+        "parquet_zstd19",
+        "lance_base",
+        "vortex_default",
+        "vortex_compact",
     ]
     assert set(target_map()) == {target.name for target in core_targets()}
 
@@ -59,8 +65,12 @@ def test_column_shape_cases_are_constructed_for_each_core_target(tmp_path: Path,
     _, base = _fixture()
     path = tmp_path / f"malformed{target.adapter.describe().extension}"
     artifact = encode_malformed(target, base, path, kind)
-    assert path.is_file() and path.stat().st_size > 0
-    assert artifact.native_bytes == path.stat().st_size
+    assert path.exists()
+    if path.is_file():
+        assert path.stat().st_size > 0
+        assert artifact.native_bytes == path.stat().st_size
+    else:
+        assert artifact.native_bytes > 0
 
 
 def test_malformed_constructor_rejects_unknown_cases(tmp_path: Path) -> None:
