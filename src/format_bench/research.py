@@ -7,6 +7,7 @@ from .model import Comparability, ExecutionState
 
 
 def load_research_records(root: Path) -> dict[str, dict]:
+    root = root.resolve()
     records = {}
     for path in sorted((root / "research" / "formats").glob("*.json")):
         record = json.loads(path.read_text(encoding="utf-8"))

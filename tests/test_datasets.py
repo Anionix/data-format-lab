@@ -44,3 +44,34 @@ def test_capture_is_append_only_and_records_provenance(
         datasets.capture_github_stars(
             "octocat", tmp_path, captured_at="2026-07-14T01:02:03+00:00"
         )
+
+
+def test_capture_uses_the_full_timestamp_for_unique_destinations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(datasets, "_github_star_pages", lambda user, token: [])
+
+    first = datasets.capture_github_stars(
+        "octocat", tmp_path, captured_at="2026-07-14T01:02:03+00:00"
+    )
+    second = datasets.capture_github_stars(
+        "octocat", tmp_path, captured_at="2026-07-14T01:02:04+00:00"
+    )
+
+    assert first != second
+
+
+def test_capture_rejects_unsafe_login_before_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requested = False
+
+    def request(user: str, token: str | None) -> list[dict]:
+        nonlocal requested
+        requested = True
+        return []
+
+    monkeypatch.setattr(datasets, "_github_star_pages", request)
+    with pytest.raises(ValueError, match="valid login"):
+        datasets.capture_github_stars("../octocat", tmp_path)
+    assert requested is False

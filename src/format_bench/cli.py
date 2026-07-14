@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
-from .datasets import capture_github_stars, fetch_dataset
+from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .fair_run import run_fair
 from .profile_run import run_claims, run_prompt
 from .release import package_run
@@ -50,6 +51,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_directory(root: Path, args: argparse.Namespace) -> Path:
+    load_manifest(root, args.dataset)
+    if args.run_dir is None or not args.run_dir.exists():
+        run_dir = prepare_run(
+            root, args.dataset, args.run_dir, fixture=args.fixture
+        )
+        verify_run(run_dir)
+        return run_dir
+    if args.fixture:
+        raise ValueError("--fixture only applies when creating a run directory")
+    manifest_path = args.run_dir / "manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError("existing run directory must contain manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("dataset_id") != args.dataset:
+        raise ValueError("run directory dataset does not match --dataset")
+    return args.run_dir
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     root = Path.cwd()
@@ -63,11 +83,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "verify":
         path = verify_run(args.run_dir)
     elif args.command == "run":
-        if args.run_dir is not None and args.fixture:
-            raise ValueError("--fixture cannot be combined with --run-dir")
-        run_dir = args.run_dir or prepare_run(root, args.dataset, fixture=args.fixture)
-        if args.run_dir is None:
-            verify_run(run_dir)
+        run_dir = _run_directory(root, args)
         runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
         path = runners[args.profile](root, run_dir)
     elif args.command == "report":
