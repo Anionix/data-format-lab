@@ -21,13 +21,13 @@ All ranked formats returned 2,331 rows, 119 AI/LLM rows, 15 repositories above
 
 | Rank | Format | Native bytes | Warm read-all p50 ms |
 | ---: | --- | ---: | ---: |
-| 1 | Parquet zstd-19 | 176,713 | 0.838 |
-| 2 | Vortex compact | 183,576 | 0.955 |
-| 3 | Parquet default | 200,031 | 0.786 |
-| 4 | Vortex default | 286,328 | 0.602 |
-| 5 | Lance base | 314,428 | 1.429 |
-| 6 | CSV | 658,439 | 1.648 |
-| 7 | object JSONL | 1,049,957 | 3.459 |
+| 1 | Parquet zstd-19 | 176,713 | 0.883 |
+| 2 | Vortex compact | 183,576 | 1.281 |
+| 3 | Parquet default | 200,031 | 0.820 |
+| 4 | Vortex default | 286,328 | 0.933 |
+| 5 | Lance base | 315,515 | 1.429 |
+| 6 | CSV | 658,439 | 1.730 |
+| 7 | object JSONL | 1,049,957 | 3.537 |
 
 ### Linux x86_64 run 1
 
@@ -43,7 +43,8 @@ All ranked formats returned 2,331 rows, 119 AI/LLM rows, 15 repositories above
 
 Native size and read latency answer different questions. zstd-19 produced the
 smallest artifact here but had a substantially higher write cost than default
-Parquet. Vortex default had the lowest warm read-all p50 in both platform runs.
+Parquet. Parquet default had the lowest warm read-all p50 in the final macOS
+run; Vortex default did in the current Linux run.
 
 ## Claim workloads
 
@@ -51,10 +52,10 @@ These results are comparable only inside each workload and platform.
 
 | Platform | Claim | Result from run 1 |
 | --- | --- | --- |
-| macOS ARM | Lance FTS | 944,129 logical bytes; 418,696 index bytes; `agent` p50 0.579 ms |
-| macOS ARM | Vortex sorted full projection | Parquet 5.637 ms; Vortex 2.357 ms |
-| macOS ARM | Vortex unsorted random 1,000 | Parquet 20.886 ms; Vortex 2.148 ms |
-| macOS ARM | TsFile time range | Parquet 2.324 ms; TsFile 2.034 ms; 1,000 rows each |
+| macOS ARM | Lance FTS | 945,600 logical bytes; 418,696 index bytes; `agent` p50 1.094 ms |
+| macOS ARM | Vortex sorted full projection | Parquet 6.236 ms; Vortex 3.013 ms |
+| macOS ARM | Vortex unsorted random 1,000 | Parquet 20.431 ms; Vortex 2.560 ms |
+| macOS ARM | TsFile time range | Parquet 2.364 ms; TsFile 1.999 ms; 1,000 rows each |
 | Linux x86_64 | Lance FTS | 944,578 logical bytes; 418,696 index bytes; `agent` p50 1.566 ms |
 | Linux x86_64 | Vortex sorted full projection | Parquet 14.072 ms; Vortex 4.283 ms |
 | Linux x86_64 | Vortex unsorted random 1,000 | Parquet 25.169 ms; Vortex 3.973 ms |
@@ -62,7 +63,7 @@ These results are comparable only inside each workload and platform.
 
 The TsFile claim used 1,000,000 time-series rows. TsFile was 313,744 bytes and
 Parquet was 5,777,023 bytes in every run, but TsFile writes were much slower:
-5.75 s versus 0.48 s on macOS run 1 and 10.10 s versus 0.74 s on Linux run 1.
+6.34 s versus 0.48 s on macOS run 1 and 10.10 s versus 0.74 s on Linux run 1.
 
 The Vortex stress artifacts were deterministic. Sorted Parquet/Vortex sizes
 were 2,761,465/2,026,488 bytes; unsorted sizes were
@@ -76,7 +77,7 @@ The taxonomy dictionary is included once in every total.
 | Representation | Total bytes | `o200k_base` | `cl100k_base` |
 | --- | ---: | ---: | ---: |
 | Compact TSV | 345,115 | 93,377 | 92,756 |
-| array JSONL | 390,697 | 105,866 | 103,745 |
+| array JSONL | 390,788 | 105,886 | 103,765 |
 | object JSONL | 598,156 | 148,736 | 145,070 |
 
 Both runs on both platforms produced identical prompt metrics. Binary formats
@@ -87,10 +88,11 @@ to the same Compact TSV before token measurement.
 
 - Both platforms produced identical result counts and normalized hashes for all
   42 fair operations. Non-Lance fair artifact sizes were identical between runs.
-- macOS fair warm p50 changed by 1.43% at the median and 5.76% at the maximum.
-  Linux changed by 25.15% at the median and 64.35% at the maximum, so timings
-  are observations rather than stable constants.
-- Lance base changed from 314,428 to 314,683 bytes on macOS and from 314,300 to
+- macOS fair warm p50 changed by 1.98% at the median and 8.29% at the maximum;
+  fresh-process p50 changed by 2.36% at the median and 11.38% at the maximum.
+  Linux warm p50 changed by 25.15% at the median and 64.35% at the maximum, so
+  timings are observations rather than stable constants.
+- Lance base changed from 315,515 to 314,043 bytes on macOS and from 314,300 to
   315,516 bytes on Linux. Indexed logical size also changed, while the FTS index
   stayed exactly 418,696 bytes.
 - An earlier exploratory run observed a 704-byte Lance delta. Its raw artifact

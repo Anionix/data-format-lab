@@ -1,14 +1,14 @@
 # Data Format Lab: prompt report
 
 Dataset: `github-stars-2026-07-03`  
-Run: `v0.1.0-macos-arm64-prompt-1`  
+Run: `v0.1.0-final-macos-arm64-prompt-1`
 No result in this report is comparable across lanes or hardware runs.
 
 ## Environment
 
 | Field | Value |
 | --- | --- |
-| Git commit | 85e22e1e99898e5683c8b6a7c6acc6aeea8ed234 |
+| Git commit | 3f514315269efb910b1c873c23c9e59790d2622b |
 | Flake lock SHA-256 | 5349aa3b52f8c844a7115a25f5b1a2bbd6a7b37847d763a5b5e2c6153357034b |
 | Platform | macOS-27.0-arm64-arm-64bit |
 | Machine | arm64 |
@@ -16,11 +16,11 @@ No result in this report is comparable across lanes or hardware runs.
 
 ## Prompt Corpus
 
-| Format | Payload bytes | Taxonomy bytes | Total bytes | o200k | cl100k |
-| --- | --- | --- | --- | --- | --- |
-| array_jsonl | 384808 | 5889 | 390697 | 105866 | 103745 |
-| compact_tsv | 339226 | 5889 | 345115 | 93377 | 92756 |
-| object_jsonl | 592267 | 5889 | 598156 | 148736 | 145070 |
+| Format | Payload bytes | Taxonomy bytes | Schema bytes | Total bytes | o200k | cl100k |
+| --- | --- | --- | --- | --- | --- | --- |
+| array_jsonl | 384808 | 5889 | 91 | 390788 | 105886 | 103765 |
+| compact_tsv | 339226 | 5889 | 0 | 345115 | 93377 | 92756 |
+| object_jsonl | 592267 | 5889 | 0 | 598156 | 148736 | 145070 |
 
 ## Retrieval Payload
 
