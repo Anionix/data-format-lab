@@ -51,3 +51,16 @@ def test_runner_rejects_unsafe_request_paths(tmp_path: Path) -> None:
     _request(tmp_path)
     with pytest.raises(ValueError, match="safe relative"):
         run_case(tmp_path, "../request.json", "evidence")
+
+
+def test_runner_rejects_symlinks_inside_directory_artifacts(tmp_path: Path) -> None:
+    _request(tmp_path)
+    artifact = tmp_path / "artifact.lance"
+    artifact.mkdir()
+    (artifact / "data.bin").write_bytes(b"data")
+    (artifact / "link").symlink_to(tmp_path / "outside")
+    request = json.loads((tmp_path / "request.json").read_text())
+    request["artifact"] = "artifact.lance"
+    (tmp_path / "request.json").write_text(json.dumps(request))
+    with pytest.raises(ValueError, match="symlink"):
+        run_case(tmp_path, "request.json", "evidence/case-1")

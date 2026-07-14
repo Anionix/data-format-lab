@@ -15,6 +15,7 @@ from format_bench.model import (
     RobustnessVerdict,
     robustness_verdict,
 )
+from format_bench.robustness.paths import reject_symlink_tree
 
 
 def _relative(root: Path, value: str | Path) -> Path:
@@ -26,6 +27,8 @@ def _relative(root: Path, value: str | Path) -> Path:
         raise ValueError("robustness path contains a symlink")
     if not target.resolve(strict=False).is_relative_to(root.resolve()):
         raise ValueError("robustness path escapes run directory")
+    if target.exists():
+        reject_symlink_tree(target, "robustness path tree contains a symlink")
     return target
 
 
@@ -88,6 +91,8 @@ def run_case(
     request_path = _relative(root, request)
     output_path = _relative(root, output_dir)
     payload = json.loads(request_path.read_text(encoding="utf-8"))
+    _relative(root, payload["manifest"])
+    _relative(root, payload["artifact"])
     expectation = RobustnessExpectation(payload["expectation"])
     command = command or (
         sys.executable, "-m", "format_bench.robustness.worker", "--request", Path(request).as_posix()
