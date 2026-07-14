@@ -110,6 +110,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     assert "| csv | read_all | 1 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
     reported = json.loads((tmp_path / "manifest.json").read_text())
     assert reported["formats"][0]["state"] == "REPORTED"
+    assert render_report(tmp_path).read_text() == report
 
 
 def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:

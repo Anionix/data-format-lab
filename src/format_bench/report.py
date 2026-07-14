@@ -59,7 +59,8 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         item
         for item in formats
         if item["comparability"] == Comparability.FULL_COMPARABLE
-        and item["state"] == ExecutionState.BENCHMARKED
+        and item["state"]
+        in {ExecutionState.BENCHMARKED, ExecutionState.REPORTED}
     ]
     output.extend(["", "## Storage Ordering", ""])
     if not manifest["rankable"]:
@@ -208,6 +209,8 @@ def render_report(run_dir: Path) -> Path:
         raise ValueError("report requires benchmarked or reported manifest and results")
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("manifest and results dataset mismatch")
+    # Project observation transitions into the report; persist only after it exists.
+    _report_observations(manifest, results)
     profile = results["profile"]
     sections = {
         "fair": lambda: _fair(manifest, results),
@@ -229,7 +232,6 @@ def render_report(run_dir: Path) -> Path:
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
-    _report_observations(manifest, results)
     for payload, json_path in (
         (manifest, run_dir / "manifest.json"),
         (results, run_dir / "results.json"),
