@@ -46,8 +46,16 @@ jobs:
       VORTEX_SOURCE_COMMIT: 5abaf9823dee973dde7295a6a36234935f08d060
       FASTLANES_SOURCE_COMMIT: f0edc1020a538f1f8098640fce8347c9ac247a0d
       NATIVE_ARCHIVE: outputs/release/data-format-lab-robustness-linux-x86_64-native-${{ matrix.target }}-${{ github.run_id }}.tar.zst
+      FALLBACK_DIR: fallback/native-${{ matrix.target }}-${{ github.run_id }}
 
     steps:
+      - name: Initialize fallback evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$FALLBACK_DIR"
+          printf 'target=%s\nrun_id=%s\nplatform=linux-x86_64\n' \
+            "$TARGET" "$GITHUB_RUN_ID" > "$FALLBACK_DIR/context.txt"
+
       - name: Check out public commit
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
@@ -166,6 +174,11 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          {
+            printf 'source=%s\n' '${{ steps.native_source.outcome }}'
+            printf 'build=%s\n' '${{ steps.native_build.outcome }}'
+            printf 'runner=%s\n' '${{ steps.native.outcome }}'
+          } > "$FALLBACK_DIR/status.txt"
           if test -f "$RUN_DIR/results.json"; then
             nix develop --command .venv/bin/format-bench report --run-dir "$RUN_DIR"
             archive=$(nix develop --command .venv/bin/format-bench package \
@@ -182,6 +195,7 @@ jobs:
             ${{ env.RUN_DIR }}
             ${{ env.NATIVE_ARCHIVE }}
             ${{ env.NATIVE_ARCHIVE }}.sha256
+            ${{ env.FALLBACK_DIR }}
           retention-days: 14
           if-no-files-found: warn
 

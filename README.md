@@ -62,7 +62,7 @@ uv run --frozen format-bench run --profile robustness --suite native --dataset g
   --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900
 ```
 
-The manual [`Native robustness Linux x86_64`](.github/workflows/benchmark-native.yml) workflow runs one available native target per matrix job, caps retained evidence at 1 GiB, and uploads raw evidence plus a package for 14 days. Linux artifacts are named separately from macOS runs; a native crash or harness failure is uploaded before the job reports failure.
+The manual [`Native robustness Linux x86_64`](.github/workflows/benchmark-native.yml) workflow runs one target per matrix job, caps retained evidence at 1 GiB, and uploads raw evidence plus a package for 14 days. Linux artifacts are named separately from macOS runs; a native crash or harness failure is uploaded before the job reports failure.
 
 See the [native robustness publication notes](docs/native-robustness.md) for the dispatch command and evidence review checklist.
 

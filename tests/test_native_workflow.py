@@ -23,6 +23,8 @@ def test_native_workflow_runs_each_available_target_with_evidence_budget() -> No
     assert "--target \"$TARGET\"" in workflow
     assert "--duration-seconds \"${{ inputs.duration_seconds }}\"" in workflow
     assert "retention-days: 14" in workflow
+    assert "FALLBACK_DIR" in workflow
+    assert "fallback/native-" in workflow
     assert "if: always()" in workflow
     assert "linux-x86_64" in workflow
 
