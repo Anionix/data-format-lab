@@ -51,7 +51,12 @@ uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-0
 uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
-native robustness suiteは`native/arrow/build`の固定Arrow fuzz binaryを読み、未ビルドのtargetも`UNSUPPORTED`証拠として記録します。`--target`は複数指定でき、`--duration-seconds`と`--artifact-budget-mib`で実行上限を指定します。
+native robustness suiteは固定したArrow、Vortex、FastLanesのtargetを記録します。Arrowは記録したsource commitのcheckoutと`native/arrow/build`のbinary、VortexとFastLanesは記録したsource commitと`HEAD`が一致するcheckoutのharnessを使います。FastLanesはcoverage-guidedではなくproject-seededとして扱います。公式native targetを確認できないLance、object JSONL、TsFileも`UNSUPPORTED`証拠として残します。未ビルドbinaryやsource不一致は成功扱いにしません。`--target`は複数指定でき、`--duration-seconds`と`--artifact-budget-mib`で実行上限を指定します。
+
+```bash
+uv run --frozen format-bench run --profile robustness --suite native --dataset github-stars-2026-07-03 \
+  --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900
+```
 
 測定値そのものはCIの合否に使いません。公開測定はmacOS ARMとLinux x86_64を別runにし、入力hash、commit、flake lock、依存版、seed、writer設定、失敗理由とともに保存します。
 

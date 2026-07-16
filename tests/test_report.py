@@ -197,7 +197,7 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
                 },
                 "cases": [
                     {
-                        "target": "csv", "tier": "CORE", "case_id": "rows-1",
+                        "target": "csv", "tier": "CORE", "details": {"engine": "coverage-guided"}, "case_id": "rows-1",
                         "expectation": "MUST_ROUNDTRIP",
                         "observed": "ROUNDTRIP_EQUAL", "verdict": "PASS",
                     },
@@ -213,8 +213,8 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
     assert "non-ranking evidence" in first
     assert "| Seed | 7 |" in first
     assert "| Verdict | Cases |" in first
-    assert "| Target | Tier | Case | Expectation | Observed | Verdict |" in first
-    assert "| csv | CORE | rows-1 | MUST_ROUNDTRIP | ROUNDTRIP_EQUAL | PASS |" in first
+    assert "| Target | Tier | Engine | Case | Expectation | Observed | Verdict |" in first
+    assert "| csv | CORE | coverage-guided | rows-1 | MUST_ROUNDTRIP | ROUNDTRIP_EQUAL | PASS |" in first
     reported = json.loads((tmp_path / "results.json").read_text())
     assert reported["results"]["robustness_v1"]["state"] == "REPORTED"
     assert render_report(tmp_path).read_text() == first

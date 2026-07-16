@@ -12,7 +12,7 @@ from .profile_run import run_claims, run_prompt
 from .release import package_run
 from .report import render_report
 from .robustness.profile import run_bounded
-from .robustness.native import ARROW_NATIVE_TARGETS, run_native
+from .robustness.native import NATIVE_TARGETS, run_native
 from .workflow import prepare_run, verify_run
 
 
@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> None:
             if args.suite == "native":
                 selected = None
                 if args.target:
-                    available = {target.name: target for target in ARROW_NATIVE_TARGETS}
+                    available = {target.name: target for target in NATIVE_TARGETS}
                     unknown = sorted(set(args.target) - available.keys())
                     if unknown:
                         raise ValueError(f"unknown native target: {', '.join(unknown)}")
