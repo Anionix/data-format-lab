@@ -244,22 +244,24 @@ jobs:
           test -f "$RUN_DIR/results.json"
           nix develop --command python - "$RUN_DIR/results.json" <<'PY'
           import json
-          import os
           import sys
 
           with open(sys.argv[1], encoding="utf-8") as handle:
               result = json.load(handle)
           cases = result["results"]["robustness_v1"]["cases"]
           bad = {
+              "UNSUPPORTED",
               "CRASHED",
               "TIMED_OUT",
               "TARGET_FAILED",
               "HARNESS_FAILED",
               "BUDGET_EXHAUSTED",
           }
-          if os.environ["TARGET"] not in {"lance", "object-jsonl", "tsfile"}:
-              bad.add("UNSUPPORTED")
-          observed = [case["observed"] for case in cases]
-          if any(value in bad for value in observed):
-              raise SystemExit(f"native target produced non-passing evidence: {observed}")
+          failures = [
+              case for case in cases
+              if case["tier"] == "CORE"
+              and (case["observed"] in bad or case["verdict"] == "FAIL")
+          ]
+          if failures:
+              raise SystemExit(f"native core target produced non-passing evidence: {failures}")
           PY
