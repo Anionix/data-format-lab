@@ -74,6 +74,7 @@ def test_native_suite_records_arrow_target_and_process_evidence(
     evidence = payload["results"]["robustness_v1"]
     case = evidence["cases"][0]
     assert evidence["suite"] == "native"
+    assert evidence["target_summary"]["arrow-csv-fuzz"]["pass"] == 1
     assert evidence["config"]["source_commits"] == {
         "arrow": "7932e197eaa00577ff3e83ddf956022df3ef174c",
         "vortex": "5abaf9823dee973dde7295a6a36234935f08d060",

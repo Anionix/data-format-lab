@@ -249,7 +249,10 @@ def _robustness(results: dict) -> list[str]:
         ]
         for item in evidence["cases"]
     ]
-    target_summary = evidence.get("target_summary") or summarize_cases(evidence["cases"])
+    target_summary = evidence.get("target_summary")
+    if not isinstance(target_summary, dict) or not target_summary:
+        target_summary = summarize_cases(evidence["cases"])
+        evidence["target_summary"] = target_summary
     target_rows = [
         [
             target,

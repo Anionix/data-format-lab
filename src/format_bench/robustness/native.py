@@ -22,6 +22,7 @@ from format_bench.model import (
 from format_bench.profile_run import _finish, _load
 from format_bench.robustness.evidence import ArtifactBudgetExceeded, EvidenceStore
 from format_bench.robustness.runner import _process
+from format_bench.robustness.summary import summarize_cases
 
 ARROW_SOURCE_COMMIT = "7932e197eaa00577ff3e83ddf956022df3ef174c"
 VORTEX_SOURCE_COMMIT = "5abaf9823dee973dde7295a6a36234935f08d060"
@@ -459,6 +460,7 @@ def run_native(
             },
             "cases": observations,
             "summary": summary,
+            "target_summary": summarize_cases(observations),
         }
     }
     return _finish(root, run_dir, run, Lane.ROBUSTNESS, evidence)
