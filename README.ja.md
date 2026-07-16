@@ -58,6 +58,10 @@ uv run --frozen format-bench run --profile robustness --suite native --dataset g
   --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900
 ```
 
+手動の[`Native robustness Linux x86_64`](.github/workflows/benchmark-native.yml) workflowは、利用可能なnative targetをmatrixの1 job 1 targetで実行し、保持証拠を1 GiBに制限して14日間uploadします。LinuxとmacOSのartifact名は分離され、native crashやharness failureでも先にraw evidenceを保存してからjobを失敗扱いにします。
+
+dispatchコマンドと証拠確認の手順は[`docs/native-robustness.md`](docs/native-robustness.md)に記録しています。
+
 測定値そのものはCIの合否に使いません。公開測定はmacOS ARMとLinux x86_64を別runにし、入力hash、commit、flake lock、依存版、seed、writer設定、失敗理由とともに保存します。
 
 結果はまず[`v0.1.0`実測総括](reports/v0.1.0/README.md)を参照し、詳細値は機種別レポートとRelease assetで確認してください。

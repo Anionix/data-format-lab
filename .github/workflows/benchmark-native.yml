@@ -1,0 +1,217 @@
+name: Native robustness Linux x86_64
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Numeric Release ID containing the fixed dataset asset
+        required: true
+        default: "353517336"
+        type: string
+      duration_seconds:
+        description: Native target runtime in seconds
+        required: true
+        default: "900"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: native/${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        target:
+          - arrow-csv-fuzz
+          - parquet-arrow-fuzz
+          - parquet-encoding-fuzz
+          - vortex-file-io
+          - vortex-compress-roundtrip
+          - fastlanes-quick-fuzz
+          - lance
+          - object-jsonl
+          - tsfile
+    permissions:
+      contents: read
+
+    env:
+      TARGET: ${{ matrix.target }}
+      RUN_DIR: runs/native-${{ matrix.target }}-${{ github.run_id }}
+      ARROW_SOURCE_COMMIT: 7932e197eaa00577ff3e83ddf956022df3ef174c
+      VORTEX_SOURCE_COMMIT: 5abaf9823dee973dde7295a6a36234935f08d060
+      FASTLANES_SOURCE_COMMIT: f0edc1020a538f1f8098640fce8347c9ac247a0d
+      NATIVE_ARCHIVE: outputs/release/data-format-lab-robustness-linux-x86_64-native-${{ matrix.target }}-${{ github.run_id }}.tar.zst
+
+    steps:
+      - name: Check out public commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Download fixed dataset from Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p incoming .data/github-stars-2026-07-03
+          asset_id=$(gh api \
+            "repos/$GITHUB_REPOSITORY/releases/${{ inputs.release_id }}" \
+            --jq '.assets[] | select(.name == "github-stars-2026-07-03.csv.zst") | .id')
+          test -n "$asset_id"
+          gh api -H "Accept: application/octet-stream" \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$asset_id" \
+            > incoming/github-stars-2026-07-03.csv.zst
+          echo "7ec5d63fef91c2655fc5ff3ee89d719689ee0c33081f02669224be96e1d2b9c2  incoming/github-stars-2026-07-03.csv.zst" \
+            | sha256sum -c -
+          nix develop --command zstd -d \
+            incoming/github-stars-2026-07-03.csv.zst \
+            -o .data/github-stars-2026-07-03/source.csv
+          echo "39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e  .data/github-stars-2026-07-03/source.csv" \
+            | sha256sum -c -
+
+      - name: Check out pinned native source
+        id: native_source
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p native
+          case "$TARGET" in
+            arrow-*)
+              git clone --filter=blob:none --no-tags https://github.com/apache/arrow.git native/arrow
+              git -C native/arrow checkout --detach "$ARROW_SOURCE_COMMIT"
+              ;;
+            vortex-*)
+              git clone --filter=blob:none --no-tags https://github.com/vortex-data/vortex.git native/vortex
+              git -C native/vortex checkout --detach "$VORTEX_SOURCE_COMMIT"
+              ;;
+            fastlanes-quick-fuzz)
+              git clone --filter=blob:none --no-tags https://github.com/cwida/FastLanes.git native/fastlanes
+              git -C native/fastlanes checkout --detach "$FASTLANES_SOURCE_COMMIT"
+              ;;
+            lance|object-jsonl|tsfile)
+              ;;
+            *)
+              echo "unknown native target: $TARGET" >&2
+              exit 2
+              ;;
+          esac
+
+      - name: Synchronize frozen Python environment
+        run: nix develop --command uv sync --frozen
+
+      - name: Configure and build native target
+        id: native_build
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            arrow-*)
+              nix develop --command cmake \
+                -S native/arrow/cpp -B native/arrow/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+                -DARROW_BUILD_STATIC=OFF \
+                -DARROW_CSV=ON \
+                -DARROW_DEPENDENCY_SOURCE=BUNDLED \
+                -DARROW_FUZZING=ON \
+                -DARROW_IPC=ON \
+                -DARROW_PARQUET=ON \
+                -DARROW_WITH_BROTLI=ON \
+                -DARROW_WITH_LZ4=ON \
+                -DARROW_WITH_SNAPPY=ON \
+                -DARROW_WITH_ZLIB=ON \
+                -DARROW_WITH_ZSTD=ON \
+                -DCMAKE_C_COMPILER=clang \
+                -DCMAKE_CXX_COMPILER=clang++ \
+                -DPARQUET_REQUIRE_ENCRYPTION=ON
+              nix develop --command cmake --build native/arrow/build --target "$TARGET"
+              ;;
+            vortex-*)
+              test -f native/vortex/Cargo.toml
+              ;;
+            fastlanes-quick-fuzz)
+              nix develop --command cmake \
+                -S native/fastlanes -B native/fastlanes/build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release -DFLS_BUILD_TESTING=ON
+              nix develop --command cmake --build native/fastlanes/build \
+                --target quick_fuzz_test --parallel 2
+              ;;
+            lance|object-jsonl|tsfile)
+              ;;
+          esac
+
+      - name: Run one native target
+        id: native
+        continue-on-error: true
+        run: |
+          set +e
+          result=$(nix develop --command .venv/bin/format-bench run \
+            --profile robustness --suite native \
+            --dataset github-stars-2026-07-03 --run-dir "$RUN_DIR" \
+            --target "$TARGET" \
+            --duration-seconds "${{ inputs.duration_seconds }}" \
+            --artifact-budget-mib 1024 2>&1)
+          status=$?
+          printf '%s\n' "$result"
+          printf 'runner_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Report and package evidence
+        id: evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          if test -f "$RUN_DIR/results.json"; then
+            nix develop --command .venv/bin/format-bench report --run-dir "$RUN_DIR"
+            archive=$(nix develop --command .venv/bin/format-bench package \
+              --run-dir "$RUN_DIR" --platform linux-x86_64)
+            test "$archive" = "$NATIVE_ARCHIVE"
+          fi
+
+      - name: Upload native evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: data-format-lab-native-${{ matrix.target }}-linux-x86_64
+          path: |
+            ${{ env.RUN_DIR }}
+            ${{ env.NATIVE_ARCHIVE }}
+            ${{ env.NATIVE_ARCHIVE }}.sha256
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Preserve target failure status
+        if: always()
+        run: |
+          if test "${{ steps.native_source.outcome }}" = failure || \
+            test "${{ steps.native_build.outcome }}" = failure || \
+            test "${{ steps.native.outcome }}" = failure || \
+            test "${{ steps.evidence.outcome }}" = failure; then
+            exit 1
+          fi
+          test -f "$RUN_DIR/results.json"
+          nix develop --command python - "$RUN_DIR/results.json" <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              result = json.load(handle)
+          cases = result["results"]["robustness_v1"]["cases"]
+          bad = {
+              "CRASHED",
+              "TIMED_OUT",
+              "HARNESS_FAILED",
+              "BUDGET_EXHAUSTED",
+          }
+          if os.environ["TARGET"] not in {"lance", "object-jsonl", "tsfile"}:
+              bad.add("UNSUPPORTED")
+          observed = [case["observed"] for case in cases]
+          if any(value in bad for value in observed):
+              raise SystemExit(f"native target produced non-passing evidence: {observed}")
+          PY
