@@ -29,7 +29,12 @@ def test_fastlanes_retry_workflow_preserves_build_and_measurement_logs() -> None
 
     assert '"$RUN_DIR/build.log"' in workflow
     assert '"$RUN_DIR/build-status.txt"' in workflow
+    assert '"$RUN_DIR/measure.log"' in workflow
+    assert '"$RUN_DIR/measure-error.txt"' in workflow
     assert '"$RUN_DIR/measure-status.txt"' in workflow
+    assert '"$RUN_DIR/measure.log" <<\'PY\'' in workflow
     assert "steps.measure.outcome" in workflow
     assert '"status": "UNSUPPORTED" if not available else "FAILED"' in workflow
+    assert "case_hash_algorithm" in workflow
+    assert "input/data.csv" in workflow
     assert "if: always()" in workflow

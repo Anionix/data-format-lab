@@ -97,6 +97,7 @@ jobs:
             printf 'source_commit=%s\n' "$FASTLANES_SOURCE_COMMIT"
             printf 'requested_numeric_rows=%s\n' '${{ inputs.numeric_rows }}'
             printf 'requested_timeout_seconds=%s\n' '${{ inputs.timeout_seconds }}'
+            printf 'host_python='; python3 --version
             printf 'python='; nix develop --command python --version
             if test -x native/fastlanes/.venv/bin/python; then
               printf 'fastlanes_python='; native/fastlanes/.venv/bin/python --version
@@ -116,20 +117,27 @@ jobs:
           CASE_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
         run: |
           set -euo pipefail
+          status=0
           case "$CASE_TIMEOUT_SECONDS" in
             ''|*[!0-9]*)
-              echo "timeout_seconds must be an integer" >&2
-              exit 2
+              printf '%s\n' "timeout_seconds must be an integer" \
+                > "$RUN_DIR/measure-error.txt"
+              status=2
+              ;;
+            *)
+              if test "$CASE_TIMEOUT_SECONDS" -lt 1 || \
+                test "$CASE_TIMEOUT_SECONDS" -gt 120; then
+                printf '%s\n' "timeout_seconds must be between 1 and 120" \
+                  > "$RUN_DIR/measure-error.txt"
+                status=2
+              fi
               ;;
           esac
-          if test "$CASE_TIMEOUT_SECONDS" -lt 1 || \
-            test "$CASE_TIMEOUT_SECONDS" -gt 120; then
-            echo "timeout_seconds must be between 1 and 120" >&2
-            exit 2
-          fi
-          set +e
-          PYTHONPATH="$GITHUB_WORKSPACE/src" \
-            native/fastlanes/.venv/bin/python - "$RUN_DIR/results.json" <<'PY'
+          if test "$status" -eq 0; then
+            set +e
+            PYTHONPATH="$GITHUB_WORKSPACE/src" \
+              native/fastlanes/.venv/bin/python - "$RUN_DIR/results.json" \
+              > "$RUN_DIR/measure.log" 2>&1 <<'PY'
           import json
           import os
           import sys
@@ -153,8 +161,9 @@ jobs:
           }
           output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
           PY
-          status=$?
-          set -e
+            status=$?
+            set -e
+          fi
           printf '%s\n' "$status" > "$RUN_DIR/measure-status.txt"
           exit "$status"
 
@@ -165,16 +174,25 @@ jobs:
           if test -s "$RUN_DIR/results.json"; then
             exit 0
           fi
-          nix develop --command python - "$RUN_DIR/results.json" \
+          python3 - "$RUN_DIR/results.json" \
             '${{ steps.source.outcome }}' '${{ steps.build.outcome }}' \
-            '${{ steps.measure.outcome }}' <<'PY'
+            '${{ steps.measure.outcome }}' "$RUN_DIR/measure-error.txt" \
+            "$RUN_DIR/measure.log" <<'PY'
           import json
           import sys
           from pathlib import Path
 
           output = Path(sys.argv[1])
-          source, build, measure = sys.argv[2:]
+          source, build, measure = sys.argv[2:5]
+          error_path = Path(sys.argv[5])
+          log_path = Path(sys.argv[6])
           available = source == "success" and build == "success"
+          if error_path.is_file():
+              error = error_path.read_text().strip()
+          elif log_path.is_file():
+              error = log_path.read_text(errors="replace").strip()[-1000:]
+          else:
+              error = "none"
           output.write_text(
               json.dumps(
                   {
@@ -185,7 +203,7 @@ jobs:
                       "source_commit": "f0edc1020a538f1f8098640fce8347c9ac247a0d",
                       "status": "UNSUPPORTED" if not available else "FAILED",
                       "failure_reason": (
-                          f"source={source}; build={build}; measure={measure}"
+                          f"source={source}; build={build}; measure={measure}; error={error}"
                       ),
                   },
                   indent=2,
@@ -195,11 +213,52 @@ jobs:
           )
           PY
 
+      - name: Bind case inputs and artifacts to hashes
+        if: always()
+        run: |
+          set -euo pipefail
+          if test ! -s "$RUN_DIR/results.json" || \
+            test ! -d "$RUN_DIR/claims/fastlanes-official"; then
+            exit 0
+          fi
+          python3 - "$RUN_DIR/results.json" \
+            "$RUN_DIR/claims/fastlanes-official" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          results_path = Path(sys.argv[1])
+          root = Path(sys.argv[2])
+
+          def digest(path: Path) -> str | None:
+              if not path.is_file():
+                  return None
+              value = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          case_hashes = {}
+          for case_dir in sorted(path for path in root.iterdir() if path.is_dir()):
+              case_hashes[case_dir.name] = {
+                  "input/data.csv": digest(case_dir / "input/data.csv"),
+                  "input/schema.json": digest(case_dir / "input/schema.json"),
+                  "data.fls": digest(case_dir / "data.fls"),
+                  "decoded.csv": digest(case_dir / "decoded.csv"),
+              }
+          payload = json.loads(results_path.read_text())
+          payload["case_hash_algorithm"] = "sha256"
+          payload["case_hashes"] = case_hashes
+          results_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+          PY
+
       - name: Write concise evidence report
         if: always()
         run: |
           set -euo pipefail
-          nix develop --command python - "$RUN_DIR/results.json" "$RUN_DIR/report.md" <<'PY'
+          python3 - "$RUN_DIR/results.json" "$RUN_DIR/report.md" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -249,7 +308,7 @@ jobs:
           test '${{ steps.checkout.outcome }}' = success
           test '${{ steps.source.outcome }}' = success
           test '${{ steps.build.outcome }}' = success
-          nix develop --command python - "$RUN_DIR/results.json" <<'PY'
+          python3 - "$RUN_DIR/results.json" <<'PY'
           import json
           import sys
           from pathlib import Path
