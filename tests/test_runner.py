@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import format_bench.runner as runner
 from format_bench.runner import (
     Job,
     MeasurementConfig,
@@ -71,3 +72,20 @@ def test_environment_records_concrete_hardware_identity() -> None:
     environment = environment_info(Path(__file__).parents[1])
     assert isinstance(environment["hardware_model"], str)
     assert environment["hardware_model"]
+
+
+def test_linux_hardware_identity_reads_product_and_cpu(monkeypatch) -> None:
+    monkeypatch.setattr(runner.sys, "platform", "linux")
+
+    def read_text(path: Path, *args, **kwargs) -> str:
+        if str(path) == "/sys/devices/virtual/dmi/id/product_name":
+            return "Virtual Machine\n"
+        if str(path) == "/proc/cpuinfo":
+            return "processor : 0\nmodel name : AMD EPYC 7763 64-Core Processor\n"
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(runner.Path, "read_text", read_text)
+
+    assert runner._hardware_model() == (
+        "Virtual Machine / AMD EPYC 7763 64-Core Processor"
+    )
