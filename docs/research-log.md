@@ -51,6 +51,11 @@ recorded `Mac14,7`, and used the standard 10 fresh-process, 5 warmup,
 producer/consumer interoperability matrix, so Arrow IPC is not being granted
 a broad compatibility claim yet.
 
+The fair adapter now exposes Arrow IPC `none`, `lz4`, and `zstd` codec variants.
+They share one typed-table and query-result contract; future measurements should
+compare their native bytes, external transport bytes, and timings without
+turning codec differences into a separate format or cross-lane score.
+
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
 ## Token questions

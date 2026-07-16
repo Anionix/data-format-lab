@@ -6,6 +6,7 @@ import pytest
 from format_bench.canonical import read_csv
 from format_bench.datasets import load_manifest
 from format_bench.fair import OPERATIONS, apply_arrow, expected_rows, result_evidence
+from format_bench.formats.arrow_ipc import ArrowIpcAdapter
 from format_bench.formats.lance import LanceAdapter
 from format_bench.formats.parquet import ParquetAdapter
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
@@ -26,7 +27,16 @@ def test_result_evidence_includes_type_and_nullability() -> None:
 
 @pytest.mark.parametrize(
     "adapter",
-    [CsvAdapter(), ObjectJsonlAdapter(), ParquetAdapter(), LanceAdapter(), VortexAdapter()],
+    [
+        CsvAdapter(),
+        ObjectJsonlAdapter(),
+        ArrowIpcAdapter(),
+        ArrowIpcAdapter("lz4"),
+        ArrowIpcAdapter("zstd"),
+        ParquetAdapter(),
+        LanceAdapter(),
+        VortexAdapter(),
+    ],
     ids=lambda adapter: adapter.describe().name,
 )
 def test_fair_operations_return_the_same_fixture_rows(tmp_path: Path, adapter) -> None:

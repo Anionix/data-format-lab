@@ -16,6 +16,8 @@
 
 異なるlaneや異なる機種の結果は順位比較しません。同一laneの`FULL_COMPARABLE`だけが順位対象です。DuckDBはファイル形式ではなくSQL実行エンジンとして扱います。
 
+Arrow IPCのcodec variant（`none`、`lz4`、`zstd`）は同じArrow schema、往復検証、検索結果契約を使う`fair` lane内の比較です。別形式やlane横断のscoreとしては扱いません。
+
 ## 証拠の流れ
 
 ```text

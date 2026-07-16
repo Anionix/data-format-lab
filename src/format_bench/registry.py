@@ -14,6 +14,8 @@ def adapters() -> tuple[FormatAdapter, ...]:
         CsvAdapter(),
         ObjectJsonlAdapter(),
         ArrowIpcAdapter(),
+        ArrowIpcAdapter("lz4"),
+        ArrowIpcAdapter("zstd"),
         ParquetAdapter(),
         ParquetAdapter(compression_level=19),
         LanceAdapter(),
