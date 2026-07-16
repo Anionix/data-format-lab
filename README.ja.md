@@ -51,6 +51,8 @@ uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-0
 uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
+native robustness suiteは`native/arrow/build`の固定Arrow fuzz binaryを読み、未ビルドのtargetも`UNSUPPORTED`証拠として記録します。`--target`は複数指定でき、`--duration-seconds`と`--artifact-budget-mib`で実行上限を指定します。
+
 測定値そのものはCIの合否に使いません。公開測定はmacOS ARMとLinux x86_64を別runにし、入力hash、commit、flake lock、依存版、seed、writer設定、失敗理由とともに保存します。
 
 結果はまず[`v0.1.0`実測総括](reports/v0.1.0/README.md)を参照し、詳細値は機種別レポートとRelease assetで確認してください。
