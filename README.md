@@ -57,6 +57,8 @@ uv run --frozen format-bench report --run-dir runs/fair-local
 
 The native robustness suite records pinned Arrow, Vortex, and FastLanes targets. Arrow requires a checkout at the recorded source commit plus binaries in `native/arrow/build`; Vortex and FastLanes require a checkout whose `HEAD` matches the recorded source commit. FastLanes is recorded as project-seeded rather than coverage-guided. Lance, object JSONL, and TsFile have no confirmed official native target and are retained as `UNSUPPORTED` evidence. Missing binaries or mismatched source checkouts never become a silent pass. Select targets with repeated `--target` options and set the run budget with `--duration-seconds` and `--artifact-budget-mib`.
 
+Robustness reports also aggregate each target's case denominator, pass/fail outcomes, crash and timeout counts, incomplete reasons, duration p50, and artifact/source identities. These are reliability evidence, not a cross-lane score.
+
 ```bash
 uv run --frozen format-bench run --profile robustness --suite native --dataset github-stars-2026-07-03 \
   --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900

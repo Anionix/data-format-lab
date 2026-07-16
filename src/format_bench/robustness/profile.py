@@ -22,6 +22,7 @@ from format_bench.robustness.evidence import ArtifactBudgetExceeded, ArtifactRec
 from format_bench.robustness.mutations import apply_mutation, mutation_recipes
 from format_bench.robustness.paths import reject_symlink_tree
 from format_bench.robustness.runner import MAX_WORKER_DETAILS_BYTES, run_case
+from format_bench.robustness.summary import summarize_cases
 from format_bench.robustness.targets import (
     RobustnessTarget,
     core_targets,
@@ -376,6 +377,7 @@ def run_bounded(
             },
             "cases": observations,
             "summary": summary,
+            "target_summary": summarize_cases(observations),
         }
     }
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.

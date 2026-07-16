@@ -49,6 +49,10 @@ def test_bounded_fixture_writes_versioned_evidence(tmp_path: Path) -> None:
         "NOT_APPLICABLE": 0,
         "PASS": 4,
     }
+    assert evidence["target_summary"]["csv"]["cases"] == 4
+    assert evidence["target_summary"]["csv"]["applicable"] == 4
+    assert evidence["target_summary"]["csv"]["pass"] == 4
+    assert evidence["target_summary"]["csv"]["artifact_sha256"]
     assert all(
         {
             "schema_version",

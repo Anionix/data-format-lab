@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .model import Comparability, ExecutionState, RobustnessVerdict, transition
+from .robustness.summary import summarize_cases
 
 
 def _cell(value: object) -> str:
@@ -248,6 +249,32 @@ def _robustness(results: dict) -> list[str]:
         ]
         for item in evidence["cases"]
     ]
+    target_summary = evidence.get("target_summary") or summarize_cases(evidence["cases"])
+    target_rows = [
+        [
+            target,
+            item["tier"],
+            item["cases"],
+            item["applicable"],
+            item["pass"],
+            item["fail"],
+            item["crashed"],
+            item["timed_out"],
+            item["unsupported"],
+            item["harness_failed"],
+            item["budget_exhausted"],
+            item["duration_ms_p50"],
+        ]
+        for target, item in sorted(target_summary.items())
+    ]
+    identity_rows = [
+        [
+            target,
+            ", ".join(item["artifact_sha256"]) or "N/A",
+            ", ".join(item["source_identities"]) or "N/A",
+        ]
+        for target, item in sorted(target_summary.items())
+    ]
     return [
         "## Robustness Evidence",
         "",
@@ -260,6 +287,30 @@ def _robustness(results: dict) -> list[str]:
         "### Verdict Summary",
         "",
         *_table(["Verdict", "Cases"], summary_rows),
+        "",
+        "### Target Summary",
+        "",
+        *_table(
+            [
+                "Target",
+                "Tier",
+                "Cases",
+                "Applicable",
+                "PASS",
+                "FAIL",
+                "Crashes",
+                "Timeouts",
+                "Unsupported",
+                "Harness failed",
+                "Budget exhausted",
+                "Duration p50 ms",
+            ],
+            target_rows,
+        ),
+        "",
+        "### Evidence Identities",
+        "",
+        *_table(["Target", "Artifact SHA-256", "Source identity"], identity_rows),
         "",
         "### Cases",
         "",
