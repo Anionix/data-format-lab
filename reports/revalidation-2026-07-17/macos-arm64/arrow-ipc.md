@@ -8,11 +8,13 @@ interoperability matrix.
 | --- | --- |
 | Dataset | `github-stars-2026-07-03` |
 | Rows / columns | 2,331 / 13 |
-| Source commit | `c3872fe52566670723c72772efac30bffb21bd3e` |
+| Source commit | `df5c2524a71531949de82531c1f4b876b8b7dcf2` |
 | Flake lock SHA-256 | `1d8b3b85a0f5f144f6076ca7d4de031d1b2c7b50bc62c1bd12d43dd0141ad54c` |
-| Platform | macOS ARM64, Mac14,7, Apple M2, 16 GB, Python 3.12.13 |
+| Platform | macOS ARM64, Python 3.12.13 |
+| Hardware model | `Mac14,7` |
 | PyArrow | 23.0.1 |
 | Protocol | 10 fresh processes, 5 warmups, 30 measurements; OS cache retained |
+| Input SHA-256 | `39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e` |
 
 ## Conformance
 
@@ -24,18 +26,18 @@ exact match.
 
 | Native bytes | External zstd bytes | Write p50 ms |
 | ---: | ---: | ---: |
-| 672,234 | 190,263 | 2.119 |
+| 672,234 | 190,263 | 6.678 |
 
 ## Fair Operations
 
 | Operation | Warm p50 ms | Warm p95 ms | IQR ms | Rows |
 | --- | ---: | ---: | ---: | ---: |
-| `exact_match` | 0.145 | 0.184 | 0.022 | 1 |
-| `filter_ai_llm` | 0.149 | 0.194 | 0.016 | 119 |
-| `filter_repo_stars_gt_100000` | 0.144 | 0.174 | 0.023 | 15 |
-| `head_10` | 0.113 | 0.142 | 0.031 | 10 |
-| `project_two` | 0.107 | 0.255 | 0.027 | 2,331 |
-| `read_all` | 0.110 | 0.301 | 0.027 | 2,331 |
+| `exact_match` | 0.141 | 0.198 | 0.033 | 1 |
+| `filter_ai_llm` | 0.143 | 0.167 | 0.008 | 119 |
+| `filter_repo_stars_gt_100000` | 0.157 | 0.461 | 0.038 | 15 |
+| `head_10` | 0.104 | 0.130 | 0.011 | 10 |
+| `project_two` | 0.105 | 0.145 | 0.027 | 2,331 |
+| `read_all` | 0.100 | 0.130 | 0.011 | 2,331 |
 
 Arrow IPC is now a `FULL_COMPARABLE` fair format. These values describe this
 dataset and host; they do not measure Arrow IPC consumer interoperability,
