@@ -143,6 +143,8 @@ jobs:
               ;;
             vortex-*)
               test -f native/vortex/Cargo.toml
+              vortex_target="${TARGET#vortex-}"
+              nix develop --command cargo fuzz build "$vortex_target"
               ;;
             fastlanes-quick-fuzz)
               nix develop --command cmake \
@@ -160,11 +162,22 @@ jobs:
         continue-on-error: true
         run: |
           set +e
+          duration='${{ inputs.duration_seconds }}'
+          case "$duration" in
+            ''|*[!0-9]*)
+              echo "duration_seconds must be an integer" >&2
+              exit 2
+              ;;
+          esac
+          if test "$duration" -lt 1 || test "$duration" -gt 3000; then
+            echo "duration_seconds must be between 1 and 3000" >&2
+            exit 2
+          fi
           result=$(nix develop --command .venv/bin/format-bench run \
             --profile robustness --suite native \
             --dataset github-stars-2026-07-03 --run-dir "$RUN_DIR" \
             --target "$TARGET" \
-            --duration-seconds "${{ inputs.duration_seconds }}" \
+            --duration-seconds "$duration" \
             --artifact-budget-mib 1024 2>&1)
           status=$?
           printf '%s\n' "$result"
