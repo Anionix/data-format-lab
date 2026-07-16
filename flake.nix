@@ -1,15 +1,25 @@
 {
   description = "Reproducible environment for Data Format Lab";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+  };
 
-  outputs = { nixpkgs, ... }:
+  outputs = { nixpkgs, rust-overlay, ... }:
     let
       systems = [ "aarch64-darwin" "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in {
       devShells = forAllSystems (system:
-        let pkgs = import nixpkgs { inherit system; };
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          };
+          rustToolchain = pkgs.rust-bin.nightly."2026-07-15".default.override {
+            extensions = [ "rust-src" ];
+          };
         in {
           default = pkgs.mkShell {
             packages = with pkgs; [
@@ -18,6 +28,8 @@
               ruff
               pyright
               ty
+              rustToolchain
+              cargo-fuzz
               duckdb
               cmake
               ninja

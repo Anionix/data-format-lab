@@ -33,6 +33,8 @@ DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED
 
 ## 実行
 
+NixはPython 3.12、`rust-src`付き`nightly-2026-07-15`、`cargo-fuzz`、C/C++ネイティブツールを固定します。Python環境は`uv.lock`で固定します。
+
 ```bash
 nix develop
 uv sync --frozen
