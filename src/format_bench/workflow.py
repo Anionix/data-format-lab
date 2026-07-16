@@ -19,6 +19,10 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def _fixture_manifest(manifest: dict, table, source: Path) -> dict:
     effective = dict(manifest)
     effective.update(
@@ -47,16 +51,23 @@ def prepare_run(
     selected: Iterable[FormatAdapter] | None = None,
 ) -> Path:
     manifest = load_manifest(root, dataset_id)
-    destination = run_dir or _default_run_dir(root, dataset_id)
-    destination.mkdir(parents=True, exist_ok=False)
-    input_dir = destination / "input"
-    input_dir.mkdir()
-
     source = (
         root / "datasets" / dataset_id / "fixture.csv"
         if fixture
         else root / ".data" / dataset_id / "source.csv"
     )
+    if not fixture:
+        actual_source_sha256 = _sha256(source)
+        if actual_source_sha256 != manifest["source_sha256"]:
+            raise ValueError(
+                "source SHA-256 mismatch: "
+                f"expected {manifest['source_sha256']}, got {actual_source_sha256}"
+            )
+    destination = run_dir or _default_run_dir(root, dataset_id)
+    destination.mkdir(parents=True, exist_ok=False)
+    input_dir = destination / "input"
+    input_dir.mkdir()
+
     table = read_csv(source, manifest)
     effective = _fixture_manifest(manifest, table, source) if fixture else manifest
     verify_table(table, effective)

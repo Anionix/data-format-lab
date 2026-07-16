@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -70,7 +71,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
         "dataset_id": "fixture",
         "rankable": True,
         "seed": 20260703,
-        "input": {"manifest": "input/manifest.json"},
+        "input": {"source": "input/source.csv", "manifest": "input/manifest.json"},
         "environment": {
             "git_commit": "encoding-commit",
             "flake_lock_sha256": "encoding-flake",
@@ -108,6 +109,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
             "warmups": 5,
             "iterations": 30,
             "seed": 20260703,
+            "timeout_seconds": 120,
             "os_cache_purged": False,
         },
         "results": {
@@ -122,10 +124,12 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
         },
     }
     (tmp_path / "input").mkdir()
+    source = tmp_path / "input" / "source.csv"
+    source.write_bytes(b"source\n")
     (tmp_path / "input" / "manifest.json").write_text(
         json.dumps(
             {
-                "source_sha256": "input-sha",
+                "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                 "canonical_hash": "canonical-sha",
                 "rows": 4,
                 "columns": [{"name": "value"}],
@@ -139,7 +143,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     report = render_report(tmp_path).read_text()
 
     assert "| csv | read_all | 1 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
-    assert "| Input SHA-256 | input-sha |" in report
+    assert f"| Input SHA-256 | {hashlib.sha256(source.read_bytes()).hexdigest()} |" in report
     assert "| Canonical hash | canonical-sha |" in report
     assert "| Rows / columns | 4 / 1 |" in report
     assert "| PyArrow | 23.0.1 |" in report
@@ -147,7 +151,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     assert "| Git commit | abc |" in report
     assert "| Packages | {\"pyarrow\":\"22.0.0\"} |" in report
     assert "| Packages | {\"pyarrow\":\"23.0.1\"} |" in report
-    assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements |" in report
+    assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements; timeout 120s |" in report
     assert "| csv | {\"delimiter\":\",\"} |" in report
     reported = json.loads((tmp_path / "manifest.json").read_text())
     assert reported["formats"][0]["state"] == "REPORTED"

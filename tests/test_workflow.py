@@ -1,4 +1,5 @@
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,27 @@ def test_prepare_validates_dataset_before_creating_destination(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="one path segment"):
         prepare_run(tmp_path, "../outside", run_dir, fixture=True)
+
+    assert not run_dir.exists()
+
+
+def test_prepare_rejects_source_hash_mismatch_before_encoding(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    dataset = root / "datasets" / DATASET
+    dataset.mkdir(parents=True)
+    source_dir = root / ".data" / DATASET
+    source_dir.mkdir(parents=True)
+    repository_root = Path(__file__).parents[1]
+    shutil.copy2(
+        repository_root / "datasets" / DATASET / "manifest.json",
+        dataset / "manifest.json",
+    )
+    source = source_dir / "source.csv"
+    source.write_text("not the dataset\n")
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(ValueError, match="source SHA-256 mismatch"):
+        prepare_run(root, DATASET, run_dir, selected=(CsvAdapter(),))
 
     assert not run_dir.exists()
 

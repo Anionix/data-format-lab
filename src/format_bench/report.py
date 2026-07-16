@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -62,18 +63,53 @@ def _input_manifest(run_dir: Path, manifest: dict) -> dict:
     reference = manifest.get("input", {}).get("manifest")
     if not isinstance(reference, str):
         return {}
-    path = (run_dir / reference).resolve()
-    try:
-        path.relative_to(run_dir.resolve())
-    except ValueError:
+    path = _input_path(run_dir, reference)
+    if path is None:
         return {}
     if not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _input_path(run_dir: Path, reference: str) -> Path | None:
+    path = (run_dir / reference).resolve()
+    try:
+        path.relative_to(run_dir.resolve())
+    except ValueError:
+        return None
+    return path
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     input_manifest = _input_manifest(run_dir, manifest)
+    input_info = manifest.get("input", {})
+    source_reference = input_info.get("source") if isinstance(input_info, dict) else None
+    source_path = (
+        _input_path(run_dir, source_reference)
+        if isinstance(source_reference, str)
+        else None
+    )
+    actual_source_sha256 = (
+        _sha256(source_path) if source_path is not None and source_path.is_file() else None
+    )
+    declared_source_sha256 = input_manifest.get("source_sha256")
+    if (
+        actual_source_sha256 is not None
+        and declared_source_sha256 is not None
+        and actual_source_sha256 != declared_source_sha256
+    ):
+        raise ValueError(
+            "input source SHA-256 mismatch: "
+            f"declared {declared_source_sha256}, actual {actual_source_sha256}"
+        )
     environment = results.get("environment", {})
     packages = environment.get("packages", {})
     measurement = results.get("measurement", {})
@@ -92,10 +128,11 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         protocol = (
             f"{measurement.get('fresh_processes')} fresh processes; "
             f"{measurement.get('warmups')} warmups; "
-            f"{measurement.get('iterations')} measurements"
+            f"{measurement.get('iterations')} measurements; "
+            f"timeout {measurement.get('timeout_seconds')}s"
         )
     rows = [
-        ["Input SHA-256", input_manifest.get("source_sha256")],
+        ["Input SHA-256", actual_source_sha256 or declared_source_sha256],
         ["Canonical hash", input_manifest.get("canonical_hash")],
         ["Rows / columns", dimensions],
         [
