@@ -23,6 +23,19 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert "/nix/store/" not in nimble_json
     assert "/opt/homebrew/" not in nimble_json
 
+    fastlanes_attempt = next(
+        attempt
+        for attempt in records["fastlanes"]["attempts"]
+        if attempt.get("workflow_run")
+        == "https://github.com/Anionix/data-format-lab/actions/runs/29520329351"
+    )
+    assert fastlanes_attempt["environment"]["architecture"] == "x86_64"
+    assert fastlanes_attempt["result"]["mixed"].startswith("HARNESS_FAILED")
+    assert fastlanes_attempt["workflow_artifact"]["release_tag"] == "v0.1.0"
+    assert fastlanes_attempt["workflow_artifact"]["release_asset_url"].endswith(
+        ".tar.zst"
+    )
+
 
 def test_relative_root_does_not_match_url_punctuation(
     monkeypatch: pytest.MonkeyPatch,
