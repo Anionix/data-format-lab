@@ -75,7 +75,8 @@ def generated_cases(seed: int, count: int) -> tuple[CaseSpec, ...]:
             "string_seed": rng.getrandbits(32),
         }
         rows = parameters["rows"]
-        parameters["cardinality"] = 0 if rows == 0 else rng.randint(1, rows)
+        drawn_cardinality = rng.randint(1, max(rows, 1))
+        parameters["cardinality"] = 0 if rows == 0 else drawn_cardinality
         encoded = json.dumps(parameters, sort_keys=True, separators=(",", ":")).encode()
         suffix = hashlib.sha256(encoded).hexdigest()[:10]
         cases.append(
