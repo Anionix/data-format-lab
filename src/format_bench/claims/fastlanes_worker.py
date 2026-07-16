@@ -25,6 +25,10 @@ MIXED_COLUMNS = (
 class TargetFailure(RuntimeError):
     """The official FastLanes call or its decoded output violated the target contract."""
 
+    def __init__(self, message: str, *, cause_type: str | None = None) -> None:
+        super().__init__(message)
+        self.cause_type = cause_type
+
 
 def _input(directory: Path, case: str, rows: int) -> tuple[Path, Path, bytes]:
     directory.mkdir(parents=True, exist_ok=True)
@@ -85,11 +89,14 @@ def run(case: str, rows: int, output: Path) -> dict:
         pyfastlanes.connect().read_csv(str(csv_path.parent)).to_fls(str(fls_path))
         pyfastlanes.connect().read_fls(str(fls_path)).to_csv(str(decoded_path))
     except Exception as error:
-        raise TargetFailure(str(error)) from error
+        raise TargetFailure(str(error), cause_type=type(error).__name__) from error
     decoded = decoded_path.read_bytes()
     artifact_bytes = fls_path.stat().st_size
     if decoded != source:
-        raise TargetFailure(f"decoded bytes differ: {len(source)} != {len(decoded)}")
+        raise TargetFailure(
+            f"decoded bytes differ: {len(source)} != {len(decoded)}",
+            cause_type="ValueMismatch",
+        )
     return {
         "outcome": "ROUNDTRIP_EQUAL",
         "source_bytes": len(source),
@@ -111,6 +118,7 @@ def main() -> None:
             "status": "FAILED",
             "failure_class": "TARGET",
             "error_type": type(error).__name__,
+            "cause_type": error.cause_type,
             "error": str(error)[-500:],
         }
     except Exception as error:

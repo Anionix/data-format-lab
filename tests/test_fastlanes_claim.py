@@ -102,7 +102,7 @@ def test_fastlanes_worker_protocol_marks_target_failure(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     def raise_target(*args, **kwargs):
-        raise fastlanes_worker.TargetFailure("target error")
+        raise fastlanes_worker.TargetFailure("target error", cause_type="RuntimeError")
 
     monkeypatch.setattr(
         fastlanes_worker,
@@ -119,6 +119,8 @@ def test_fastlanes_worker_protocol_marks_target_failure(
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["failure_class"] == "TARGET"
+    assert payload["error_type"] == "TargetFailure"
+    assert payload["cause_type"] == "RuntimeError"
 
 
 def test_fastlanes_worker_protocol_marks_harness_failure(
