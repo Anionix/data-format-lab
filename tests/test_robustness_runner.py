@@ -1,4 +1,5 @@
 import json
+import os
 import signal
 import sys
 from pathlib import Path
@@ -47,6 +48,43 @@ def test_runner_classifies_signal_and_timeout(tmp_path: Path) -> None:
     assert crashed["process"]["signal"] == signal.SIGTERM
     timed_out = _run(tmp_path / "timeout", "import time; time.sleep(5)")
     assert timed_out["observed"] is ObservedOutcome.TIMED_OUT
+    assert timed_out["process"]["signal"] is None
+
+
+def test_process_reaps_descendant_after_leader_exit(tmp_path: Path) -> None:
+    pid_path = tmp_path / "descendant.pid"
+    ready_path = tmp_path / "descendant.ready"
+    descendant = (
+        "from pathlib import Path; import os,time; "
+        f"Path({str(pid_path)!r}).write_text(str(os.getpid())); "
+        f"Path({str(ready_path)!r}).write_text('ready'); "
+        "print('DESCENDANT-TAIL', flush=True); time.sleep(30)"
+    )
+    leader = "\n".join(
+        (
+            "from pathlib import Path",
+            "import subprocess,sys,time",
+            f"subprocess.Popen([sys.executable, '-c', {descendant!r}], stdout=sys.stdout, stderr=sys.stderr)",
+            f"ready=Path({str(ready_path)!r}); deadline=time.time()+2",
+            "while not ready.exists() and time.time() < deadline:",
+            "    time.sleep(0.01)",
+            "print('LEADER-EXIT', flush=True)",
+        )
+    )
+    process, stdout, _ = _process(
+        (sys.executable, "-c", leader), tmp_path, 2, output_budget_bytes=256
+    )
+    pid = int(pid_path.read_text())
+    try:
+        assert process["exit_code"] == 0
+        assert "DESCENDANT-TAIL" in stdout
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+    finally:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: Path) -> None:

@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import hashlib
 import os
+import selectors
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
-from typing import BinaryIO, NotRequired, Sequence, TypedDict, cast
+from typing import NotRequired, Sequence, TypedDict, cast
 
 from format_bench.model import (
     ObservedOutcome,
@@ -143,9 +143,17 @@ def _save(root: Path, value: str | Path, content: str) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _tail(handle: BinaryIO, size: int, limit: int) -> str:
-    handle.seek(max(0, size - limit))
-    return handle.read(limit).decode("utf-8", errors="ignore")
+def _append_tail(
+    current: bytearray,
+    data: bytes,
+    budget: int | None,
+) -> None:
+    current.extend(data)
+    if budget is None:
+        return
+    excess = len(current) - budget
+    if excess > 0:
+        del current[:excess]
 
 
 def _process(
@@ -162,41 +170,106 @@ def _process(
     env["PYTHONPATH"] = os.pathsep.join(
         item for item in (source_root, env.get("PYTHONPATH")) if item
     )
-    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
-        process = subprocess.Popen(
-            list(command), cwd=cwd, stdout=stdout_file, stderr=stderr_file,
-            start_new_session=True, env=env,
-        )
-        timed_out = False
+    process = subprocess.Popen(
+        list(command), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        start_new_session=True, env=env,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stdout_pipe, stderr_pipe = process.stdout, process.stderr
+    stdout_tail = bytearray()
+    stderr_tail = bytearray()
+    stdout_bytes = 0
+    stderr_bytes = 0
+    timed_out = False
+    cleanup_sent = False
+    stdout_budget = (
+        output_budget_bytes // 2 if output_budget_bytes is not None else None
+    )
+    stderr_budget = (
+        output_budget_bytes - stdout_budget
+        if output_budget_bytes is not None and stdout_budget is not None
+        else None
+    )
+
+    def cleanup_group() -> None:
+        nonlocal cleanup_sent
+        if cleanup_sent:
+            return
+        cleanup_sent = True
         try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
             os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+    try:
+        os.set_blocking(stdout_pipe.fileno(), False)
+        os.set_blocking(stderr_pipe.fileno(), False)
+        with selectors.DefaultSelector() as selector:
+            selector.register(stdout_pipe, selectors.EVENT_READ, "stdout")
+            selector.register(stderr_pipe, selectors.EVENT_READ, "stderr")
+            deadline = time.monotonic() + timeout
+            while selector.get_map() or process.poll() is None:
+                if process.poll() is not None:
+                    cleanup_group()
+                elif time.monotonic() >= deadline:
+                    timed_out = True
+                    cleanup_group()
+
+                if not selector.get_map():
+                    if process.poll() is None:
+                        time.sleep(0.01)
+                    continue
+
+                wait_for = 0.05
+                if not cleanup_sent:
+                    wait_for = max(0.0, min(wait_for, deadline - time.monotonic()))
+                for key, _ in selector.select(wait_for):
+                    try:
+                        chunk = os.read(key.fd, 64 * 1024)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        (stdout_pipe if key.data == "stdout" else stderr_pipe).close()
+                        continue
+                    if key.data == "stdout":
+                        stdout_bytes += len(chunk)
+                        _append_tail(
+                            stdout_tail, chunk, stdout_budget
+                        )
+                    else:
+                        stderr_bytes += len(chunk)
+                        _append_tail(
+                            stderr_tail, chunk, stderr_budget
+                        )
+        process.wait()
+    finally:
+        if process.poll() is None:
+            cleanup_group()
             process.wait()
-        stdout_bytes = os.fstat(stdout_file.fileno()).st_size
-        stderr_bytes = os.fstat(stderr_file.fileno()).st_size
-        budget = stdout_bytes + stderr_bytes if output_budget_bytes is None else output_budget_bytes
-        stdout_limit = min(stdout_bytes, budget // 2)
-        stderr_limit = min(stderr_bytes, budget - stdout_limit)
-        remaining = budget - stdout_limit - stderr_limit
-        stdout_limit += min(stdout_bytes - stdout_limit, remaining)
-        remaining = budget - stdout_limit - stderr_limit
-        stderr_limit += min(stderr_bytes - stderr_limit, remaining)
-        stdout = _tail(stdout_file, stdout_bytes, stdout_limit)
-        stderr = _tail(stderr_file, stderr_bytes, stderr_limit)
+        if not stdout_pipe.closed:
+            stdout_pipe.close()
+        if not stderr_pipe.closed:
+            stderr_pipe.close()
     duration_ms = round((time.perf_counter_ns() - started) / 1_000_000, 3)
+    stdout = bytes(stdout_tail).decode("utf-8", errors="ignore")
+    stderr = bytes(stderr_tail).decode("utf-8", errors="ignore")
     return {
-        "exit_code": process.returncode if not timed_out else None,
-        "signal": -process.returncode if process.returncode is not None and process.returncode < 0 else None,
+        "exit_code": process.returncode if not timed_out and process.returncode >= 0 else None,
+        "signal": (
+            -process.returncode
+            if not timed_out and process.returncode is not None and process.returncode < 0
+            else None
+        ),
         "timed_out": timed_out,
         "duration_ms": duration_ms,
         "stdout_bytes": stdout_bytes,
         "stderr_bytes": stderr_bytes,
-        "stdout_truncated": stdout_limit < stdout_bytes,
-        "stderr_truncated": stderr_limit < stderr_bytes,
+        "stdout_truncated": len(stdout_tail) < stdout_bytes,
+        "stderr_truncated": len(stderr_tail) < stderr_bytes,
         "output_budget_bytes": output_budget_bytes,
-        "output_exhausted": stdout_limit + stderr_limit < stdout_bytes + stderr_bytes,
+        "output_exhausted": len(stdout_tail) + len(stderr_tail) < stdout_bytes + stderr_bytes,
     }, stdout, stderr
 
 
