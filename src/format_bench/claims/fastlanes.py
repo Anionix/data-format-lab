@@ -16,6 +16,7 @@ SOURCE_COMMIT = "f0edc1020a538f1f8098640fce8347c9ac247a0d"
 PACKAGE = "pyfastlanes==0.1.3.post9"
 DELIMITER = "|"
 STRING_BOUNDARIES = (1023, 1024, 1025, 2048, 2049)
+MIXED_ROWS = 1024
 
 
 def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> dict:
@@ -75,21 +76,33 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
     else:
         try:
             result.update(json.loads(stdout.strip().splitlines()[-1]))
+            if "outcome" not in result:
+                result["outcome"] = ObservedOutcome.HARNESS_FAILED
         except (IndexError, json.JSONDecodeError) as error:
             result["outcome"] = ObservedOutcome.HARNESS_FAILED
             result["error"] = f"invalid worker output: {error}"
     return result
 
 
-def _fatal_cases(numeric: dict, strings: dict[str, dict], malformed: dict) -> list[dict]:
+def _fatal_cases(
+    numeric: dict,
+    strings: dict[str, dict],
+    malformed: dict,
+    mixed: dict | None = None,
+) -> list[dict]:
     fatal = []
     if numeric.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
         fatal.append(numeric)
     fatal.extend(
         item
-        for item in (*strings.values(), malformed)
-        if item.get("outcome")
-        in {ObservedOutcome.TIMED_OUT, ObservedOutcome.HARNESS_FAILED}
+        for item in (*strings.values(), malformed, *((mixed,) if mixed is not None else ()))
+        if item.get("status") == "FAILED"
+        or item.get("outcome")
+        in {
+            ObservedOutcome.CRASHED,
+            ObservedOutcome.TIMED_OUT,
+            ObservedOutcome.HARNESS_FAILED,
+        }
     )
     return fatal
 
@@ -111,12 +124,13 @@ def run_fastlanes_claim(
         str(rows): _run_case(directory, f"string-{rows}", rows, timeout_seconds)
         for rows in string_boundaries
     }
+    mixed = _run_case(directory, "mixed-13-columns", MIXED_ROWS, timeout_seconds)
     malformed = _run_case(directory, "comma-malformed", max(string_boundaries), timeout_seconds)
     boundary_summary = ",".join(
         f"{rows}={item.get('outcome', item.get('status', 'UNKNOWN'))}"
         for rows, item in strings.items()
     )
-    fatal = _fatal_cases(numeric, strings, malformed)
+    fatal = _fatal_cases(numeric, strings, malformed, mixed)
     root = directory.parent.parent
     return {
         "status": "FAILED" if fatal else "MEASURED",
@@ -130,10 +144,12 @@ def run_fastlanes_claim(
         "project_seeded": True,
         "numeric": numeric,
         "string_boundaries": strings,
+        "mixed": mixed,
         "comma_malformed": malformed,
         "summary": (
             f"numeric={numeric.get('outcome', numeric.get('status', 'UNKNOWN'))}; "
             f"strings={boundary_summary}; "
+            f"mixed={mixed.get('outcome', mixed.get('status', 'UNKNOWN'))}; "
             f"comma={malformed.get('outcome', malformed.get('status', 'UNKNOWN'))}"
         ),
         "artifacts_root": str(directory.relative_to(root)),

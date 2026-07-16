@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 from format_bench.claims.fastlanes import _fatal_cases, _run_case
-from format_bench.claims.fastlanes_worker import _input
+from format_bench.claims.fastlanes_worker import MIXED_COLUMNS, _input
 from format_bench.model import ObservedOutcome
 
 
@@ -40,7 +40,41 @@ def test_fastlanes_runner_contains_native_crash(tmp_path: Path, monkeypatch) -> 
     assert (tmp_path / "comma-malformed" / "stderr.txt").is_file()
 
 
+def test_fastlanes_mixed_input_matches_the_13_column_contract(tmp_path: Path) -> None:
+    schema, csv_path, data = _input(tmp_path, "mixed", 2)
+    payload = json.loads(schema.read_text())
+
+    assert payload["columns"] == list(MIXED_COLUMNS)
+    assert len(data.splitlines()[0].split(b"|")) == 13
+    assert csv_path.read_bytes() == data
+
+
+def test_fastlanes_worker_failure_is_normalized_to_harness_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, '{"status":"FAILED"}\n', ""
+        ),
+    )
+
+    result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
+
+    assert result["status"] == "FAILED"
+    assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
+
+
 def test_fastlanes_numeric_failure_is_fatal() -> None:
     numeric = {"case": "numeric", "outcome": ObservedOutcome.CRASHED}
 
     assert _fatal_cases(numeric, {}, {"outcome": ObservedOutcome.REJECTED}) == [numeric]
+
+
+def test_fastlanes_string_crash_and_worker_failure_are_fatal() -> None:
+    numeric = {"outcome": ObservedOutcome.ROUNDTRIP_EQUAL}
+    strings = {"1023": {"status": "FAILED"}}
+    malformed = {"outcome": ObservedOutcome.CRASHED}
+
+    assert _fatal_cases(numeric, strings, malformed) == [*strings.values(), malformed]

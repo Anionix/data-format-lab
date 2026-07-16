@@ -32,6 +32,8 @@ Follow-up on 2026-07-17: the pinned FastLanes Python binding was rebuilt from th
 
 The claims runner keeps the corrected TsFile time-series workload as `ADAPTED` and marks both TsFile and the pinned FastLanes execution as `EXPERIMENTAL`. FastLanes cases run in fresh child processes, retain per-case artifacts, and do not gate Core CI when the optional reader is unavailable or terminates.
 
+The 2026-07-17 retry added the exact 13-column mixed-schema case and corrected fatal classification for worker failures and crashes. The lock-pinned Python package could not build under macOS arm64 Clang 21 because `src/table/stats.cpp` promotes a `std::string` null-argument warning to an error. The official C++ `quick_fuzz_test` built after downgrading the two observed warning classes, but all ten pinned cases exited `SIGTRAP`; this is experimental evidence, not an upstream bug claim.
+
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
 ## Token questions

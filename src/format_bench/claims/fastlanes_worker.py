@@ -5,6 +5,23 @@ import json
 from pathlib import Path
 
 
+MIXED_COLUMNS = (
+    {"name": "group", "type": "string", "nullability": "NULL"},
+    {"name": "category", "type": "string", "nullability": "NULL"},
+    {"name": "micro_category", "type": "string", "nullability": "NULL"},
+    {"name": "classification_score", "type": "double", "nullability": "NULL"},
+    {"name": "matched_terms", "type": "string", "nullability": "NULL"},
+    {"name": "full_name", "type": "string", "nullability": "NULL"},
+    {"name": "html_url", "type": "string", "nullability": "NULL"},
+    {"name": "language", "type": "string", "nullability": "NULL"},
+    {"name": "repo_stars", "type": "bigint", "nullability": "NULL"},
+    {"name": "fork", "type": "boolean", "nullability": "NULL"},
+    {"name": "archived", "type": "boolean", "nullability": "NULL"},
+    {"name": "topics", "type": "string", "nullability": "NULL"},
+    {"name": "description", "type": "string", "nullability": "NULL"},
+)
+
+
 def _input(directory: Path, case: str, rows: int) -> tuple[Path, Path, bytes]:
     directory.mkdir(parents=True, exist_ok=True)
     if case == "numeric":
@@ -22,6 +39,28 @@ def _input(directory: Path, case: str, rows: int) -> tuple[Path, Path, bytes]:
             for index in range(8)
         ]
         lines = (",".join(str(row + index) for index in range(8)) for row in range(rows))
+    elif case == "mixed":
+        columns = list(MIXED_COLUMNS)
+        lines = (
+            "|".join(
+                (
+                    "AI / LLM" if row % 2 == 0 else "Databases",
+                    f"category-{row % 3}",
+                    f"micro-{row % 5}",
+                    f"{(row % 100) / 100:.2f}",
+                    f"term-{row % 7};term-{(row + 1) % 7}",
+                    f"owner/repo-{row}",
+                    f"https://github.com/owner/repo-{row}",
+                    "Python" if row % 2 == 0 else "Rust",
+                    str(row * 17),
+                    "true" if row % 2 == 0 else "false",
+                    "false" if row % 11 else "true",
+                    f"topic-{row % 4};topic-{(row + 1) % 4}",
+                    f"Repository description {row}",
+                )
+            )
+            for row in range(rows)
+        )
     else:
         raise ValueError(f"unknown FastLanes case: {case}")
     schema = directory / "schema.json"
@@ -53,7 +92,7 @@ def run(case: str, rows: int, output: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", choices=("numeric", "string", "comma"), required=True)
+    parser.add_argument("--case", choices=("numeric", "string", "mixed", "comma"), required=True)
     parser.add_argument("--rows", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
