@@ -244,6 +244,38 @@ def test_fair_report_includes_reproducibility_provenance(tmp_path: Path) -> None
     assert results_hash in report
 
 
+def test_report_failure_does_not_persist_reported_state(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input/source.csv").write_text("value\n1\n")
+    (tmp_path / "input/manifest.json").write_text(
+        json.dumps({"source_sha256": "wrong", "canonical_hash": "canonical"})
+    )
+    manifest = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "rankable": True,
+        "input": {"source": "input/source.csv", "manifest": "input/manifest.json"},
+        "formats": [],
+    }
+    results = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "run_id": "failed-report-fixture",
+        "profile": "fair",
+        "environment": {},
+        "measurement": {},
+        "results": {},
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "results.json").write_text(json.dumps(results))
+
+    with pytest.raises(ValueError, match="input source SHA-256 mismatch"):
+        render_report(tmp_path)
+
+    assert json.loads((tmp_path / "manifest.json").read_text())["state"] == "BENCHMARKED"
+    assert json.loads((tmp_path / "results.json").read_text())["state"] == "BENCHMARKED"
+
+
 def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
     manifest = {"state": "BENCHMARKED", "dataset_id": "fixture", "formats": []}
     results = {
