@@ -159,6 +159,7 @@ def _write_archive(
                         info.uname = info.gname = ""
                         with path.open("rb") as source:
                             archive.addfile(info, source)
+        temporary.chmod(0o644)
         temporary.replace(archive_path)
     except Exception:
         if temporary is not None:

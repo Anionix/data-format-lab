@@ -1,5 +1,6 @@
 import hashlib
 import json
+import stat
 import tarfile
 from pathlib import Path
 
@@ -101,6 +102,7 @@ def test_release_package_is_deterministic_and_relative(
     first = package_run(run, tmp_path / "first", "linux-x86_64")
     second = package_run(run, tmp_path / "second", "linux-x86_64")
     assert first.read_bytes() == second.read_bytes()
+    assert stat.S_IMODE(first.stat().st_mode) == 0o644
     monkeypatch.chdir(tmp_path)
     relative = package_run(Path("run"), Path("relative"), "linux-x86_64")
     assert first.read_bytes() == relative.read_bytes()
