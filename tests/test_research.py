@@ -23,6 +23,10 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert fastlanes_attempt["environment"]["architecture"] == "x86_64"
     assert fastlanes_attempt["result"]["mixed"].startswith("HARNESS_FAILED")
     assert fastlanes_attempt["workflow_run"]["run_id"] == "29520329351"
+    assert fastlanes_attempt["workflow_run"]["release_tag"] == "v0.1.0"
+    assert fastlanes_attempt["workflow_run"]["release_asset_url"].endswith(
+        ".tar.zst"
+    )
 
     nimble_json = json.dumps(records["nimble"])
     assert "/nix/store/" not in nimble_json
