@@ -1,10 +1,12 @@
 # Data Format Lab: fair report
 
-Dataset: `github-stars-2026-07-03`  
-Run: `data-format-lab-parquet-codecs-clean-1784236998`  
+Dataset: `github-stars-2026-07-03`<br>
+Run: `data-format-lab-parquet-codecs-clean-1784236998`<br>
 No result in this report is comparable across lanes or hardware runs.
 
 ## Environment
+
+### Encoding
 
 | Field | Value |
 | --- | --- |
@@ -14,6 +16,61 @@ No result in this report is comparable across lanes or hardware runs.
 | Machine | arm64 |
 | Hardware model | Mac14,7 |
 | Python | 3.12.13 |
+| Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
+
+### Measurement
+
+| Field | Value |
+| --- | --- |
+| Git commit | 85ac7ded30d7fad473de138a6846abf90a278e56 |
+| Flake lock SHA-256 | 1d8b3b85a0f5f144f6076ca7d4de031d1b2c7b50bc62c1bd12d43dd0141ad54c |
+| Platform | macOS-27.0-arm64-arm-64bit |
+| Machine | arm64 |
+| Hardware model | Mac14,7 |
+| Python | 3.12.13 |
+| Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
+
+## Reproducibility
+
+| Field | Value |
+| --- | --- |
+| Input SHA-256 | 39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e |
+| Canonical hash | 1bf35022cce6d752f7959907b6a60d4024123e045a270f4aa286acbefbe4ca39 |
+| Rows / columns | 2331 / 13 |
+| Expected counts | {"full_name_anomalyco_opencode":1,"group_ai_llm":119,"repo_stars_gt_100000":15,"rows":2331} |
+| PyArrow | 23.0.1 |
+| Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
+| Protocol | 10 fresh processes; 5 warmups; 30 measurements |
+| Seed | 20260703 |
+| OS cache purged | False |
+
+### Writer Settings
+
+| Format | Settings |
+| --- | --- |
+| parquet_default | {"compression":"zstd","dictionary":true,"level":"library-default"} |
+| parquet_zstd19 | {"compression":"zstd","dictionary":true,"level":19} |
+| parquet_snappy | {"compression":"snappy","dictionary":true,"level":"library-default"} |
+| parquet_gzip | {"compression":"gzip","dictionary":true,"level":"library-default"} |
+
+## Evidence Digests
+
+| File | SHA-256 |
+| --- | --- |
+| Manifest SHA-256 | f53c731b9221cf2db2a1a5e931bea332071ceb134dfa7f9ebb7fe87003a6ebd4 |
+| Results SHA-256 | 989f8819e6a4a36481171fbbe64c7d88fb58417b170143ebef40714e68279165 |
+| Input manifest SHA-256 | 9c684dac968596d25a95e4731514fa742c81d0a7c01eeb2666c6790473261b8f |
+| Input source SHA-256 | 39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e |
+
+Format settings in the Writer Settings table are the writer settings used for each artifact.
+The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.
+
+## Durable Evidence
+
+| File | URL |
+| --- | --- |
+| Raw archive | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-data-format-lab-parquet-codecs-clean-1784236998.tar.zst |
+| SHA-256 checksum | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-data-format-lab-parquet-codecs-clean-1784236998.tar.zst.sha256 |
 
 ## Format Evidence
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -20,6 +21,23 @@ def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
     ]
     output.extend("| " + " | ".join(_cell(value) for value in row) + " |" for row in rows)
     return output
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _run_file(run_dir: Path, value: object) -> Path | None:
+    if not isinstance(value, str):
+        return None
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"report path is unsafe: {value}")
+    return run_dir / relative
 
 
 def _package_versions(environment: dict) -> str:
@@ -59,21 +77,24 @@ def _environment(manifest: dict, results: dict) -> list[str]:
 
 
 def _input_manifest(run_dir: Path, manifest: dict) -> dict:
-    reference = manifest.get("input", {}).get("manifest")
-    if not isinstance(reference, str):
-        return {}
-    path = (run_dir / reference).resolve()
-    try:
-        path.relative_to(run_dir.resolve())
-    except ValueError:
-        return {}
-    if not path.is_file():
+    input_info = manifest.get("input", {})
+    path = _run_file(
+        run_dir, input_info.get("manifest") if isinstance(input_info, dict) else None
+    )
+    if path is None or not path.is_file():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     input_manifest = _input_manifest(run_dir, manifest)
+    input_info = manifest.get("input", {})
+    input_manifest_path = _run_file(
+        run_dir, input_info.get("manifest") if isinstance(input_info, dict) else None
+    )
+    source_path = _run_file(
+        run_dir, input_info.get("source") if isinstance(input_info, dict) else None
+    )
     environment = results.get("environment", {})
     packages = environment.get("packages", {})
     measurement = results.get("measurement", {})
@@ -112,6 +133,38 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         ["Seed", measurement.get("seed", manifest.get("seed"))],
         ["OS cache purged", measurement.get("os_cache_purged")],
     ]
+    digest_rows = [
+        ["Manifest SHA-256", _sha256(run_dir / "manifest.json")],
+        ["Results SHA-256", _sha256(run_dir / "results.json")],
+    ]
+    if input_manifest_path is not None and input_manifest_path.is_file():
+        digest_rows.append(["Input manifest SHA-256", _sha256(input_manifest_path)])
+    if source_path is not None and source_path.is_file():
+        digest_rows.append(["Input source SHA-256", _sha256(source_path)])
+    lines = [
+        "## Evidence Digests",
+        "",
+        *_table(["File", "SHA-256"], digest_rows),
+        "",
+        "Format settings in the Writer Settings table are the writer settings used for each artifact.",
+        "The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.",
+    ]
+    release = results.get("release", {})
+    if isinstance(release, dict) and isinstance(release.get("archive_url"), str):
+        lines.extend(
+            [
+                "",
+                "## Durable Evidence",
+                "",
+                *_table(
+                    ["File", "URL"],
+                    [
+                        ["Raw archive", release["archive_url"]],
+                        ["SHA-256 checksum", release.get("checksum_url", "N/A")],
+                    ],
+                ),
+            ]
+        )
     return [
         "## Reproducibility",
         "",
@@ -120,6 +173,8 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         "### Writer Settings",
         "",
         *_table(["Format", "Settings"], format_settings),
+        "",
+        *lines,
     ]
 
 
@@ -445,6 +500,16 @@ def render_report(run_dir: Path) -> Path:
         "prompt": lambda: _prompt(results),
         "robustness": lambda: _robustness(results),
     }
+    section = sections[profile]()
+    for payload, json_path in (
+        (manifest, run_dir / "manifest.json"),
+        (results, run_dir / "results.json"),
+    ):
+        if payload["state"] == ExecutionState.BENCHMARKED:
+            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+        json_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     lines = [
         f"# Data Format Lab: {profile} report",
         "",
@@ -456,19 +521,10 @@ def render_report(run_dir: Path) -> Path:
         "",
         *_provenance(run_dir, manifest, results),
         "",
-        *sections[profile](),
+        *section,
         "",
     ]
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
-    for payload, json_path in (
-        (manifest, run_dir / "manifest.json"),
-        (results, run_dir / "results.json"),
-    ):
-        if payload["state"] == ExecutionState.BENCHMARKED:
-            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
-        json_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
     return path

@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -152,6 +153,90 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     reported = json.loads((tmp_path / "manifest.json").read_text())
     assert reported["formats"][0]["state"] == "REPORTED"
     assert render_report(tmp_path).read_text() == report
+
+
+def test_fair_report_includes_reproducibility_provenance(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    source = input_dir / "source.csv"
+    source.write_text("value\n1\n")
+    (input_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "rows": 1,
+                "columns": [{"name": "value", "arrow_type": "int64", "nullable": True}],
+                "source_sha256": "source-hash",
+                "canonical_hash": "canonical-hash",
+                "expected_counts": {"rows": 1},
+            }
+        )
+    )
+    manifest = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "rankable": True,
+        "input": {"source": "input/source.csv", "manifest": "input/manifest.json"},
+        "formats": [
+            {
+                "format": "csv",
+                "comparability": "FULL_COMPARABLE",
+                "state": "BENCHMARKED",
+                "native_bytes": 10,
+                "settings": {"compression": "none"},
+            }
+        ],
+    }
+    results = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "run_id": "fair-provenance-fixture",
+        "profile": "fair",
+        "measurement": {
+            "fresh_processes": 10,
+            "warmups": 5,
+            "iterations": 30,
+            "seed": 20260703,
+            "os_cache_purged": False,
+        },
+        "environment": {
+            "git_commit": "abc",
+            "flake_lock_sha256": "def",
+            "platform": "test-os",
+            "machine": "test-cpu",
+            "python": "3.12.0",
+            "packages": {"pyarrow": "23.0.1"},
+        },
+        "release": {
+            "archive_url": "https://example.invalid/evidence.tar.zst",
+            "checksum_url": "https://example.invalid/evidence.tar.zst.sha256",
+        },
+        "results": {
+            "csv/read_all": {
+                "status": "MEASURED",
+                "fresh_process": {"p50_ms": 1},
+                "warm": {"p50_ms": 1, "p95_ms": 2, "iqr_ms": 1},
+                "result": 1,
+                "evidence": {"normalized_hash": "result-hash"},
+                "max_rss_bytes_p50": 100,
+            }
+        },
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "results.json").write_text(json.dumps(results))
+
+    report = render_report(tmp_path).read_text()
+
+    assert "## Reproducibility" in report
+    assert "| Input SHA-256 | source-hash |" in report
+    assert "| Canonical hash | canonical-hash |" in report
+    assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements |" in report
+    assert "| PyArrow | 23.0.1 |" in report
+    assert '| csv | {"compression":"none"} |' in report
+    assert "## Evidence Digests" in report
+    assert "## Durable Evidence" in report
+    assert "https://example.invalid/evidence.tar.zst.sha256" in report
+    results_hash = hashlib.sha256((tmp_path / "results.json").read_bytes()).hexdigest()
+    assert results_hash in report
 
 
 def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
