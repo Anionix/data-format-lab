@@ -21,7 +21,11 @@ def test_native_workflow_runs_each_available_target_with_evidence_budget() -> No
     assert "max-parallel: 6" in workflow
     assert "--artifact-budget-mib 1024" in workflow
     assert "--target \"$TARGET\"" in workflow
-    assert "--duration-seconds \"${{ inputs.duration_seconds }}\"" in workflow
+    assert '--duration-seconds "$REQUESTED_DURATION_SECONDS"' in workflow
+    assert "cd native/vortex && cargo fuzz build file_io" in workflow
+    assert "cd native/vortex && cargo fuzz build compress_roundtrip" in workflow
+    assert 'test "$REQUESTED_DURATION_SECONDS" -gt 3300' in workflow
+    assert "timeout-minutes: 90" in workflow
     assert "retention-days: 14" in workflow
     assert "FALLBACK_DIR" in workflow
     assert "FALLBACK_TMP_DIR" in workflow
