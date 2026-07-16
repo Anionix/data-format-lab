@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 from typing import TypeVar
 
+from .canonical import canonical_hash, load_dataset, query_counts, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .fair_run import run_fair
 from .profile_run import run_claims, run_prompt
@@ -14,6 +15,7 @@ from .report import render_report
 from .robustness.profile import run_bounded
 from .robustness.native import NATIVE_TARGETS, run_native
 from .workflow import prepare_run, verify_run
+from .interop import run_arrow_ipc_interoperability
 
 
 _T = TypeVar("_T")
@@ -81,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
+
+    interop = subcommands.add_parser("interop")
+    interop.add_argument("--dataset", required=True)
+    interop.add_argument("--output", type=Path, default=Path("outputs/interop"))
+    interop.add_argument("--fixture", action="store_true")
 
     package = subcommands.add_parser("package")
     package.add_argument("--run-dir", type=Path, required=True)
@@ -191,6 +198,24 @@ def main(argv: list[str] | None = None) -> None:
             path = runners[args.profile](root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
+    elif args.command == "interop":
+        source = (
+            root / "datasets" / args.dataset / "fixture.csv"
+            if args.fixture
+            else root / ".data" / args.dataset / "source.csv"
+        )
+        if args.fixture:
+            manifest = load_manifest(root, args.dataset)
+            table = read_csv(source, manifest)
+            manifest = {
+                **manifest,
+                "rows": table.num_rows,
+                "canonical_hash": canonical_hash(table),
+                "expected_counts": query_counts(table),
+            }
+        else:
+            manifest, table = load_dataset(root, args.dataset, source=source)
+        path = run_arrow_ipc_interoperability(table, manifest, args.output)
     else:
         path = package_run(args.run_dir, args.output, args.platform)
     print(path)
