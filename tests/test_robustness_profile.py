@@ -6,7 +6,18 @@ import pytest
 import format_bench.robustness.profile as robustness_profile
 from format_bench import cli
 from format_bench.formats.text import CsvAdapter
-from format_bench.robustness.profile import _mutate, run_bounded
+from format_bench.robustness.profile import (
+    _execute,
+    _mutate,
+    run_bounded,
+)
+from format_bench.robustness.evidence import EvidenceStore
+from format_bench.model import (
+    ObservedOutcome,
+    RobustnessExpectation,
+    RobustnessVerdict,
+)
+from format_bench.canonical import read_csv
 from format_bench.robustness.targets import core_targets
 from format_bench.workflow import prepare_run, verify_run
 
@@ -112,3 +123,140 @@ def test_mutation_uses_actual_member_size_and_rejects_links(tmp_path: Path) -> N
     assert outside.read_bytes() == b"unchanged"
     with pytest.raises(ValueError, match="non-negative"):
         run_bounded(tmp_path, tmp_path, mutations_per_target=-1)
+
+
+def test_worker_output_budget_leaves_room_for_case_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    target = core_targets()[0]
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(target.adapter,))
+    dataset = json.loads((run_dir / "input/manifest.json").read_text())
+    table = read_csv(run_dir / "input/source.csv", dataset)
+    store = EvidenceStore(run_dir / "robustness", 64 * 1024)
+
+    def noisy_case(
+        case_root: Path,
+        request: str,
+        output_dir: str,
+        timeout: float,
+        command=None,
+        output_budget_bytes: int | None = None,
+    ) -> dict:
+        assert output_budget_bytes is not None
+        assert output_budget_bytes < store.budget_bytes - store.used_bytes
+        output = case_root / output_dir
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "stdout.txt").write_bytes(b"x" * output_budget_bytes)
+        (output / "stderr.txt").write_bytes(b"")
+        return {
+            "case_id": "budget-boundary",
+            "target": target.name,
+            "expectation": RobustnessExpectation.MUST_ROUNDTRIP,
+            "observed": ObservedOutcome.BUDGET_EXHAUSTED,
+            "verdict": RobustnessVerdict.INCOMPLETE,
+            "details": {},
+            "process": {
+                "exit_code": 0,
+                "signal": None,
+                "timed_out": False,
+                "duration_ms": 0.0,
+                "stdout_bytes": output_budget_bytes,
+                "stderr_bytes": 0,
+                "stdout_truncated": True,
+                "stderr_truncated": False,
+                "output_budget_bytes": output_budget_bytes,
+                "output_exhausted": True,
+            },
+            "stdout": (output / "stdout.txt").relative_to(case_root).as_posix(),
+            "stderr": (output / "stderr.txt").relative_to(case_root).as_posix(),
+        }
+
+    monkeypatch.setattr("format_bench.robustness.profile.run_case", noisy_case)
+    result = _execute(
+        run_dir,
+        store,
+        target,
+        "budget-boundary",
+        RobustnessExpectation.MUST_ROUNDTRIP,
+        table,
+        dataset,
+        1.0,
+    )
+
+    result_path = store.root / "cases" / target.name / "budget-boundary" / "result.json"
+    assert result["observed"] is ObservedOutcome.BUDGET_EXHAUSTED
+    assert result_path.is_file()
+    assert store.used_bytes <= store.budget_bytes
+
+
+def test_budget_exhaustion_keeps_later_cases_runnable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    target = core_targets()[0]
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(target.adapter,))
+    verify_run(run_dir, {target.name: target.adapter})
+    first = robustness_profile.CaseSpec(
+        "rows-1", "rows", robustness_profile.RobustnessExpectation.MUST_ROUNDTRIP,
+        (("rows", 1),),
+    )
+    later = robustness_profile.CaseSpec(
+        "generated-000-later", "rows", robustness_profile.RobustnessExpectation.MUST_ROUNDTRIP,
+        (("rows", 1),),
+    )
+    monkeypatch.setattr(robustness_profile, "named_cases", lambda: (first,))
+    monkeypatch.setattr(robustness_profile, "generated_cases", lambda seed, count: (later,))
+    output_bytes = 128
+    calls: list[str] = []
+    monkeypatch.setattr(
+        robustness_profile, "_PER_CASE_OUTPUT_BUDGET_BYTES", output_bytes
+    )
+
+    def noisy_case(
+        case_root: Path,
+        request: str,
+        output_dir: str,
+        timeout: float,
+        command=None,
+        output_budget_bytes: int | None = None,
+    ) -> dict:
+        del timeout, command
+        assert output_budget_bytes == output_bytes
+        request_payload = json.loads((case_root / request).read_text())
+        calls.append(request_payload["case_id"])
+        output = case_root / output_dir
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "stdout.txt").write_bytes(b"x" * output_budget_bytes)
+        (output / "stderr.txt").write_bytes(b"")
+        return {
+            "case_id": request_payload["case_id"],
+            "target": target.name,
+            "expectation": "MUST_ROUNDTRIP",
+            "observed": ObservedOutcome.BUDGET_EXHAUSTED,
+            "verdict": RobustnessVerdict.INCOMPLETE,
+            "details": {},
+            "process": {},
+            "stdout": (Path(output_dir) / "stdout.txt").as_posix(),
+            "stderr": (Path(output_dir) / "stderr.txt").as_posix(),
+        }
+
+    monkeypatch.setattr(robustness_profile, "run_case", noisy_case)
+    result_path = run_bounded(
+        root,
+        run_dir,
+        generated_count=0,
+        mutations_per_target=0,
+        targets=(target,),
+        artifact_budget_mib=4,
+    )
+    cases = json.loads(result_path.read_text())["results"]["robustness_v1"]["cases"]
+
+    assert calls == ["rows-1", "generated-000-later"]
+    assert [case["observed"] for case in cases] == ["BUDGET_EXHAUSTED"] * 2
+    assert all(
+        (run_dir / "robustness" / "cases" / target.name / case / "result.json").is_file()
+        for case in calls
+    )
