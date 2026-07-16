@@ -346,6 +346,8 @@ def _case(
             observed = ObservedOutcome.CRASHED
         elif process["exit_code"] == 0:
             observed = ObservedOutcome.ACCEPTED
+        elif target.engine == "project-seeded":
+            observed = ObservedOutcome.TARGET_FAILED
         else:
             observed = ObservedOutcome.HARNESS_FAILED
         details: dict[str, object] = {

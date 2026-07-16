@@ -66,6 +66,7 @@ def test_robustness_contract_exposes_the_public_vocabulary() -> None:
         ("MUST_NOT_CRASH", "REJECTED", "PASS"),
         ("MUST_NOT_CRASH", "CRASHED", "FAIL"),
         ("MUST_NOT_CRASH", "TIMED_OUT", "FAIL"),
+        ("MUST_NOT_CRASH", "TARGET_FAILED", "FAIL"),
         ("MUST_NOT_CRASH", "UNSUPPORTED", "INCOMPLETE"),
         ("MUST_NOT_CRASH", "BUDGET_EXHAUSTED", "INCOMPLETE"),
         ("MUST_NOT_CRASH", "HARNESS_FAILED", "INCOMPLETE"),
