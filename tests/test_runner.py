@@ -81,7 +81,11 @@ def test_linux_hardware_identity_reads_product_and_cpu(monkeypatch) -> None:
         if str(path) == "/sys/devices/virtual/dmi/id/product_name":
             return "Virtual Machine\n"
         if str(path) == "/proc/cpuinfo":
-            return "processor : 0\nmodel name : AMD EPYC 7763 64-Core Processor\n"
+            return (
+                "processor : 0\n"
+                "model : 79\n"
+                "model name : AMD EPYC 7763 64-Core Processor\n"
+            )
         raise FileNotFoundError(path)
 
     monkeypatch.setattr(runner.Path, "read_text", read_text)

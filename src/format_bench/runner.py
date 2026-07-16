@@ -158,19 +158,22 @@ def _linux_hardware_model() -> str:
     except OSError:
         pass
 
-    cpu = ""
+    candidates = {"model name": "", "hardware": "", "model": ""}
     try:
         for line in Path("/proc/cpuinfo").read_text(
             encoding="utf-8", errors="replace"
         ).splitlines():
             key, separator, value = line.partition(":")
-            if separator and key.strip().lower() in {"model name", "hardware", "model"}:
-                cpu = value.strip()
-                if cpu:
-                    break
+            normalized_key = key.strip().lower()
+            if separator and normalized_key in candidates and not candidates[normalized_key]:
+                candidates[normalized_key] = value.strip()
     except OSError:
         pass
 
+    cpu = next(
+        (candidates[key] for key in ("model name", "hardware", "model") if candidates[key]),
+        "",
+    )
     return " / ".join(dict.fromkeys(value for value in (product, cpu) if value))
 
 
