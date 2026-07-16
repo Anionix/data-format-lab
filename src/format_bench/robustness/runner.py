@@ -144,6 +144,8 @@ def _save(root: Path, value: str | Path, content: str) -> str:
 
 
 def _append_tail(
+    stdout_tail: bytearray,
+    stderr_tail: bytearray,
     current: bytearray,
     data: bytes,
     budget: int | None,
@@ -151,9 +153,23 @@ def _append_tail(
     current.extend(data)
     if budget is None:
         return
-    excess = len(current) - budget
-    if excess > 0:
-        del current[:excess]
+    excess = len(stdout_tail) + len(stderr_tail) - budget
+    if excess <= 0:
+        return
+    half = budget // 2
+    stdout_floor = min(len(stdout_tail), half) if stderr_tail else 0
+    stderr_floor = min(len(stderr_tail), budget - half) if stdout_tail else 0
+    other = stderr_tail if current is stdout_tail else stdout_tail
+    floors = (
+        (current, stdout_floor if current is stdout_tail else stderr_floor),
+        (other, stderr_floor if current is stdout_tail else stdout_floor),
+    )
+    for buffer, floor in floors:
+        removed = min(excess, max(0, len(buffer) - floor))
+        del buffer[:removed]
+        excess -= removed
+        if excess == 0:
+            break
 
 
 def _process(
@@ -183,14 +199,6 @@ def _process(
     stderr_bytes = 0
     timed_out = False
     cleanup_sent = False
-    stdout_budget = (
-        output_budget_bytes // 2 if output_budget_bytes is not None else None
-    )
-    stderr_budget = (
-        output_budget_bytes - stdout_budget
-        if output_budget_bytes is not None and stdout_budget is not None
-        else None
-    )
 
     def cleanup_group() -> None:
         nonlocal cleanup_sent
@@ -236,12 +244,12 @@ def _process(
                     if key.data == "stdout":
                         stdout_bytes += len(chunk)
                         _append_tail(
-                            stdout_tail, chunk, stdout_budget
+                            stdout_tail, stderr_tail, stdout_tail, chunk, output_budget_bytes
                         )
                     else:
                         stderr_bytes += len(chunk)
                         _append_tail(
-                            stderr_tail, chunk, stderr_budget
+                            stdout_tail, stderr_tail, stderr_tail, chunk, output_budget_bytes
                         )
         process.wait()
     finally:
@@ -269,7 +277,10 @@ def _process(
         "stdout_truncated": len(stdout_tail) < stdout_bytes,
         "stderr_truncated": len(stderr_tail) < stderr_bytes,
         "output_budget_bytes": output_budget_bytes,
-        "output_exhausted": len(stdout_tail) + len(stderr_tail) < stdout_bytes + stderr_bytes,
+        "output_exhausted": (
+            output_budget_bytes is not None
+            and stdout_bytes + stderr_bytes > output_budget_bytes
+        ),
     }, stdout, stderr
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 
 import pyarrow as pa
@@ -92,7 +93,7 @@ def _case_result_reserve(
     expectation: RobustnessExpectation,
     input_record: ArtifactRecord,
     artifact_records: tuple[ArtifactRecord, ...],
-    mutation: dict[str, object] | None,
+    mutation: Mapping[str, object] | None,
     timeout: float,
     output_budget_bytes: int,
 ) -> int:

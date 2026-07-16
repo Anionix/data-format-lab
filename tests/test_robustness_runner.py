@@ -2,6 +2,7 @@ import json
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -78,8 +79,15 @@ def test_process_reaps_descendant_after_leader_exit(tmp_path: Path) -> None:
     try:
         assert process["exit_code"] == 0
         assert "DESCENDANT-TAIL" in stdout
-        with pytest.raises(ProcessLookupError):
-            os.kill(pid, 0)
+        deadline = time.monotonic() + 1
+        while True:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail("descendant survived process-group cleanup")
+            time.sleep(0.01)
     finally:
         try:
             os.kill(pid, signal.SIGKILL)
@@ -103,6 +111,13 @@ def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: 
     assert large_details["details"]["original_size_bytes"] > 4096
     valid = _run(tmp_path / "valid", "import json; print(json.dumps({'observed':'REJECTED'}))", "MUST_ROUNDTRIP")
     assert valid["verdict"] is RobustnessVerdict.FAIL
+
+
+def test_runner_reuses_unused_stream_budget(tmp_path: Path) -> None:
+    code = "import json; print(json.dumps({'observed':'REJECTED','details':{'message':'x'*200}}))"
+    result = _run(tmp_path, code, output_budget_bytes=512)
+    assert result["observed"] is ObservedOutcome.REJECTED
+    assert result["process"]["output_exhausted"] is False
 
 
 def test_runner_rejects_unsafe_request_paths(tmp_path: Path) -> None:
