@@ -38,6 +38,42 @@
         "dependency_warning": "CMake reported that protoc 33.4 did not match the protobuf library 7.35.1"
       },
       "result": "protobuf and fmt targets resolved, but the bundled xsimd dependency stopped configuration because its CMake minimum version is older than CMake 4.1.2; no build or projection test was attempted"
+    },
+    {
+      "entrypoint": "Nix-only dependency-closure configure probe",
+      "attempted_on": "2026-07-17",
+      "workload": "configure a release build with the pinned submodules before the planned 1,024-column projection test",
+      "command": "nix develop --command cmake -S <nimble-checkout> -B <build-dir> -G Ninja",
+      "cmake_args": [
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DVELOX_ENABLE_GEO=OFF",
+        "-DVELOX_DEPENDENCY_SOURCE=AUTO",
+        "-DBoost_SOURCE=BUNDLED",
+        "-Dfolly_SOURCE=SYSTEM",
+        "-Dabsl_SOURCE=SYSTEM",
+        "-Dfmt_SOURCE=SYSTEM",
+        "-Dglog_SOURCE=SYSTEM",
+        "-Dgflags_SOURCE=SYSTEM",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+      ],
+      "environment": {
+        "os": "Darwin 27.0.0",
+        "architecture": "arm64",
+        "clang": "21.1.8",
+        "cmake": "4.1.2",
+        "ninja": "1.13.2",
+        "nixpkgs_revision": "e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3",
+        "protobuf": "35.1 from the locked lab flake",
+        "system_dependencies": {
+          "folly": "2026.01.19.00",
+          "abseil": "20260107.1",
+          "fmt": "12.1.0",
+          "xsimd": "13.2.0 available; pinned Velox selected bundled 10.0.0",
+          "lz4": "1.10.0"
+        },
+        "source_provenance": "Nimble, Velox, and OpenZL remained at the recorded commits; compiler and protoc came from the Nix environment"
+      },
+      "result": "The lab probe passed the xsimd policy boundary and reached generation, but its selected system Folly target referenced the Boost::thread target that the Nimble CMake dependency list did not build, and Nimble link targets could not resolve protobuf::libprotobuf; no build or projection test was attempted"
     }
   ],
   "retry_when": "the pinned official tree configures and builds with its submodules, or a standalone reader/writer is published"
