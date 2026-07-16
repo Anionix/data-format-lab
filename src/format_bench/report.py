@@ -91,6 +91,14 @@ def _sha256(path: Path) -> str:
 def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     input_manifest = _input_manifest(run_dir, manifest)
     input_info = manifest.get("input", {})
+    manifest_reference = (
+        input_info.get("manifest") if isinstance(input_info, dict) else None
+    )
+    input_manifest_path = (
+        _input_path(run_dir, manifest_reference)
+        if isinstance(manifest_reference, str)
+        else None
+    )
     source_reference = input_info.get("source") if isinstance(input_info, dict) else None
     source_path = (
         _input_path(run_dir, source_reference)
@@ -149,6 +157,38 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         ["Seed", measurement.get("seed", manifest.get("seed"))],
         ["OS cache purged", measurement.get("os_cache_purged")],
     ]
+    digest_rows = [
+        ["Manifest SHA-256", _sha256(run_dir / "manifest.json")],
+        ["Results SHA-256", _sha256(run_dir / "results.json")],
+    ]
+    if input_manifest_path is not None and input_manifest_path.is_file():
+        digest_rows.append(["Input manifest SHA-256", _sha256(input_manifest_path)])
+    if source_path is not None and source_path.is_file():
+        digest_rows.append(["Input source SHA-256", _sha256(source_path)])
+    evidence = [
+        "## Evidence Digests",
+        "",
+        *_table(["File", "SHA-256"], digest_rows),
+        "",
+        "Format settings in the Writer Settings table are the writer settings used for each artifact.",
+        "The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.",
+    ]
+    release = results.get("release", {})
+    if isinstance(release, dict) and isinstance(release.get("archive_url"), str):
+        evidence.extend(
+            [
+                "",
+                "## Durable Evidence",
+                "",
+                *_table(
+                    ["File", "URL"],
+                    [
+                        ["Raw archive", release["archive_url"]],
+                        ["SHA-256 checksum", release.get("checksum_url", "N/A")],
+                    ],
+                ),
+            ]
+        )
     return [
         "## Reproducibility",
         "",
@@ -157,6 +197,8 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         "### Writer Settings",
         "",
         *_table(["Format", "Settings"], format_settings),
+        "",
+        *evidence,
     ]
 
 
@@ -482,6 +524,16 @@ def render_report(run_dir: Path) -> Path:
         "prompt": lambda: _prompt(results),
         "robustness": lambda: _robustness(results),
     }
+    section = sections[profile]()
+    for payload, json_path in (
+        (manifest, run_dir / "manifest.json"),
+        (results, run_dir / "results.json"),
+    ):
+        if payload["state"] == ExecutionState.BENCHMARKED:
+            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+        json_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     lines = [
         f"# Data Format Lab: {profile} report",
         "",
@@ -493,19 +545,10 @@ def render_report(run_dir: Path) -> Path:
         "",
         *_provenance(run_dir, manifest, results),
         "",
-        *sections[profile](),
+        *section,
         "",
     ]
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
-    for payload, json_path in (
-        (manifest, run_dir / "manifest.json"),
-        (results, run_dir / "results.json"),
-    ):
-        if payload["state"] == ExecutionState.BENCHMARKED:
-            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
-        json_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
     return path

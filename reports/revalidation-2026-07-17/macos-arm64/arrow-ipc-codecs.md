@@ -40,7 +40,7 @@ No result in this report is comparable across lanes or hardware runs.
 | Expected counts | {"full_name_anomalyco_opencode":1,"group_ai_llm":119,"repo_stars_gt_100000":15,"rows":2331} |
 | PyArrow | 23.0.1 |
 | Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
-| Protocol | 10 fresh processes; 5 warmups; 30 measurements |
+| Protocol | 10 fresh processes; 5 warmups; 30 measurements; timeout 120s |
 | Seed | 20260703 |
 | OS cache purged | False |
 
@@ -51,6 +51,25 @@ No result in this report is comparable across lanes or hardware runs.
 | arrow_ipc | {"compression":"none","container":"arrow-ipc-file"} |
 | arrow_ipc_lz4 | {"compression":"lz4","container":"arrow-ipc-file"} |
 | arrow_ipc_zstd | {"compression":"zstd","container":"arrow-ipc-file"} |
+
+## Evidence Digests
+
+| File | SHA-256 |
+| --- | --- |
+| Manifest SHA-256 | 13899f29945117060bcbf8536887f021b8a671e23add7e52e40efa0a85b6c326 |
+| Results SHA-256 | 3bc38fcdefbdf6af126e7c8e564aa60cb69e6b3a9d6636448ddb3dfcf5da358b |
+| Input manifest SHA-256 | 9c684dac968596d25a95e4731514fa742c81d0a7c01eeb2666c6790473261b8f |
+| Input source SHA-256 | 39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e |
+
+Format settings in the Writer Settings table are the writer settings used for each artifact.
+The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.
+
+## Durable Evidence
+
+| File | URL |
+| --- | --- |
+| Raw archive | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-arrow-ipc-codecs-provenance-85ac7de.tar.zst |
+| SHA-256 checksum | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-arrow-ipc-codecs-provenance-85ac7de.tar.zst.sha256 |
 
 ## Format Evidence
 
