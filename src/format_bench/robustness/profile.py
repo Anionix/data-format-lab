@@ -116,6 +116,7 @@ def _case_result_reserve(
             "stderr_truncated": True,
             "output_budget_bytes": output_budget_bytes,
             "output_exhausted": True,
+            "cleanup_incomplete": False,
         },
         "stdout": f"robustness/{prefix.as_posix()}/stdout.txt",
         "stderr": f"robustness/{prefix.as_posix()}/stderr.txt",

@@ -33,8 +33,9 @@ class ProcessEvidence(TypedDict):
     stderr_bytes: int
     stdout_truncated: bool
     stderr_truncated: bool
-    output_budget_bytes: int | None
+    output_budget_bytes: int
     output_exhausted: bool
+    cleanup_incomplete: bool
 
 
 class RequestPayload(TypedDict):
@@ -201,7 +202,10 @@ def _process(
     stderr_bytes = 0
     timed_out = False
     cleanup_sent = False
+    cleanup_incomplete = False
     drain_deadline: float | None = None
+    # None means "use the bounded default"; the effective value is recorded so
+    # evidence never hides an implicit retention limit.
     retention_budget = (
         output_budget_bytes
         if output_budget_bytes is not None
@@ -238,8 +242,11 @@ def _process(
 
                 # A descendant can call setsid() and escape killpg(). Bound the
                 # final pipe drain so an escaped child cannot hang the harness.
+                # Do not guess detached PIDs: record incomplete cleanup instead
+                # of risking a signal to an unrelated reused PID.
                 if drain_deadline is not None and time.monotonic() >= drain_deadline:
                     timed_out = True
+                    cleanup_incomplete = True
                     for key in tuple(selector.get_map().values()):
                         selector.unregister(key.fileobj)
                     break
@@ -296,11 +303,9 @@ def _process(
         "stderr_bytes": stderr_bytes,
         "stdout_truncated": len(stdout_tail) < stdout_bytes,
         "stderr_truncated": len(stderr_tail) < stderr_bytes,
-        "output_budget_bytes": output_budget_bytes,
-        "output_exhausted": (
-            output_budget_bytes is not None
-            and stdout_bytes + stderr_bytes > output_budget_bytes
-        ),
+        "output_budget_bytes": retention_budget,
+        "output_exhausted": stdout_bytes + stderr_bytes > retention_budget,
+        "cleanup_incomplete": cleanup_incomplete,
     }, stdout, stderr
 
 
@@ -308,7 +313,12 @@ def _outcome(
     process: ProcessEvidence, stdout: str
 ) -> tuple[ObservedOutcome, dict[str, object]]:
     if process["timed_out"]:
-        return ObservedOutcome.TIMED_OUT, {}
+        details: dict[str, object] = (
+            {"cleanup_incomplete": True}
+            if process["cleanup_incomplete"]
+            else {}
+        )
+        return ObservedOutcome.TIMED_OUT, details
     signal_number = process["signal"]
     if signal_number is not None:
         try:

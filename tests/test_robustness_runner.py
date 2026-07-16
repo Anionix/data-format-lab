@@ -106,10 +106,15 @@ def test_process_bounds_drain_for_detached_descendant(tmp_path: Path) -> None:
         f"Path({str(pid_path)!r}).write_text(str(os.getpid())); "
         "print('DETACHED-TAIL', flush=True); time.sleep(30)"
     )
-    leader = (
-        "import subprocess,sys; "
-        f"subprocess.Popen([sys.executable, '-c', {descendant!r}], "
-        "stdout=sys.stdout, stderr=sys.stderr)"
+    leader = "\n".join(
+        (
+            "from pathlib import Path",
+            "import subprocess,sys,time",
+            f"subprocess.Popen([sys.executable, '-c', {descendant!r}], stdout=sys.stdout, stderr=sys.stderr)",
+            f"path=Path({str(pid_path)!r}); deadline=time.time()+2",
+            "while not path.exists() and time.time() < deadline:",
+            "    time.sleep(0.01)",
+        )
     )
     started = time.monotonic()
     process, stdout, _ = _process(
@@ -119,6 +124,7 @@ def test_process_bounds_drain_for_detached_descendant(tmp_path: Path) -> None:
     try:
         assert process["timed_out"] is True
         assert process["signal"] is None
+        assert process["cleanup_incomplete"] is True
         assert time.monotonic() - started < 3
         assert "DETACHED-TAIL" in stdout
     finally:
@@ -160,11 +166,32 @@ def test_runner_bounds_retained_output_without_explicit_budget(tmp_path: Path) -
     process, stdout, stderr = _process(
         (sys.executable, "-c", code), tmp_path, 2
     )
-    assert process["output_budget_bytes"] is None
-    assert process["output_exhausted"] is False
+    assert process["output_budget_bytes"] == DEFAULT_OUTPUT_RETENTION_BYTES
+    assert process["output_exhausted"] is True
     assert process["stdout_truncated"] is True
     assert process["stderr_truncated"] is True
     assert len(stdout.encode()) + len(stderr.encode()) <= DEFAULT_OUTPUT_RETENTION_BYTES
+
+
+def test_runner_drains_noisy_child_beyond_pipe_capacity(tmp_path: Path) -> None:
+    code = "\n".join(
+        (
+            "import os",
+            "chunk_out=b'O'*65536; chunk_err=b'E'*65536",
+            "for _ in range(64):",
+            "    os.write(1, chunk_out)",
+            "    os.write(2, chunk_err)",
+        )
+    )
+    process, stdout, stderr = _process(
+        (sys.executable, "-c", code), tmp_path, 2, output_budget_bytes=256
+    )
+    assert process["exit_code"] == 0
+    assert process["timed_out"] is False
+    assert process["stdout_bytes"] > 1_000_000
+    assert process["stderr_bytes"] > 1_000_000
+    assert process["output_exhausted"] is True
+    assert len(stdout.encode()) + len(stderr.encode()) <= 256
 
 
 def test_runner_rejects_unsafe_request_paths(tmp_path: Path) -> None:
