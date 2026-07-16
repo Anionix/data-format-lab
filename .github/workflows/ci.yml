@@ -24,7 +24,20 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - name: Evaluate pinned environments
-        run: nix flake check --no-build --all-systems
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if nix flake check --no-build --all-systems; then
+              exit 0
+            fi
+            if test "$attempt" -lt 3; then
+              delay=$((attempt * 15))
+              echo "flake evaluation failed on attempt $attempt; retrying in ${delay}s"
+              sleep "$delay"
+            fi
+          done
+          echo "flake evaluation failed after 3 attempts" >&2
+          exit 1
 
       - name: Synchronize frozen Python environment
         run: nix develop --command uv sync --frozen
