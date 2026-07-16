@@ -33,6 +33,7 @@ Formalize the existing canonical verification as the conformance gate and add a 
 - Model observed outcomes as round-trip equality, acceptance, rejection, value mismatch, crash, timeout, unsupported, budget exhaustion, or harness failure.
 - Model verdicts as pass, fail, not applicable, or incomplete.
 - Run every bounded case through a fresh Python module subprocess with no shell interpolation.
+- Pass a dedicated seed directory to binary-backed coverage-guided targets and preserve that directory in the native evidence.
 - Treat CSV, object JSONL, both Parquet settings, Lance base, and both Vortex settings as core targets.
 - Treat TsFile and the pinned FastLanes experiment as evidence-only targets.
 - Classify a non-zero exit from a project-seeded native target as `TARGET_FAILED`/`FAIL`; reserve `HARNESS_FAILED`/`INCOMPLETE` for runner, setup, or contract errors.
