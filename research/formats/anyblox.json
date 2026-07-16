@@ -37,5 +37,5 @@
       "result": "stable compilation again failed with E0554/E0599; no round trip or performance measurement was attempted"
     }
   ],
-  "retry_when": "the artifact pins a reproducible nightly toolchain or builds on stable Rust"
+  "retry_when": "the artifact pins a reproducible nightly toolchain or builds on stable Rust, and a checksum-complete dataset and .anyblox bundle are available"
 }
