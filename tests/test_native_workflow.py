@@ -29,6 +29,7 @@ def test_native_workflow_runs_each_available_target_with_evidence_budget() -> No
     assert "retention-days: 14" in workflow
     assert "FALLBACK_DIR" in workflow
     assert "FALLBACK_TMP_DIR" in workflow
+    assert "runner.temp" not in workflow
     assert "fallback/native-" in workflow
     assert "if: always()" in workflow
     assert "linux-x86_64" in workflow
@@ -45,3 +46,4 @@ def test_native_workflow_keeps_the_native_runner_failure_after_upload() -> None:
     assert "steps.native_build.outcome" in workflow
     assert "steps.native.outcome" in workflow
     assert "steps.evidence.outcome" in workflow
+    assert '"TARGET_FAILED"' in workflow
