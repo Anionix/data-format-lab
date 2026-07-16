@@ -11,7 +11,7 @@ on:
       timeout_seconds:
         description: Timeout per generated case
         required: true
-        default: "900"
+        default: "120"
         type: string
 
 permissions:
@@ -26,19 +26,20 @@ jobs:
   retry:
     name: FastLanes official Python round trip
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 30
 
     steps:
+      - name: Check out public commit
+        id: checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
       - name: Initialize evidence directory
+        if: always()
         run: |
           set -euo pipefail
           mkdir -p "$RUN_DIR"
           printf 'platform=linux-x86_64\nrun_id=%s\n' "$GITHUB_RUN_ID" \
             > "$RUN_DIR/context.txt"
-
-      - name: Check out public commit
-        id: checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
@@ -115,6 +116,17 @@ jobs:
           CASE_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
         run: |
           set -euo pipefail
+          case "$CASE_TIMEOUT_SECONDS" in
+            ''|*[!0-9]*)
+              echo "timeout_seconds must be an integer" >&2
+              exit 2
+              ;;
+          esac
+          if test "$CASE_TIMEOUT_SECONDS" -lt 1 || \
+            test "$CASE_TIMEOUT_SECONDS" -gt 120; then
+            echo "timeout_seconds must be between 1 and 120" >&2
+            exit 2
+          fi
           set +e
           PYTHONPATH="$GITHUB_WORKSPACE/src" \
             native/fastlanes/.venv/bin/python - "$RUN_DIR/results.json" <<'PY'
@@ -154,13 +166,15 @@ jobs:
             exit 0
           fi
           nix develop --command python - "$RUN_DIR/results.json" \
-            '${{ steps.source.outcome }}' '${{ steps.build.outcome }}' <<'PY'
+            '${{ steps.source.outcome }}' '${{ steps.build.outcome }}' \
+            '${{ steps.measure.outcome }}' <<'PY'
           import json
           import sys
           from pathlib import Path
 
           output = Path(sys.argv[1])
-          source, build = sys.argv[2:]
+          source, build, measure = sys.argv[2:]
+          available = source == "success" and build == "success"
           output.write_text(
               json.dumps(
                   {
@@ -169,8 +183,10 @@ jobs:
                       "lane": "claims",
                       "platform": "linux-x86_64",
                       "source_commit": "f0edc1020a538f1f8098640fce8347c9ac247a0d",
-                      "status": "UNSUPPORTED",
-                      "failure_reason": f"source={source}; build={build}",
+                      "status": "UNSUPPORTED" if not available else "FAILED",
+                      "failure_reason": (
+                          f"source={source}; build={build}; measure={measure}"
+                      ),
                   },
                   indent=2,
                   sort_keys=True,
