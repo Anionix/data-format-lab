@@ -24,6 +24,7 @@ def test_native_workflow_runs_each_available_target_with_evidence_budget() -> No
     assert "--duration-seconds \"${{ inputs.duration_seconds }}\"" in workflow
     assert "retention-days: 14" in workflow
     assert "FALLBACK_DIR" in workflow
+    assert "FALLBACK_TMP_DIR" in workflow
     assert "fallback/native-" in workflow
     assert "if: always()" in workflow
     assert "linux-x86_64" in workflow
@@ -32,6 +33,7 @@ def test_native_workflow_runs_each_available_target_with_evidence_budget() -> No
 def test_native_workflow_keeps_the_native_runner_failure_after_upload() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "id: native_source" in workflow
+    assert "id: checkout" in workflow
     assert "id: native_build" in workflow
     assert "id: native" in workflow
     assert "continue-on-error: true" in workflow
