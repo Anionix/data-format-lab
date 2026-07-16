@@ -253,4 +253,5 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
     assert "| csv | CORE | coverage-guided | rows-1 | MUST_ROUNDTRIP | ROUNDTRIP_EQUAL | PASS |" in first
     reported = json.loads((tmp_path / "results.json").read_text())
     assert reported["results"]["robustness_v1"]["state"] == "REPORTED"
+    assert reported["results"]["robustness_v1"]["target_summary"]["csv"]["pass"] == 1
     assert render_report(tmp_path).read_text() == first
