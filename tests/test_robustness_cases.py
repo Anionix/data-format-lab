@@ -61,6 +61,13 @@ def test_generated_cases_preserve_requested_rows() -> None:
             assert case.options["cardinality"] == 0
 
 
+def test_empty_generated_case_preserves_following_seed_sequence() -> None:
+    cases = generated_cases(74, 32)
+    assert cases[8].options["rows"] == 0
+    assert cases[8].options["cardinality"] == 0
+    assert cases[9].case_id == "generated-009-ad1bb43efc"
+
+
 def test_malformed_case_has_no_valid_arrow_materialization() -> None:
     case = next(case for case in named_cases() if case.case_id == "malformed-extra-column")
     with pytest.raises(ValueError, match="no valid Arrow input"):
