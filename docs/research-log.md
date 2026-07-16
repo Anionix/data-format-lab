@@ -73,6 +73,18 @@ retaining the existing `zstd-19` high-compression variant. These are codec
 choices inside one typed Parquet contract; the next evidence run will use the
 same fresh-process and warm-read protocol as the Arrow IPC codec report.
 
+The full comparison used reachable public commit
+`85ac7ded30d7fad473de138a6846abf90a278e56` on macOS `Mac14,7`. Native sizes
+were 269,320 bytes (`snappy`), 187,083 bytes (`gzip`), 200,031 bytes
+(`zstd` library default), and 176,713 bytes (`zstd-19`). Warm-operation p50
+values ranged from 0.459--1.467 ms for Snappy, 1.094--1.916 ms for Gzip,
+0.676--1.795 ms for default Zstandard, and 0.846--1.865 ms for Zstandard
+level 19. The complete table, result hashes, p95, IQR, RSS, and write timings
+are in the [Parquet codec evidence report](../reports/revalidation-2026-07-17/macos-arm64/parquet-codecs.md).
+For this dataset and host, Zstandard level 19 minimized storage, Snappy had
+the lowest write cost and generally lower warm-read latency, and Gzip sat
+between them on size but was slower to write and read.
+
 ## Token questions
 
 Estimated token counts were replaced with exact `o200k_base` and `cl100k_base` measurements. The prompt contract fixes seven semantic fields. Compact TSV includes its taxonomy dictionary in both byte and token totals. Object and array JSONL encode the same records.
