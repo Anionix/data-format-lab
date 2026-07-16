@@ -13,6 +13,14 @@ on:
         required: true
         default: "120"
         type: string
+      case_scope:
+        description: Run the full matrix or only the mixed 13-column reproducer
+        required: true
+        default: full
+        type: choice
+        options:
+          - full
+          - mixed
 
 permissions:
   contents: read
@@ -97,6 +105,7 @@ jobs:
             printf 'source_commit=%s\n' "$FASTLANES_SOURCE_COMMIT"
             printf 'requested_numeric_rows=%s\n' '${{ inputs.numeric_rows }}'
             printf 'requested_timeout_seconds=%s\n' '${{ inputs.timeout_seconds }}'
+            printf 'requested_case_scope=%s\n' '${{ inputs.case_scope }}'
             printf 'host_python='; python3 --version
             printf 'python='; nix develop --command python --version
             if test -x native/fastlanes/.venv/bin/python; then
@@ -115,6 +124,7 @@ jobs:
         env:
           NUMERIC_ROWS: ${{ inputs.numeric_rows }}
           CASE_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+          CASE_SCOPE: ${{ inputs.case_scope }}
         run: |
           set -euo pipefail
           status=0
@@ -150,6 +160,7 @@ jobs:
               output.parent / "claims" / "fastlanes-official",
               numeric_rows=int(os.environ["NUMERIC_ROWS"]),
               timeout_seconds=float(os.environ["CASE_TIMEOUT_SECONDS"]),
+              case_scope=os.environ["CASE_SCOPE"],
           )
           payload = {
               "schema_version": "1",

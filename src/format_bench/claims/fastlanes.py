@@ -17,6 +17,7 @@ PACKAGE = "pyfastlanes==0.1.3.post9"
 DELIMITER = "|"
 STRING_BOUNDARIES = (1023, 1024, 1025, 2048, 2049)
 MIXED_ROWS = 1024
+CASE_SCOPES = ("full", "mixed")
 
 
 def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> dict:
@@ -89,11 +90,19 @@ def _fatal_cases(
     mixed: dict | None = None,
 ) -> list[dict]:
     fatal = []
-    if numeric.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
+    if numeric.get("status") != "SKIPPED" and numeric.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
         fatal.append(numeric)
-    if mixed is not None and mixed.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
+    if (
+        mixed is not None
+        and mixed.get("status") != "SKIPPED"
+        and mixed.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL
+    ):
         fatal.append(mixed)
     return fatal
+
+
+def _skipped_case(name: str) -> dict:
+    return {"case": name, "status": "SKIPPED"}
 
 
 def run_fastlanes_claim(
@@ -102,22 +111,40 @@ def run_fastlanes_claim(
     numeric_rows: int = 1_000_000,
     string_boundaries: tuple[int, ...] = STRING_BOUNDARIES,
     timeout_seconds: float = 900.0,
+    case_scope: str = "full",
 ) -> dict:
+    if case_scope not in CASE_SCOPES:
+        raise ValueError(f"unknown FastLanes case scope: {case_scope}")
     if importlib.util.find_spec("pyfastlanes") is None:
         raise ModuleNotFoundError(f"optional dependency is unavailable: {PACKAGE}")
     import pyfastlanes
 
     directory.mkdir(parents=True, exist_ok=True)
-    numeric = _run_case(directory, "numeric-8-columns", numeric_rows, timeout_seconds)
-    strings = {
-        str(rows): _run_case(directory, f"string-{rows}", rows, timeout_seconds)
-        for rows in string_boundaries
-    }
+    numeric = (
+        _run_case(directory, "numeric-8-columns", numeric_rows, timeout_seconds)
+        if case_scope == "full"
+        else _skipped_case("numeric-8-columns")
+    )
+    strings = (
+        {
+            str(rows): _run_case(directory, f"string-{rows}", rows, timeout_seconds)
+            for rows in string_boundaries
+        }
+        if case_scope == "full"
+        else {}
+    )
     mixed = _run_case(directory, "mixed-13-columns", MIXED_ROWS, timeout_seconds)
-    malformed = _run_case(directory, "comma-malformed", max(string_boundaries), timeout_seconds)
-    boundary_summary = ",".join(
-        f"{rows}={item.get('outcome', item.get('status', 'UNKNOWN'))}"
-        for rows, item in strings.items()
+    malformed = (
+        _run_case(directory, "comma-malformed", max(string_boundaries), timeout_seconds)
+        if case_scope == "full"
+        else _skipped_case("comma-malformed")
+    )
+    boundary_summary = (
+        ",".join(
+            f"{rows}={item.get('outcome', item.get('status', 'UNKNOWN'))}"
+            for rows, item in strings.items()
+        )
+        or "SKIPPED"
     )
     fatal = _fatal_cases(numeric, mixed)
     root = directory.parent.parent
@@ -128,6 +155,7 @@ def run_fastlanes_claim(
         "package": PACKAGE,
         "package_version": version("pyfastlanes"),
         "runtime_version": pyfastlanes.get_version(),
+        "case_scope": case_scope,
         "delimiter": DELIMITER,
         "target_tier": "EXPERIMENTAL",
         "project_seeded": True,

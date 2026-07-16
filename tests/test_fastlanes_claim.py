@@ -87,3 +87,10 @@ def test_fastlanes_mixed_failure_is_fatal() -> None:
     mixed = {"outcome": ObservedOutcome.HARNESS_FAILED}
 
     assert _fatal_cases(numeric, mixed) == [mixed]
+
+
+def test_fastlanes_skipped_numeric_control_does_not_fail_mixed_scope() -> None:
+    numeric = {"case": "numeric-8-columns", "status": "SKIPPED"}
+    mixed = {"outcome": ObservedOutcome.ROUNDTRIP_EQUAL}
+
+    assert _fatal_cases(numeric, mixed) == []

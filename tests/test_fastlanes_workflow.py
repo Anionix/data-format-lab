@@ -15,6 +15,9 @@ def test_fastlanes_retry_workflow_is_pinned_and_linux_only() -> None:
     assert "mixed 13-column outcome" in workflow
     assert "timeout-minutes: 30" in workflow
     assert 'default: "120"' in workflow
+    assert "case_scope:" in workflow
+    assert "- mixed" in workflow
+    assert 'case_scope=os.environ["CASE_SCOPE"]' in workflow
     assert "timeout_seconds must be between 1 and 120" in workflow
     assert "tar --zstd" in workflow
     assert "retention-days: 14" in workflow
