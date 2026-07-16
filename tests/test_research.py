@@ -43,7 +43,7 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert len(manifest["flake_lock_sha256"]) == 64
     assert manifest["source_commits"] == records["nimble"]["source_commits"]
     for name, dependency in manifest["dependencies"].items():
-        if name == "xsimd":
+        if name in {"boost", "xsimd"}:
             assert dependency["acquisition"].startswith("Velox commit ")
         else:
             assert dependency["acquisition"].startswith("nixpkgs@")
