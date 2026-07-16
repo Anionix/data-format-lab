@@ -31,10 +31,14 @@
       "attempted_on": "2026-07-17",
       "workload": "build the Python extension before a 13-column mixed-schema round trip",
       "environment": {
-        "host": "Darwin esunoMacBook-Pro 27.0.0 arm64",
+        "os": "Darwin 27.0.0",
+        "hardware_model": "Mac14,7",
+        "chip": "Apple M2",
+        "memory_gib": 16,
+        "cpu_cores": 8,
         "macos": "27.0 (26A5378j)",
         "sdk_version": "27.0",
-        "sdk_path": "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+        "sdk_discovery_command": "xcrun --show-sdk-version; xcrun --show-sdk-path",
         "architecture": "arm64",
         "python": "3.12.13",
         "clang": "21.1.8",
@@ -50,6 +54,7 @@
           "-DFLS_ENABLE_VERBOSE_OUTPUT=ON"
         ]
       },
+      "build_command": "nix develop --command bash -euo pipefail -c 'cd <fastlanes-checkout>; python3 -m venv .venv; .venv/bin/python -m pip install scikit-build-core==0.11.6 cmake==4.4.0 ninja==1.13.0 pybind11==2.12.1 setuptools-scm==8.3.1; CMAKE_BUILD_PARALLEL_LEVEL=4 .venv/bin/python -m pip install --no-build-isolation -e .'",
       "result": "build stopped at src/table/stats.cpp:17 for TypedStats<std::string> with -Werror,-Wnonnull; no mixed-schema round trip was attempted"
     }
   ],
