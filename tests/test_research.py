@@ -16,6 +16,8 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert all(record["attempts"] for record in records.values())
     assert all(record["claim_summary"] for record in records.values())
     assert all(record["retry_when"] for record in records.values())
+    assert "checksum-complete dataset" in records["anyblox"]["retry_when"]
+    assert ".anyblox bundle" in records["anyblox"]["retry_when"]
 
     nimble_json = json.dumps(records["nimble"])
     assert "/nix/store/" not in nimble_json

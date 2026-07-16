@@ -8,16 +8,34 @@
   },
   "primary_source": "https://www.vldb.org/pvldb/vol18/p4017-gienieczko.pdf",
   "claim": "embed a WebAssembly decoder so readers can consume previously unknown formats",
-  "attempted_on": "2026-07-14",
+  "attempted_on": "2026-07-17",
   "comparability": "PARTIAL",
   "state": "FAILED",
-  "claim_summary": "reproducibility artifact did not build with stable Rust",
+  "claim_summary": "official targets are present, but the reproducibility artifact has no pinned nightly toolchain or checksum-complete input bundle",
   "attempts": [
     {
       "entrypoint": "official bundler and anyblox2csv Cargo targets",
       "workload": "build the VLDB 2025 reproducibility artifact with all submodules",
       "result": "vendored Vortex code required unversioned nightly Rust features; stable Rust failed with E0554/E0599"
+    },
+    {
+      "entrypoint": "official bundler and anyblox2csv retry",
+      "attempted_on": "2026-07-17",
+      "workload": "rebuild the pinned artifact and reader before measuring a round trip",
+      "environment": {
+        "os": "Darwin 27.0.0",
+        "architecture": "arm64",
+        "rustc": "1.93.1 from Homebrew",
+        "cargo": "1.93.1 from Homebrew",
+        "rustup": "not installed"
+      },
+      "source_constraints": {
+        "rust_toolchain": "channel=nightly without a date or digest",
+        "input_bundle": "no complete checksum-pinned dataset and .anyblox bundle identified",
+        "container": "Docker configuration does not pin a complete compiler and input environment"
+      },
+      "result": "stable compilation again failed with E0554/E0599; no round trip or performance measurement was attempted"
     }
   ],
-  "retry_when": "the artifact pins a reproducible nightly toolchain or builds on stable Rust"
+  "retry_when": "the artifact pins a reproducible nightly toolchain or builds on stable Rust, and a checksum-complete dataset and .anyblox bundle are available"
 }

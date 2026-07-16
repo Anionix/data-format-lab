@@ -36,6 +36,8 @@ The 2026-07-17 retry added the exact 13-column mixed-schema case and corrected f
 
 The 2026-07-17 Nimble retry pinned core `9da673...`, Velox `e06dd...`, and OpenZL `6b48...`. The dependency provenance was not fully lock-pure: protobuf library `35.1` came from Nix, `protoc 33.4` and fmt `12.1.0` came from Homebrew, and CMake reported the compiler/library mismatch. A dependency-resolving CMake path reached the bundled xsimd project but stopped at its pre-3.5 minimum-version declaration under CMake 4.1.2. The earlier protobuf/fmt target failure and this newer configure failure are both `UNSUPPORTED` build evidence; the 1,024-column projection comparison was not run.
 
+The 2026-07-17 AnyBlox retry found official bundler and `anyblox2csv` targets at the pinned commits, but the artifact still required an undated nightly Rust toolchain. This host had Homebrew Rust 1.93.1 and no `rustup`; stable compilation failed with `E0554/E0599`. The input bundle and compiler were not checksum-complete, so no round trip or performance result was promoted.
+
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
 ## Token questions
