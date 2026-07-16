@@ -2,7 +2,7 @@
 
 データ形式やデータベースの性能主張を、共通契約と形式固有ワークロードで検証する公開研究ラボです。単一の「最強形式」は決めません。
 
-[English](README.md) | [研究ログ](docs/research-log.md) | [データ利用上の注意](DATA_NOTICE.md)
+[English](README.md) | [形式選定ガイド](docs/format-selection.md) | [研究ログ](docs/research-log.md) | [データ利用上の注意](DATA_NOTICE.md)
 
 最初のケーススタディは、2026-07-03に固定した公開GitHub Starsメタデータ2,331件・13列です。特定のStarsデータ専用ツールではなく、今後ほかのデータセットや主張を追加できる構成です。
 
