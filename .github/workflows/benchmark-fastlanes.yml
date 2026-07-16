@@ -176,7 +176,8 @@ jobs:
           fi
           python3 - "$RUN_DIR/results.json" \
             '${{ steps.source.outcome }}' '${{ steps.build.outcome }}' \
-            '${{ steps.measure.outcome }}' "$RUN_DIR/measure-error.txt" <<'PY'
+            '${{ steps.measure.outcome }}' "$RUN_DIR/measure-error.txt" \
+            "$RUN_DIR/measure.log" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -184,8 +185,14 @@ jobs:
           output = Path(sys.argv[1])
           source, build, measure = sys.argv[2:5]
           error_path = Path(sys.argv[5])
+          log_path = Path(sys.argv[6])
           available = source == "success" and build == "success"
-          error = error_path.read_text().strip() if error_path.is_file() else "none"
+          if error_path.is_file():
+              error = error_path.read_text().strip()
+          elif log_path.is_file():
+              error = log_path.read_text(errors="replace").strip()[-1000:]
+          else:
+              error = "none"
           output.write_text(
               json.dumps(
                   {
