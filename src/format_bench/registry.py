@@ -18,6 +18,8 @@ def adapters() -> tuple[FormatAdapter, ...]:
         ArrowIpcAdapter("zstd"),
         ParquetAdapter(),
         ParquetAdapter(compression_level=19),
+        ParquetAdapter(compression="snappy"),
+        ParquetAdapter(compression="gzip"),
         LanceAdapter(),
         VortexAdapter(),
         VortexAdapter(compact=True),

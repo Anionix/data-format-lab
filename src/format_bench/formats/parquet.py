@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -11,20 +12,36 @@ from format_bench.model import Comparability, Lane
 
 from .base import Artifact, FormatDescription, write_artifact
 
+ParquetCompression = Literal["snappy", "gzip", "zstd"]
+
 
 class ParquetAdapter:
-    def __init__(self, compression_level: int | None = None) -> None:
+    def __init__(
+        self,
+        compression_level: int | None = None,
+        *,
+        compression: ParquetCompression = "zstd",
+    ) -> None:
+        if compression not in {"snappy", "gzip", "zstd"}:
+            raise ValueError(f"unsupported Parquet compression: {compression}")
         self.compression_level = compression_level
+        self.compression = compression
 
     def describe(self) -> FormatDescription:
         level = self.compression_level
+        if self.compression == "snappy":
+            name = "parquet_snappy"
+        elif self.compression == "gzip":
+            name = "parquet_gzip"
+        else:
+            name = "parquet_zstd19" if level == 19 else "parquet_default"
         return FormatDescription(
-            name="parquet_zstd19" if level == 19 else "parquet_default",
+            name=name,
             lane=Lane.FAIR,
             comparability=Comparability.FULL_COMPARABLE,
             extension=".parquet",
             settings={
-                "compression": "zstd",
+                "compression": self.compression,
                 "level": level if level is not None else "library-default",
                 "dictionary": True,
             },
@@ -35,7 +52,7 @@ class ParquetAdapter:
             pq.write_table(
                 table,
                 path,
-                compression="zstd",
+                compression=self.compression,
                 compression_level=self.compression_level,
                 use_dictionary=True,
             )
