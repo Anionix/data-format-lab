@@ -88,6 +88,14 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _json_bytes(payload: dict) -> bytes:
+    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     input_manifest = _input_manifest(run_dir, manifest)
     input_info = manifest.get("input", {})
@@ -158,8 +166,8 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         ["OS cache purged", measurement.get("os_cache_purged")],
     ]
     digest_rows = [
-        ["Manifest SHA-256", _sha256(run_dir / "manifest.json")],
-        ["Results SHA-256", _sha256(run_dir / "results.json")],
+        ["Manifest SHA-256", _sha256_bytes(_json_bytes(manifest))],
+        ["Results SHA-256", _sha256_bytes(_json_bytes(results))],
     ]
     if input_manifest_path is not None and input_manifest_path.is_file():
         digest_rows.append(["Input manifest SHA-256", _sha256(input_manifest_path)])
@@ -525,15 +533,9 @@ def render_report(run_dir: Path) -> Path:
         "robustness": lambda: _robustness(results),
     }
     section = sections[profile]()
-    for payload, json_path in (
-        (manifest, run_dir / "manifest.json"),
-        (results, run_dir / "results.json"),
-    ):
+    for payload in (manifest, results):
         if payload["state"] == ExecutionState.BENCHMARKED:
             payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
-        json_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
     lines = [
         f"# Data Format Lab: {profile} report",
         "",
@@ -550,5 +552,12 @@ def render_report(run_dir: Path) -> Path:
     ]
     path = run_dir / "report.md"
     path.write_text("\n".join(lines), encoding="utf-8")
-    # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
+    for payload, json_path in (
+        (manifest, run_dir / "manifest.json"),
+        (results, run_dir / "results.json"),
+    ):
+        if payload["state"] == ExecutionState.BENCHMARKED:
+            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+        json_path.write_bytes(_json_bytes(payload))
+    # LLM contract: transition in memory, then persist after durable report output.
     return path
