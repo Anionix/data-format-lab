@@ -108,6 +108,22 @@ def test_runner_revalidates_output_path_after_worker_execution(
     assert not (outside / "stderr.txt").exists()
 
 
+def test_runner_rejects_preexisting_hard_link_evidence(tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
+    outside.write_text("unchanged")
+    code = (
+        "import json,os; from pathlib import Path; "
+        "path=Path('evidence/case-1'); path.mkdir(parents=True); "
+        f"os.link({str(outside)!r}, path/'stdout.txt'); "
+        "print(json.dumps({'observed':'REJECTED','details':{}}))"
+    )
+
+    with pytest.raises(FileExistsError):
+        _run(tmp_path, code)
+
+    assert outside.read_text() == "unchanged"
+
+
 def test_runner_exposes_source_package_to_child(tmp_path: Path) -> None:
     process, stdout, _ = _process(
         (sys.executable, "-c", "import format_bench; print(format_bench.__name__)"),
