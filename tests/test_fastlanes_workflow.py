@@ -37,4 +37,5 @@ def test_fastlanes_retry_workflow_preserves_build_and_measurement_logs() -> None
     assert '"status": "UNSUPPORTED" if not available else "FAILED"' in workflow
     assert "case_hash_algorithm" in workflow
     assert "input/data.csv" in workflow
+    assert "no failure reason recorded" in workflow
     assert "if: always()" in workflow

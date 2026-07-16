@@ -314,7 +314,13 @@ jobs:
           from pathlib import Path
 
           results = json.loads(Path(sys.argv[1]).read_text())
-          evidence = results.get("evidence", {})
+          evidence = results.get("evidence")
+          if evidence is None:
+              raise SystemExit(
+                  "FastLanes claim "
+                  f"{results.get('status', 'UNKNOWN')}: "
+                  f"{results.get('failure_reason', 'no failure reason recorded')}"
+              )
           if evidence.get("status") != "MEASURED":
               raise SystemExit(f"FastLanes claim status: {evidence.get('status')}")
           mixed = evidence.get("mixed", {})
