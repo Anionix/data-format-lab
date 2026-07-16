@@ -49,7 +49,7 @@ def test_fastlanes_mixed_input_matches_the_13_column_contract(tmp_path: Path) ->
     assert csv_path.read_bytes() == data
 
 
-def test_fastlanes_worker_failure_is_normalized_to_harness_failure(
+def test_fastlanes_worker_failure_is_classified_as_target_failure(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -63,6 +63,20 @@ def test_fastlanes_worker_failure_is_normalized_to_harness_failure(
     result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
 
     assert result["status"] == "FAILED"
+    assert result["outcome"] is ObservedOutcome.TARGET_FAILED
+
+
+def test_fastlanes_invalid_worker_output_remains_a_harness_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "not-json\n", ""),
+    )
+
+    result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
+
     assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
 
 
@@ -84,7 +98,7 @@ def test_fastlanes_robustness_failures_do_not_change_claims_verdict() -> None:
 
 def test_fastlanes_mixed_failure_is_fatal() -> None:
     numeric = {"outcome": ObservedOutcome.ROUNDTRIP_EQUAL}
-    mixed = {"outcome": ObservedOutcome.HARNESS_FAILED}
+    mixed = {"outcome": ObservedOutcome.TARGET_FAILED}
 
     assert _fatal_cases(numeric, mixed) == [mixed]
 

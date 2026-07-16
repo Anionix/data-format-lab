@@ -129,7 +129,7 @@
         "runtime": "0.1.4",
         "timeout_seconds": 30
       },
-      "result": "the official extension built, but the mixed case raised RuntimeError UNREACHABLE at wizard.cpp:1252. The fresh worker preserved the error as status FAILED and exited normally; no data.fls or decoded.csv was produced. This is FAILED/HARNESS_FAILED evidence, not an upstream bug attribution.",
+      "result": "the official extension built, but the mixed case raised RuntimeError UNREACHABLE at wizard.cpp:1252. The fresh worker preserved the error as status FAILED and exited normally; the lab classifies this as TARGET_FAILED, not a harness failure. No data.fls or decoded.csv was produced. This is an observation, not an upstream bug attribution.",
       "workflow_run": {
         "run_id": "29528725613",
         "url": "https://github.com/Anionix/data-format-lab/actions/runs/29528725613",
