@@ -2,7 +2,7 @@
 
 Reproducible, evidence-first tests for data formats, database claims, and LLM-facing representations.
 
-[日本語](README.ja.md) | [Research log](docs/research-log.md) | [Data notice](DATA_NOTICE.md)
+[日本語](README.ja.md) | [Format selection guide](docs/format-selection.md) | [Research log](docs/research-log.md) | [Data notice](DATA_NOTICE.md)
 
 Data Format Lab asks narrower questions than "which format is best?" It verifies equal-data storage behavior, format-native performance claims, and prompt token cost under separate contracts. Failed builds and unsupported formats remain part of the public record.
 
