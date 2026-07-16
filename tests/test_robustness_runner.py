@@ -89,6 +89,25 @@ def test_runner_rejects_symlinks_inside_directory_artifacts(tmp_path: Path) -> N
         run_case(tmp_path, "request.json", "evidence/case-1")
 
 
+def test_runner_revalidates_output_path_after_worker_execution(
+    tmp_path: Path,
+) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    code = (
+        "import json; from pathlib import Path; "
+        "path=Path('evidence/case-1'); path.parent.mkdir(parents=True); "
+        f"path.symlink_to({str(outside)!r}, target_is_directory=True); "
+        "print(json.dumps({'observed':'REJECTED','details':{}}))"
+    )
+
+    with pytest.raises(ValueError, match="symlink"):
+        _run(tmp_path, code)
+
+    assert not (outside / "stdout.txt").exists()
+    assert not (outside / "stderr.txt").exists()
+
+
 def test_runner_exposes_source_package_to_child(tmp_path: Path) -> None:
     process, stdout, _ = _process(
         (sys.executable, "-c", "import format_bench; print(format_bench.__name__)"),
