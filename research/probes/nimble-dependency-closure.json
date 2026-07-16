@@ -30,15 +30,18 @@
   "dependencies": {
     "folly": {
       "version": "2026.01.19.00",
-      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+      "package": "folly",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
     },
     "abseil": {
       "version": "20260107.1",
-      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+      "package": "abseil-cpp",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
     },
     "fmt": {
       "version": "12.1.0",
-      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+      "package": "fmt",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
     },
     "protobuf": {
       "version": "35.1",
@@ -49,8 +52,8 @@
       "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
     },
     "xsimd": {
-      "version": "13.2.0 available; pinned Velox selected bundled 10.0.0",
-      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+      "version": "10.0.0",
+      "acquisition": "Velox commit e06dd2b5ee7816b99bccbdbd382fe68b3d8f4a48 via bundled third_party/xsimd"
     },
     "lz4": {
       "version": "1.10.0",
