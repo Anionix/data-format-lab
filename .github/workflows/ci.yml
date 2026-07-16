@@ -36,8 +36,20 @@ jobs:
               sleep "$delay"
             fi
           done
-          echo "flake evaluation failed after 3 attempts" >&2
-          exit 1
+          echo "flake evaluation failed after 3 attempts; trying codeload fallback" >&2
+          fallback_root=$(mktemp -d)
+          fallback_archive="$fallback_root/rust-overlay.tar.gz"
+          fallback_source="$fallback_root/rust-overlay"
+          rust_overlay_rev=$(jq -er '.nodes["rust-overlay"].locked.rev' flake.lock)
+          curl --fail --location --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 120 \
+            -o "$fallback_archive" \
+            "https://codeload.github.com/oxalica/rust-overlay/tar.gz/$rust_overlay_rev"
+          mkdir "$fallback_source"
+          tar -xzf "$fallback_archive" --strip-components=1 -C "$fallback_source"
+          nix flake check --no-build --all-systems \
+            --override-input rust-overlay "path:$fallback_source"
+          exit 0
 
       - name: Synchronize frozen Python environment
         run: nix develop --command uv sync --frozen
