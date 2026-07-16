@@ -24,11 +24,13 @@ attempts. They remain research leads, not production recommendations. Their
 exact commits, failures, and retry conditions are recorded in the
 [negative-evidence records](../research/formats/).
 
-FastLanes also has no general selection yet. Its corrected pipe-delimited
-numeric case round-tripped, but partial-vector string cases failed, malformed
-input terminated the process, and the pinned Python binding hit a reproducible
-macOS build blocker. Keep it as experimental evidence until those retry
-conditions are resolved.
+FastLanes also has no general selection yet. Results are host- and
+workload-sensitive: an earlier pipe-delimited numeric case round-tripped, but
+the pinned Linux retry crashed in the one-million-row numeric case and all
+string-boundary cases, while the mixed 13-column case raised an internal
+`UNREACHABLE` error. The pinned macOS Python binding also has a reproducible
+build blocker. Keep it as experimental evidence until these retry conditions
+are resolved.
 
 DuckDB is a query engine and can be useful with several of these formats. It is
 not a competing file-format row in this guide.
