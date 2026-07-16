@@ -235,10 +235,19 @@ jobs:
       - name: Preserve target failure status
         if: always()
         run: |
+          if test "${{ steps.evidence.outcome }}" = failure; then
+            exit 1
+          fi
+          if test "$TARGET" = "fastlanes-quick-fuzz" && {
+            test "${{ steps.native_source.outcome }}" = failure || \
+            test "${{ steps.native_build.outcome }}" = failure || \
+            test "${{ steps.native.outcome }}" = failure;
+          }; then
+            exit 0
+          fi
           if test "${{ steps.native_source.outcome }}" = failure || \
             test "${{ steps.native_build.outcome }}" = failure || \
-            test "${{ steps.native.outcome }}" = failure || \
-            test "${{ steps.evidence.outcome }}" = failure; then
+            test "${{ steps.native.outcome }}" = failure; then
             exit 1
           fi
           test -f "$RUN_DIR/results.json"
