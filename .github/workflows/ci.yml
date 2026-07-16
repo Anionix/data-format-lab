@@ -71,6 +71,11 @@ jobs:
                 .venv/bin/python -c \
                   "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
                   "$run_dir/manifest.json"
+                if test "$profile" = claims; then
+                  .venv/bin/python -c \
+                    "import json,sys; r=json.load(open(sys.argv[1]))[\"results\"]; assert all(r[name][\"target_tier\"] == \"EXPERIMENTAL\" for name in (\"tsfile_time_series\", \"fastlanes_official\"))" \
+                    "$run_dir/results.json"
+                fi
               } >"$log" 2>&1
             }
 
@@ -104,6 +109,34 @@ jobs:
               fi
             done
             exit "$failed"
+          '
+
+      - name: Gate bounded robustness fixture
+        run: |
+          # Run separately from the concurrent smokes so subprocess timeouts remain meaningful.
+          # shellcheck disable=SC2016
+          nix develop --command bash -euo pipefail -c '
+            run_dir="runs/ci-smoke-robustness-$BASHPID"
+            result=$(.venv/bin/format-bench run \
+              --profile robustness \
+              --suite bounded \
+              --dataset github-stars-2026-07-03 \
+              --run-dir "$run_dir" \
+              --fixture \
+              --generated-cases 0 \
+              --mutations-per-target 1 \
+              --case-timeout-seconds 10 \
+              --artifact-budget-mib 64)
+            run_dir=$(dirname "$result")
+            report=$(.venv/bin/format-bench report --run-dir "$run_dir")
+            before=$(sha256sum "$report")
+            .venv/bin/format-bench report --run-dir "$run_dir" >/dev/null
+            after=$(sha256sum "$report")
+            test "$before" = "$after"
+            .venv/bin/python -c \
+              "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
+              "$run_dir/manifest.json"
+            .venv/bin/python -m format_bench.robustness.gate "$run_dir/results.json"
           '
 
       - name: Observe ty diagnostics
