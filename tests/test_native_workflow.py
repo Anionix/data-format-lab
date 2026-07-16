@@ -47,3 +47,5 @@ def test_native_workflow_keeps_the_native_runner_failure_after_upload() -> None:
     assert "steps.native.outcome" in workflow
     assert "steps.evidence.outcome" in workflow
     assert '"TARGET_FAILED"' in workflow
+    assert 'case["tier"] == "CORE"' in workflow
+    assert 'case["verdict"] == "FAIL"' in workflow
