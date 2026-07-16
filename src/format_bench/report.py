@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -20,6 +21,105 @@ def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
     ]
     output.extend("| " + " | ".join(_cell(value) for value in row) + " |" for row in rows)
     return output
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _run_file(run_dir: Path, value: object) -> Path | None:
+    if not isinstance(value, str):
+        return None
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"report path is unsafe: {value}")
+    return run_dir / relative
+
+
+def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
+    input_info = manifest.get("input", {})
+    input_manifest_path = _run_file(
+        run_dir, input_info.get("manifest") if isinstance(input_info, dict) else None
+    )
+    source_path = _run_file(
+        run_dir, input_info.get("source") if isinstance(input_info, dict) else None
+    )
+    dataset = {}
+    if input_manifest_path is not None and input_manifest_path.is_file():
+        dataset = json.loads(input_manifest_path.read_text(encoding="utf-8"))
+    columns = dataset.get("columns", [])
+    schema = ", ".join(
+        f"{item.get('name')}:{item.get('arrow_type')}"
+        f"{'?' if item.get('nullable', True) else '!'}"
+        for item in columns
+        if isinstance(item, dict)
+    )
+    dataset_rows = [
+        ["Rows", dataset.get("rows", "N/A")],
+        ["Columns", len(columns) if isinstance(columns, list) else "N/A"],
+        ["Schema", schema or "N/A"],
+        ["Source SHA-256", dataset.get("source_sha256", "N/A")],
+        ["Canonical hash", dataset.get("canonical_hash", "N/A")],
+        [
+            "Expected counts",
+            json.dumps(dataset.get("expected_counts", {}), sort_keys=True),
+        ],
+    ]
+    measurement = results.get("measurement", {})
+    measurement_rows = [
+        [key, measurement[key]] for key in sorted(measurement)
+    ]
+    packages = results.get("environment", {}).get("packages", {})
+    package_rows = [[key, packages[key]] for key in sorted(packages)]
+    digest_rows = [
+        ["Manifest SHA-256", _sha256(run_dir / "manifest.json")],
+        ["Results SHA-256", _sha256(run_dir / "results.json")],
+    ]
+    if input_manifest_path is not None and input_manifest_path.is_file():
+        digest_rows.append(["Input manifest SHA-256", _sha256(input_manifest_path)])
+    if source_path is not None and source_path.is_file():
+        digest_rows.append(["Input source SHA-256", _sha256(source_path)])
+    lines = [
+        "## Dataset Contract",
+        "",
+        *_table(["Field", "Value"], dataset_rows),
+        "",
+        "## Measurement Protocol",
+        "",
+        *_table(["Setting", "Value"], measurement_rows),
+        "",
+        "## Package Versions",
+        "",
+        *_table(["Package", "Version"], package_rows),
+        "",
+        "## Evidence Digests",
+        "",
+        *_table(["File", "SHA-256"], digest_rows),
+        "",
+        "Format settings in the Format Evidence table are the writer settings used for each artifact.",
+        "The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.",
+    ]
+    release = results.get("release", {})
+    if isinstance(release, dict) and isinstance(release.get("archive_url"), str):
+        lines.extend(
+            [
+                "",
+                "## Durable Evidence",
+                "",
+                *_table(
+                    ["File", "URL"],
+                    [
+                        ["Raw archive", release["archive_url"]],
+                        ["SHA-256 checksum", release.get("checksum_url", "N/A")],
+                    ],
+                ),
+            ]
+        )
+    return lines
 
 
 def _environment(results: dict) -> list[str]:
@@ -45,6 +145,7 @@ def _fair(manifest: dict, results: dict) -> list[str]:
             item.get("native_bytes"),
             item.get("transport_zstd_bytes"),
             item.get("prepare_write_ms"),
+            json.dumps(item.get("settings", {}), sort_keys=True, separators=(",", ":")),
             item.get("failure_reason"),
         ]
         for item in formats
@@ -53,7 +154,16 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         "## Format Evidence",
         "",
         *_table(
-            ["Format", "Comparability", "State", "Native bytes", "zstd bytes", "Write ms", "Failure"],
+            [
+                "Format",
+                "Comparability",
+                "State",
+                "Native bytes",
+                "zstd bytes",
+                "Write ms",
+                "Settings",
+                "Failure",
+            ],
             rows,
         ),
     ]
@@ -357,21 +467,7 @@ def render_report(run_dir: Path) -> Path:
         "prompt": lambda: _prompt(results),
         "robustness": lambda: _robustness(results),
     }
-    lines = [
-        f"# Data Format Lab: {profile} report",
-        "",
-        f"Dataset: `{results['dataset_id']}`  ",
-        f"Run: `{results['run_id']}`  ",
-        "No result in this report is comparable across lanes or hardware runs.",
-        "",
-        *_environment(results),
-        "",
-        *sections[profile](),
-        "",
-    ]
-    path = run_dir / "report.md"
-    path.write_text("\n".join(lines), encoding="utf-8")
-    # LLM contract: BENCHMARKED -> REPORTED after the human-readable evidence exists.
+    section = sections[profile]()
     for payload, json_path in (
         (manifest, run_dir / "manifest.json"),
         (results, run_dir / "results.json"),
@@ -381,4 +477,21 @@ def render_report(run_dir: Path) -> Path:
         json_path.write_text(
             json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+    lines = [
+        f"# Data Format Lab: {profile} report",
+        "",
+        f"Dataset: `{results['dataset_id']}`  ",
+        f"Run: `{results['run_id']}`  ",
+        "No result in this report is comparable across lanes or hardware runs.",
+        "",
+        *_environment(results),
+        "",
+        *_provenance(run_dir, manifest, results),
+        "",
+        *section,
+        "",
+    ]
+    path = run_dir / "report.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    # LLM contract: BENCHMARKED -> REPORTED before durable report output.
     return path

@@ -15,13 +15,69 @@ No result in this report is comparable across lanes or hardware runs.
 | Hardware model | Mac14,7 |
 | Python | 3.12.13 |
 
+## Dataset Contract
+
+| Field | Value |
+| --- | --- |
+| Rows | 2331 |
+| Columns | 13 |
+| Schema | group:string?, category:string?, micro_category:string?, classification_score:float64?, matched_terms:string?, full_name:string?, html_url:string?, language:string?, repo_stars:int64?, fork:bool?, archived:bool?, topics:string?, description:string? |
+| Source SHA-256 | 39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e |
+| Canonical hash | 1bf35022cce6d752f7959907b6a60d4024123e045a270f4aa286acbefbe4ca39 |
+| Expected counts | {"full_name_anomalyco_opencode": 1, "group_ai_llm": 119, "repo_stars_gt_100000": 15, "rows": 2331} |
+
+## Measurement Protocol
+
+| Setting | Value |
+| --- | --- |
+| fresh_processes | 10 |
+| iterations | 30 |
+| os_cache_purged | False |
+| seed | 20260703 |
+| timeout_seconds | 120 |
+| warmups | 5 |
+
+## Package Versions
+
+| Package | Version |
+| --- | --- |
+| pandas | N/A |
+| pyarrow | 23.0.1 |
+| pyfastlanes | N/A |
+| pylance | 8.0.0 |
+| pytz | N/A |
+| tiktoken | 0.12.0 |
+| tsfile | N/A |
+| tzdata | N/A |
+| vortex-data | 0.76.0 |
+| zstandard | 0.25.0 |
+
+## Evidence Digests
+
+| File | SHA-256 |
+| --- | --- |
+| Manifest SHA-256 | 27f436ccf01ab1def18ad1f59bf1ec96414e2fbf0c4ba057f402ce506eda54f8 |
+| Results SHA-256 | 334b888b2a4ff1994cc4b3081362528109cc162ee225795740eac981ea4144c9 |
+| Input manifest SHA-256 | 9c684dac968596d25a95e4731514fa742c81d0a7c01eeb2666c6790473261b8f |
+| Input source SHA-256 | 39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e |
+
+Format settings in the Format Evidence table are the writer settings used for each artifact.
+The `format-bench package` command includes these raw JSON files and referenced artifacts; it writes the archive SHA-256 to the adjacent `.sha256` file.
+
+## Durable Evidence
+
+| File | URL |
+| --- | --- |
+| Raw archive | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-data-format-lab-arrow-ipc-codecs-1784235449.tar.zst |
+| SHA-256 checksum | https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fair-macos-arm64-data-format-lab-arrow-ipc-codecs-1784235449.tar.zst.sha256 |
+
 ## Format Evidence
 
-| Format | Comparability | State | Native bytes | zstd bytes | Write ms | Failure |
-| --- | --- | --- | --- | --- | --- | --- |
-| arrow_ipc | FULL_COMPARABLE | REPORTED | 672234 | 190263 | 3.035 | N/A |
-| arrow_ipc_lz4 | FULL_COMPARABLE | REPORTED | 327066 | 247469 | 2.549 | N/A |
-| arrow_ipc_zstd | FULL_COMPARABLE | REPORTED | 215482 | 215497 | 2.496 | N/A |
+| Format | Comparability | State | Native bytes | zstd bytes | Write ms | Settings | Failure |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| arrow_ipc | FULL_COMPARABLE | REPORTED | 672234 | 190263 | 3.035 | {"compression":"none","container":"arrow-ipc-file"} | N/A |
+| arrow_ipc_lz4 | FULL_COMPARABLE | REPORTED | 327066 | 247469 | 2.549 | {"compression":"lz4","container":"arrow-ipc-file"} | N/A |
+| arrow_ipc_zstd | FULL_COMPARABLE | REPORTED | 215482 | 215497 | 2.496 | {"compression":"zstd","container":"arrow-ipc-file"} | N/A |
 
 ## Storage Ordering
 
