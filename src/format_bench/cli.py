@@ -12,6 +12,7 @@ from .profile_run import run_claims, run_prompt
 from .release import package_run
 from .report import render_report
 from .robustness.profile import run_bounded
+from .robustness.native import ARROW_NATIVE_TARGETS, run_native
 from .workflow import prepare_run, verify_run
 
 
@@ -69,7 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--dataset", required=True)
     run.add_argument("--run-dir", type=Path)
     run.add_argument("--fixture", action="store_true")
-    run.add_argument("--suite", choices=["bounded"])
+    run.add_argument("--suite", choices=["bounded", "native"])
+    run.add_argument("--target", action="append")
+    run.add_argument("--duration-seconds", type=_positive_float)
     run.add_argument("--seed", type=int)
     run.add_argument("--generated-cases", type=_non_negative_int)
     run.add_argument("--mutations-per-target", type=_non_negative_int)
@@ -94,6 +97,8 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.mutations_per_target,
         args.case_timeout_seconds,
         args.artifact_budget_mib,
+        args.target,
+        args.duration_seconds,
     )
     if args.profile != "robustness":
         if any(value is not None for value in robustness_options):
@@ -101,8 +106,20 @@ def _validate_run_options(args: argparse.Namespace) -> None:
                 "robustness options only apply with --profile robustness"
             )
         return
-    if args.suite != "bounded":
-        raise ValueError("--profile robustness requires --suite bounded")
+    if args.suite not in {"bounded", "native"}:
+        raise ValueError("--profile robustness requires --suite bounded or native")
+    if args.suite == "bounded" and (args.target or args.duration_seconds is not None):
+        raise ValueError("--target and --duration-seconds require --suite native")
+    if args.suite == "native" and any(
+        value is not None
+        for value in (
+            args.seed,
+            args.generated_cases,
+            args.mutations_per_target,
+            args.case_timeout_seconds,
+        )
+    ):
+        raise ValueError("bounded robustness options require --suite bounded")
 
 
 def _default(value: _T | None, default: _T) -> _T:
@@ -144,15 +161,31 @@ def main(argv: list[str] | None = None) -> None:
         _validate_run_options(args)
         run_dir = _run_directory(root, args)
         if args.profile == "robustness":
-            path = run_bounded(
-                root,
-                run_dir,
-                seed=_default(args.seed, 20260703),
-                generated_count=_default(args.generated_cases, 32),
-                mutations_per_target=_default(args.mutations_per_target, 64),
-                timeout_seconds=_default(args.case_timeout_seconds, 30.0),
-                artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
-            )
+            if args.suite == "native":
+                selected = None
+                if args.target:
+                    available = {target.name: target for target in ARROW_NATIVE_TARGETS}
+                    unknown = sorted(set(args.target) - available.keys())
+                    if unknown:
+                        raise ValueError(f"unknown native target: {', '.join(unknown)}")
+                    selected = tuple(available[name] for name in args.target)
+                path = run_native(
+                    root,
+                    run_dir,
+                    duration_seconds=_default(args.duration_seconds, 900.0),
+                    artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
+                    targets=selected,
+                )
+            else:
+                path = run_bounded(
+                    root,
+                    run_dir,
+                    seed=_default(args.seed, 20260703),
+                    generated_count=_default(args.generated_cases, 32),
+                    mutations_per_target=_default(args.mutations_per_target, 64),
+                    timeout_seconds=_default(args.case_timeout_seconds, 30.0),
+                    artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
+                )
         else:
             runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
             path = runners[args.profile](root, run_dir)

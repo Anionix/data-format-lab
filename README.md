@@ -55,6 +55,8 @@ uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-0
 uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
+The native robustness suite reads pinned Arrow fuzz binaries from `native/arrow/build` and records missing binaries as `UNSUPPORTED` evidence. Select targets with repeated `--target` options and set the run budget with `--duration-seconds` and `--artifact-budget-mib`.
+
 Run `claims` and `prompt` in separate run directories. Omitting `--run-dir` makes `run` prepare and verify a new timestamped directory automatically.
 
 The default fair protocol uses 10 fresh processes per format and operation. Each process performs 5 warmups and 30 measured iterations. Reports include fresh-open and warm p50/p95, IQR, maximum RSS, exact result counts, and normalized result hashes. OS caches are not purged.
