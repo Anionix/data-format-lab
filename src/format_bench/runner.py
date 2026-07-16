@@ -149,6 +149,20 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _hardware_model() -> str:
+    if sys.platform == "darwin":
+        probe = subprocess.run(
+            ["sysctl", "-n", "hw.model"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        model = probe.stdout.strip()
+        if probe.returncode == 0 and model:
+            return model
+    return platform.processor() or platform.machine()
+
+
 def environment_info(root: Path) -> dict:
     packages = {}
     for name in (
@@ -175,6 +189,7 @@ def environment_info(root: Path) -> dict:
         "flake_lock_sha256": _sha256(root / "flake.lock"),
         "platform": platform.platform(),
         "machine": platform.machine(),
+        "hardware_model": _hardware_model(),
         "processor": platform.processor(),
         "python": platform.python_version(),
         "packages": packages,
