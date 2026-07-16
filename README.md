@@ -37,7 +37,7 @@ The four comparability states are:
 
 ## Reproduce
 
-Nix pins Python 3.12 and native tools. `uv.lock` pins the Python environment.
+Nix pins Python 3.12, Rust `nightly-2026-07-15` with `rust-src`, `cargo-fuzz`, and the native C/C++ tools. `uv.lock` pins the Python environment.
 
 ```bash
 nix develop
