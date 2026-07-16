@@ -49,3 +49,5 @@ def test_native_workflow_keeps_the_native_runner_failure_after_upload() -> None:
     assert '"TARGET_FAILED"' in workflow
     assert 'case["tier"] == "CORE"' in workflow
     assert 'case["verdict"] == "FAIL"' in workflow
+    assert 'TARGET" = "fastlanes-quick-fuzz"' in workflow
+    assert 'steps.evidence.outcome' in workflow
