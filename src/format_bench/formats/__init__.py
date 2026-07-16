@@ -1,4 +1,5 @@
 from .base import Artifact, FormatAdapter, FormatDescription
+from .arrow_ipc import ArrowIpcAdapter
 from .lance import LanceAdapter, build_fts, lance_components, query_fts
 from .parquet import ParquetAdapter
 from .text import CsvAdapter, ObjectJsonlAdapter
@@ -7,6 +8,7 @@ from .vortex import VortexAdapter
 
 __all__ = [
     "Artifact",
+    "ArrowIpcAdapter",
     "CsvAdapter",
     "FormatAdapter",
     "FormatDescription",

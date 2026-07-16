@@ -38,6 +38,14 @@ The 2026-07-17 Nimble retry pinned core `9da673...`, Velox `e06dd...`, and OpenZ
 
 The 2026-07-17 AnyBlox retry found official bundler and `anyblox2csv` targets at the pinned commits, but the artifact still required an undated nightly Rust toolchain. This host had Homebrew Rust 1.93.1 and no `rustup`; stable compilation failed with `E0554/E0599`. The input bundle and compiler were not checksum-complete, so no round trip or performance result was promoted.
 
+Arrow IPC was added as a typed fair-lane format using the already pinned
+PyArrow dependency. On the full 2,331-row Stars snapshot it passed the
+canonical gate and all six fair operations. The incremental macOS ARM run
+measured 672,234 native bytes, 190,263 external-zstd bytes, and a 2.993 ms
+write p50; detailed p50/p95 values are in the [Arrow IPC evidence report](../reports/revalidation-2026-07-17/macos-arm64/arrow-ipc.md).
+This is a fair storage result, not a producer/consumer interoperability
+matrix, so Arrow IPC is not being granted a broad compatibility claim yet.
+
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
 ## Token questions
