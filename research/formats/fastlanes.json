@@ -25,7 +25,14 @@
       "entrypoint": "official reader with invalid comma-delimited input",
       "workload": "malformed delimiter input",
       "result": "process exited -11; retained as robustness evidence"
+    },
+    {
+      "entrypoint": "official pyfastlanes editable build with scikit-build-core",
+      "attempted_on": "2026-07-17",
+      "workload": "build the Python extension before a 13-column mixed-schema round trip",
+      "environment": "macOS ARM64, Python 3.12.13, Clang 21.1.8, CMake 4.4.0, Ninja",
+      "result": "build stopped at src/table/stats.cpp:17 for TypedStats<std::string> with -Werror,-Wnonnull; no mixed-schema round trip was attempted"
     }
   ],
-  "retry_when": "the official reader round-trips partial-vector string dictionaries and rejects malformed input without terminating the process"
+  "retry_when": "the official Python extension builds in a reproducible toolchain, round-trips partial-vector string dictionaries, and rejects malformed input without terminating the process"
 }
