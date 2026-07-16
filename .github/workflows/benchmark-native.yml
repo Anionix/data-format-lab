@@ -21,7 +21,7 @@ jobs:
   native:
     name: native/${{ matrix.target }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 6
@@ -143,8 +143,16 @@ jobs:
               ;;
             vortex-*)
               test -f native/vortex/Cargo.toml
-              vortex_target="${TARGET#vortex-}"
-              nix develop --command cargo fuzz build "$vortex_target"
+              case "$TARGET" in
+                vortex-file-io)
+                  nix develop --command bash -euo pipefail -c \
+                    'cd native/vortex && cargo fuzz build file_io'
+                  ;;
+                vortex-compress-roundtrip)
+                  nix develop --command bash -euo pipefail -c \
+                    'cd native/vortex && cargo fuzz build compress_roundtrip'
+                  ;;
+              esac
               ;;
             fastlanes-quick-fuzz)
               nix develop --command cmake \
@@ -160,24 +168,27 @@ jobs:
       - name: Run one native target
         id: native
         continue-on-error: true
+        env:
+          REQUESTED_DURATION_SECONDS: ${{ inputs.duration_seconds }}
         run: |
-          set +e
-          duration='${{ inputs.duration_seconds }}'
-          case "$duration" in
+          set -euo pipefail
+          case "$REQUESTED_DURATION_SECONDS" in
             ''|*[!0-9]*)
               echo "duration_seconds must be an integer" >&2
               exit 2
               ;;
           esac
-          if test "$duration" -lt 1 || test "$duration" -gt 3000; then
-            echo "duration_seconds must be between 1 and 3000" >&2
+          if test "$REQUESTED_DURATION_SECONDS" -lt 1 || \
+            test "$REQUESTED_DURATION_SECONDS" -gt 3300; then
+            echo "duration_seconds must be between 1 and 3300" >&2
             exit 2
           fi
+          set +e
           result=$(nix develop --command .venv/bin/format-bench run \
             --profile robustness --suite native \
             --dataset github-stars-2026-07-03 --run-dir "$RUN_DIR" \
             --target "$TARGET" \
-            --duration-seconds "$duration" \
+            --duration-seconds "$REQUESTED_DURATION_SECONDS" \
             --artifact-budget-mib 1024 2>&1)
           status=$?
           printf '%s\n' "$result"
