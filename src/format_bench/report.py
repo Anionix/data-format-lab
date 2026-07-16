@@ -28,6 +28,7 @@ def _environment(results: dict) -> list[str]:
         ["Flake lock SHA-256", environment["flake_lock_sha256"]],
         ["Platform", environment["platform"]],
         ["Machine", environment["machine"]],
+        ["Hardware model", environment.get("hardware_model", "N/A")],
         ["Python", environment["python"]],
     ]
     return ["## Environment", "", *_table(["Field", "Value"], rows)]

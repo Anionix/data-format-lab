@@ -65,3 +65,9 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
 def test_environment_records_isolated_claim_dependencies() -> None:
     packages = environment_info(Path(__file__).parents[1])["packages"]
     assert {"pandas", "pytz", "tsfile", "tzdata"} <= packages.keys()
+
+
+def test_environment_records_concrete_hardware_identity() -> None:
+    environment = environment_info(Path(__file__).parents[1])
+    assert isinstance(environment["hardware_model"], str)
+    assert environment["hardware_model"]
