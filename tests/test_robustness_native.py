@@ -213,6 +213,30 @@ def test_native_suite_uses_gtest_for_fastlanes(tmp_path: Path, monkeypatch) -> N
     assert all(not item.startswith("-max_total_time=") for item in command)
 
 
+def test_native_suite_classifies_project_seeded_target_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "fastlanes-failed-run"
+    work_dir = tmp_path / "fastlanes"
+    _verified_fixture(root, run_dir)
+    _fake_target(work_dir / "build", "quick_fuzz_test", "print('target failed')")
+    target = replace(FASTLANES_NATIVE_TARGETS[0], work_dir=work_dir, source_commit=None)
+
+    def fake_process(command, cwd, timeout, output_budget_bytes):
+        return {"timed_out": False, "signal": None, "exit_code": 1}, "", "failed"
+
+    monkeypatch.setattr(native, "_process", fake_process)
+    result_path = run_native(
+        root, run_dir, duration_seconds=1, artifact_budget_mib=4, targets=(target,)
+    )
+
+    case = json.loads(result_path.read_text())["results"]["robustness_v1"]["cases"][0]
+    assert case["observed"] == ObservedOutcome.TARGET_FAILED.value
+    assert case["verdict"] == RobustnessVerdict.FAIL.value
+    assert case["process"]["exit_code"] == 1
+
+
 def test_native_suite_rejects_manifest_corpus_traversal(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"

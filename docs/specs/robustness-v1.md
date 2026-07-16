@@ -35,6 +35,7 @@ Formalize the existing canonical verification as the conformance gate and add a 
 - Run every bounded case through a fresh Python module subprocess with no shell interpolation.
 - Treat CSV, object JSONL, both Parquet settings, Lance base, and both Vortex settings as core targets.
 - Treat TsFile and the pinned FastLanes experiment as evidence-only targets.
+- Classify a non-zero exit from a project-seeded native target as `TARGET_FAILED`/`FAIL`; reserve `HARNESS_FAILED`/`INCOMPLETE` for runner, setup, or contract errors.
 - Cover row counts 0, 1, 1023, 1024, 1025, 2048, and 2049; dictionary cardinalities 1, 2, 255, and 256; NULL positions; UTF-8 and parser-sensitive strings; numeric boundaries; column-count errors; and truncation.
 - Add deterministic Arrow-table generation and empty, truncate, bit-flip, zero-range, append, and region mutation recipes.
 - Default full bounded runs to seed 20260703, 32 generated cases, 64 mutations per target, 30 seconds per case, and a 1 GiB artifact budget.
