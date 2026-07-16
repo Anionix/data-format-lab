@@ -34,6 +34,20 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert "/nix/store/" not in nimble_json
     assert "/opt/homebrew/" not in nimble_json
 
+    manifest = json.loads(
+        (Path.cwd() / "research" / "probes" / "nimble-dependency-closure.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["status"] == "UNSUPPORTED"
+    assert len(manifest["flake_lock_sha256"]) == 64
+    assert manifest["source_commits"] == records["nimble"]["source_commits"]
+    for name, dependency in manifest["dependencies"].items():
+        if name in {"boost", "xsimd"}:
+            assert dependency["acquisition"].startswith("Velox commit ")
+        else:
+            assert dependency["acquisition"].startswith("nixpkgs@")
+
 
 def test_relative_root_does_not_match_url_punctuation(
     monkeypatch: pytest.MonkeyPatch,

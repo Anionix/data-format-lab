@@ -45,6 +45,9 @@
               glog
               gtest
               icu
+              folly
+              abseil-cpp
+              fmt
               libevent
               libsodium
               lz4

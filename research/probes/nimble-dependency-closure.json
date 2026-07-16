@@ -1,0 +1,103 @@
+{
+  "schema_version": "1",
+  "name": "nimble-dependency-closure",
+  "status": "UNSUPPORTED",
+  "purpose": "Reproduce the pinned Nimble configure probe before a wide-table measurement",
+  "flake_lock_sha256": "1d8b3b85a0f5f144f6076ca7d4de031d1b2c7b50bc62c1bd12d43dd0141ad54c",
+  "nixpkgs_revision": "e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3",
+  "source_commits": {
+    "core": "9da673156acfed828991be52cb393be564108ce0",
+    "velox": "e06dd2b5ee7816b99bccbdbd382fe68b3d8f4a48",
+    "openzl": "6b48fa4868160ed1e5c78ac422639615dd0dcf28"
+  },
+  "host": {
+    "os": "Darwin 27.0.0",
+    "architecture": "arm64",
+    "compiler": {
+      "name": "clang",
+      "version": "21.1.8",
+      "acquisition": "locked lab flake"
+    },
+    "cmake": {
+      "version": "4.1.2",
+      "acquisition": "locked lab flake"
+    },
+    "ninja": {
+      "version": "1.13.2",
+      "acquisition": "locked lab flake"
+    }
+  },
+  "dependencies": {
+    "folly": {
+      "version": "2026.01.19.00",
+      "package": "folly",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
+    },
+    "abseil": {
+      "version": "20260107.1",
+      "package": "abseil-cpp",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
+    },
+    "fmt": {
+      "version": "12.1.0",
+      "package": "fmt",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
+    },
+    "protobuf": {
+      "version": "35.1",
+      "package": "protobuf",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+    },
+    "protoc": {
+      "version": "35.1",
+      "package": "protobuf",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+    },
+    "boost": {
+      "version": "1.84.0",
+      "source_sha256": "4d27e9efed0f6f152dc28db6430b9d3dfb40c0345da7342eaa5a987dde57bd95",
+      "acquisition": "Velox commit e06dd2b5ee7816b99bccbdbd382fe68b3d8f4a48 via bundled CMake module"
+    },
+    "glog": {
+      "version": "0.7.1",
+      "package": "glog",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
+    },
+    "gflags": {
+      "version": "2.3.0",
+      "package": "gflags",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3 via the lab dev shell"
+    },
+    "xsimd": {
+      "version": "10.0.0",
+      "source_sha256": "73f818368b3a4dad92fab1b2933d93694241bd2365a6181747b2df1768f6afdd",
+      "acquisition": "Velox commit e06dd2b5ee7816b99bccbdbd382fe68b3d8f4a48 via bundled third_party/xsimd"
+    },
+    "lz4": {
+      "version": "1.10.0",
+      "package": "lz4",
+      "acquisition": "nixpkgs@e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3"
+    }
+  },
+  "checkout": [
+    "git submodule sync --recursive",
+    "git submodule update --init --recursive"
+  ],
+  "configure": {
+    "command": "nix develop --command cmake -S <nimble-checkout> -B <build-dir> -G Ninja",
+    "args": [
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DVELOX_ENABLE_GEO=OFF",
+      "-DVELOX_DEPENDENCY_SOURCE=AUTO",
+      "-DBoost_SOURCE=BUNDLED",
+      "-Dfolly_SOURCE=SYSTEM",
+      "-Dabsl_SOURCE=SYSTEM",
+      "-Dfmt_SOURCE=SYSTEM",
+      "-Dglog_SOURCE=SYSTEM",
+      "-Dgflags_SOURCE=SYSTEM",
+      "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+    ]
+  },
+  "observed_boundary": "Configuration reached generation, but the selected system Folly target referenced Boost::thread and Nimble link targets could not resolve protobuf::libprotobuf. No build or 1,024-column projection measurement was run.",
+  "retry_when": "The same pinned tree configures and builds with this closure, or a standalone reader/writer is published."
+}
