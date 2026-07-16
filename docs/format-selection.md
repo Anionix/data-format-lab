@@ -8,13 +8,14 @@ different inputs and success rules.
 
 | Workload | First choice | Evidence and caveat |
 | --- | --- | --- |
-| Typed analytics and interchange | Parquet default | All ranked fair formats passed the canonical gate. Parquet is the practical baseline for typed schemas, projection, predicate pushdown, and broad interoperability. |
+| Typed analytics and interchange | Parquet default | All ranked fair formats passed the canonical gate. Parquet is the practical baseline for typed schemas, projection, predicate pushdown, and broad interoperability. Arrow IPC is a useful in-process interchange choice when the PyArrow ecosystem is already the boundary. |
 | Static storage where bytes matter more than write time | Parquet zstd-19 | It was the smallest ranked fair artifact. Higher compression increases write cost, so it is better suited to archival or mostly-read data. |
 | Large scans, filters, and random access | Vortex compact | The claims workload showed an advantage in the tested sorted, unsorted, and random-access stress cases. This is claim-specific evidence, not a general database ranking; validate the operations and ecosystem you need. |
 | Full-text search | Lance | Lance is the tested option with a full-text index. Scalar and vector indexes were not evaluated. Keep base data, index, metadata, logical directory size, and transport size separate when budgeting storage. |
 | LLM prompt payload | Compact TSV | It used the fewest measured tokens for the shared seven-field prompt contract. Include the taxonomy dictionary and schema, and use a self-describing representation when consumers cannot share that contract. |
 | Human-readable structured exchange | Object JSONL | Field names travel with each record, making inspection and ad hoc tooling easier. It costs more bytes and tokens than array JSONL or Compact TSV. |
 | Simple line-oriented interchange | CSV | It is widely supported and easy to inspect, but schema, NULL, quoting, and type rules must be supplied separately. It is not the typed storage baseline. |
+| In-process Arrow interchange | Arrow IPC | It preserves the Arrow schema and values through a typed file container. It is not a substitute for broad cross-language interchange unless the consumers support Arrow IPC. |
 | Measured device/tag time-range query | TsFile | The adapted synthetic workload used 100 devices with 10,000 points each and measured a 1,000-row time range. It was not a fair Stars comparison and had slower writes; other time-series access patterns were not evaluated. |
 
 ## Formats Without A Selection
@@ -55,6 +56,7 @@ inside a lane and gives a recommendation with a caveat for each workload.
 ## Traceability
 
 - The measured values and platform separation are in the [v0.1.0 evidence summary](../reports/v0.1.0/README.md).
+- The incremental Arrow IPC fair result is in the [2026-07-17 evidence report](../reports/revalidation-2026-07-17/macos-arm64/arrow-ipc.md).
 - The corrected questions, workload adaptations, and research decisions are in the [research log](research-log.md).
 - The lifecycle and comparability contract is in [CONTEXT.md](../CONTEXT.md).
 - FastLanes, Nimble, and AnyBlox failures are in the [negative-evidence records](../research/formats/).

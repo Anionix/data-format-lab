@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .formats.base import FormatAdapter
+from .formats.arrow_ipc import ArrowIpcAdapter
 from .formats.lance import LanceAdapter
 from .formats.parquet import ParquetAdapter
 from .formats.text import CsvAdapter, ObjectJsonlAdapter
@@ -12,6 +13,7 @@ def adapters() -> tuple[FormatAdapter, ...]:
     return (
         CsvAdapter(),
         ObjectJsonlAdapter(),
+        ArrowIpcAdapter(),
         ParquetAdapter(),
         ParquetAdapter(compression_level=19),
         LanceAdapter(),

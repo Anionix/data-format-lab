@@ -10,7 +10,7 @@
 
 | lane | 検証する問い | 例 |
 | --- | --- | --- |
-| `fair` | 同じArrowテーブルを保存し、同じ検索結果を返すときの容量と速度 | CSV、JSONL、Parquet、Lance、Vortex、適応TsFile |
+| `fair` | 同じArrowテーブルを保存し、同じ検索結果を返すときの容量と速度 | CSV、JSONL、Arrow IPC、Parquet、Lance、Vortex、適応TsFile |
 | `claims` | 公式が主張する強みを、適したワークロードで再現できるか | Lance FTS、Vortex scan、適応TsFile時系列、実験FastLanes証拠 |
 | `prompt` | 同じ7項目をLLMへ渡すときの正確なtoken数 | Compact TSV、object JSONL、array JSONL |
 
