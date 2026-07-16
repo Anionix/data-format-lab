@@ -120,10 +120,12 @@ def _relative(root: Path, value: str | Path) -> Path:
     return target
 
 
-def _save(path: Path, content: str) -> str:
+def _save(root: Path, value: str | Path, content: str) -> str:
+    path = _relative(root, value)
     path.parent.mkdir(parents=True, exist_ok=True)
+    path = _relative(root, value)
     path.write_text(content, encoding="utf-8", errors="replace")
-    return path.relative_to(path.parents[2]).as_posix()
+    return path.relative_to(root).as_posix()
 
 
 def _tail(handle: BinaryIO, size: int, limit: int) -> str:
@@ -216,7 +218,7 @@ def run_case(
 ) -> CaseResult:
     root = run_dir.resolve()
     request_path = _relative(root, request)
-    output_path = _relative(root, output_dir)
+    _relative(root, output_dir)
     payload = _request_payload(request_path)
     _relative(root, payload["manifest"])
     _relative(root, payload["artifact"])
@@ -227,10 +229,8 @@ def run_case(
     process, stdout, stderr = _process(
         command, root, timeout_seconds, output_budget_bytes
     )
-    stdout_path = output_path / "stdout.txt"
-    stderr_path = output_path / "stderr.txt"
-    _save(stdout_path, stdout)
-    _save(stderr_path, stderr)
+    stdout_path = _save(root, Path(output_dir) / "stdout.txt", stdout)
+    stderr_path = _save(root, Path(output_dir) / "stderr.txt", stderr)
     observed, details = _outcome(process, stdout)
     verdict = robustness_verdict(expectation, observed)
     return {
@@ -241,6 +241,6 @@ def run_case(
         "verdict": verdict,
         "details": details,
         "process": process,
-        "stdout": stdout_path.relative_to(root).as_posix(),
-        "stderr": stderr_path.relative_to(root).as_posix(),
+        "stdout": stdout_path,
+        "stderr": stderr_path,
     }
