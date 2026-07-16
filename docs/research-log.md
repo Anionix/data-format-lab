@@ -68,6 +68,11 @@ uncompressed IPC was fastest for these warm reads.
 
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
+The Parquet fair adapter now exposes `snappy`, `gzip`, and `zstd` variants while
+retaining the existing `zstd-19` high-compression variant. These are codec
+choices inside one typed Parquet contract; the next evidence run will use the
+same fresh-process and warm-read protocol as the Arrow IPC codec report.
+
 ## Token questions
 
 Estimated token counts were replaced with exact `o200k_base` and `cl100k_base` measurements. The prompt contract fixes seven semantic fields. Compact TSV includes its taxonomy dictionary in both byte and token totals. Object and array JSONL encode the same records.

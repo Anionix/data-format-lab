@@ -20,6 +20,8 @@ Results never rank across lanes or hardware runs. Only `FULL_COMPARABLE` evidenc
 
 Arrow IPC codec variants (`none`, `lz4`, and `zstd`) remain in the `fair` lane and share the same Arrow schema, round-trip gate, and query-result contract. They are codec variants, not separate formats or a cross-lane score.
 
+Parquet codec variants (`snappy`, `gzip`, `zstd`, and the existing `zstd-19` high-compression setting) follow the same fair-lane rule and preserve the canonical table contract.
+
 ## Evidence contract
 
 Every measured format follows one lifecycle:

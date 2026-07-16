@@ -18,6 +18,8 @@
 
 Arrow IPCのcodec variant（`none`、`lz4`、`zstd`）は同じArrow schema、往復検証、検索結果契約を使う`fair` lane内の比較です。別形式やlane横断のscoreとしては扱いません。
 
+Parquetのcodec variant（`snappy`、`gzip`、`zstd`、既存の高圧縮設定`zstd-19`）も同じfair laneの規則で比較し、canonical tableの契約を維持します。
+
 ## 証拠の流れ
 
 ```text
