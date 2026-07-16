@@ -150,3 +150,31 @@ def test_worker_reports_raised_builtin_verification_as_value_mismatch(
     result = run_request(Path("request.json"))
     assert result["observed"] is ObservedOutcome.VALUE_MISMATCH
     assert result["details"]["error_type"] == "ValueError"
+
+
+def test_worker_reports_non_value_verification_errors_as_value_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class BrokenVerifier:
+        def read(self, path, manifest):
+            return None
+
+        def verify_roundtrip(self, path, manifest):
+            raise TypeError("comparison unavailable")
+
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "type-mismatch",
+        "target": "broken",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+        "expectation": "MUST_ROUNDTRIP",
+    }))
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": BrokenVerifier()})
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+
+    assert result["observed"] is ObservedOutcome.VALUE_MISMATCH
+    assert result["details"]["error_type"] == "TypeError"

@@ -161,6 +161,40 @@ def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
     assert "robustness crash" not in (tmp_path / "report.md").read_text()
 
 
+def test_claim_report_falls_back_to_legacy_research_attempt(tmp_path: Path) -> None:
+    manifest = {"state": "BENCHMARKED", "dataset_id": "fixture", "formats": []}
+    results = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "run_id": "legacy-claims-fixture",
+        "profile": "claims",
+        "environment": {
+            "git_commit": "abc",
+            "flake_lock_sha256": "def",
+            "platform": "test-os",
+            "machine": "test-cpu",
+            "python": "3.12.0",
+        },
+        "results": {
+            "negative_research": {
+                "legacy": {
+                    "comparability": "PARTIAL",
+                    "state": "FAILED",
+                    "attempts": [{"result": "legacy result"}],
+                }
+            }
+        },
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "results.json").write_text(json.dumps(results))
+
+    render_report(tmp_path)
+
+    assert "| legacy | RESEARCH_RECORD | PARTIAL | FAILED | legacy result |" in (
+        tmp_path / "report.md"
+    ).read_text()
+
+
 def test_robustness_report_separates_case_contract_and_is_deterministic(
     tmp_path: Path,
 ) -> None:

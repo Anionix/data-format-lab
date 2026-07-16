@@ -56,6 +56,16 @@ def test_evidence_store_imports_file_and_directory(tmp_path: Path) -> None:
     assert store.used_bytes == 6
 
 
+def test_evidence_store_rejects_destination_inside_source(tmp_path: Path) -> None:
+    source = tmp_path / "evidence"
+    source.mkdir()
+    (source / "data.bin").write_bytes(b"data")
+    store = EvidenceStore(source, budget_bytes=100)
+
+    with pytest.raises(ValueError, match="inside source"):
+        store.import_path(source, "copy")
+
+
 def test_evidence_store_rejects_unsafe_paths_and_symlinks(tmp_path: Path) -> None:
     store = EvidenceStore(tmp_path / "evidence", budget_bytes=100)
     with pytest.raises(ValueError, match="safe relative"):
@@ -74,3 +84,11 @@ def test_invalid_mutation_arguments_and_operations_are_rejected() -> None:
     unknown = type(recipe)("bad", "unknown")
     with pytest.raises(ValueError, match="unknown mutation"):
         apply_mutation(b"x", unknown)
+
+
+def test_non_empty_truncate_mutation_always_changes_size() -> None:
+    data = bytes(range(256))
+    recipes = mutation_recipes(len(data), 983, 2)
+    truncate = next(recipe for recipe in recipes if recipe.operation == "truncate")
+
+    assert len(apply_mutation(data, truncate)) < len(data)

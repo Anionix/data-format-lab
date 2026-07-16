@@ -29,7 +29,7 @@ def mutation_recipes(size: int, seed: int, count: int) -> tuple[MutationRecipe, 
         operation = operations[index % len(operations)]
         parameters: dict[str, MutationValue] = {}
         if operation == "truncate":
-            parameters["offset"] = rng.randint(0, size)
+            parameters["offset"] = rng.randrange(size) if size else 0
         elif operation.startswith("flip_"):
             region = operation.removeprefix("flip_")
             if region == "header":

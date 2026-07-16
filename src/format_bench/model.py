@@ -98,10 +98,14 @@ def transition(current: ExecutionState, target: ExecutionState) -> ExecutionStat
 
 
 def robustness_verdict(
-    expectation: RobustnessExpectation,
-    observed: ObservedOutcome,
-    applicability: Applicability = Applicability.APPLICABLE,
+    expectation: RobustnessExpectation | str,
+    observed: ObservedOutcome | str,
+    applicability: Applicability | str = Applicability.APPLICABLE,
 ) -> RobustnessVerdict:
+    # Evidence is persisted as JSON strings and may be evaluated after reload.
+    expectation = RobustnessExpectation(expectation)
+    observed = ObservedOutcome(observed)
+    applicability = Applicability(applicability)
     if applicability is Applicability.NOT_APPLICABLE:
         return RobustnessVerdict.NOT_APPLICABLE
     if observed in {

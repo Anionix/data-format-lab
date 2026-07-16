@@ -279,6 +279,8 @@ def run_bounded(
 ) -> Path:
     if mutations_per_target < 0:
         raise ValueError("mutations_per_target must be non-negative")
+    root = root.resolve()
+    run_dir = run_dir.resolve()
     run, dataset = _load(run_dir)
     base = read_csv(run_dir / run["input"]["source"], dataset)
     cases = list(named_cases()) + list(generated_cases(seed, generated_count))
@@ -376,5 +378,6 @@ def run_bounded(
             "summary": summary,
         }
     }
-    # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED; report performs -> REPORTED.
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # Robustness failures remain UNSUPPORTED or FAILED evidence and never rank.
     return _finish(root, run_dir, run, Lane.ROBUSTNESS, evidence)
