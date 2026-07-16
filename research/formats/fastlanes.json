@@ -5,10 +5,10 @@
   "source_commits": {"core": "f0edc1020a538f1f8098640fce8347c9ac247a0d"},
   "primary_source": "https://fastlanes.io/",
   "claim": "nested encodings designed for parallel SIMD-friendly decoding",
-  "attempted_on": "2026-07-14",
+  "attempted_on": "2026-07-17",
   "comparability": "PARTIAL",
   "state": "FAILED",
-  "claim_summary": "numeric data round-tripped; partial-vector string dictionary lookup failed; Python binding rebuild blocked before mixed-schema test",
+  "claim_summary": "the macOS exploratory numeric control round-tripped, but the reproducible Linux x86_64 retry built successfully and then crashed numeric and string cases; the 13-column mixed case reached an UNREACHABLE path",
   "correction": "the earlier numeric -11 result used comma-separated input against the official pipe-delimited reader and is superseded",
   "attempts": [
     {
@@ -70,7 +70,46 @@
         "warning_overrides": ["-Wno-error=character-conversion", "-Wno-error=nonnull"]
       },
       "result": "target built after warning overrides; all 10 CTest cases exited SIGTRAP"
+    },
+    {
+      "entrypoint": "official pyfastlanes editable build and claims workflow on Linux x86_64",
+      "attempted_on": "2026-07-17",
+      "workload": "1,000,000 rows and 8 numeric columns; string rows 1,023, 1,024, 1,025, 2,048, and 2,049; 1,024 rows and 13 mixed columns; malformed comma input",
+      "environment": {
+        "os": "Ubuntu 24.04 GitHub-hosted runner",
+        "kernel": "6.17.0-1020-azure",
+        "architecture": "x86_64",
+        "host_python": "3.12.3",
+        "python": "3.12.13",
+        "clang": "21.1.8",
+        "cmake": "4.1.2",
+        "ninja": "1.13.2",
+        "scikit_build_core": "0.11.6",
+        "pybind11": "2.12.1",
+        "setuptools_scm": "8.3.1",
+        "build_type": "Release",
+        "parallelism": 4,
+        "timeout_seconds": 120,
+        "package": "pyfastlanes==0.1.3.post9",
+        "runtime_version": "0.1.4"
+      },
+      "build_command": "python -m venv native/fastlanes/.venv; pip install scikit-build-core==0.11.6 cmake==4.4.0 ninja==1.13.0 pybind11==2.12.1 setuptools-scm==8.3.1; CMAKE_BUILD_PARALLEL_LEVEL=4 pip install --no-build-isolation -e native/fastlanes",
+      "result": {
+        "build": "succeeded",
+        "numeric": "CRASHED SIGSEGV (-11)",
+        "string_boundaries": "1,023, 1,024, 1,025, 2,048, and 2,049 all CRASHED SIGSEGV (-11)",
+        "mixed": "HARNESS_FAILED RuntimeError: UNREACHABLE at src/wizard/wizard.cpp:1252",
+        "comma_malformed": "HARNESS_FAILED RuntimeError: invalid character in signed integer; child process returned 0 because the worker captured the exception"
+      },
+      "workflow_run": {
+        "run_id": "29520329351",
+        "url": "https://github.com/Anionix/data-format-lab/actions/runs/29520329351",
+        "artifact_name": "data-format-lab-fastlanes-linux-x86_64-29520329351",
+        "results_path": "runs/fastlanes-linux-29520329351/results.json",
+        "archive_path": "outputs/release/data-format-lab-fastlanes-linux-x86_64-29520329351.tar.zst",
+        "archive_sha256": "b9270a10d9cc0f5d81a81e67b8e22af591a06018e767720b9d9c6e4c3689227a"
+      }
     }
   ],
-  "retry_when": "the official Python extension builds in a reproducible toolchain, round-trips partial-vector string dictionaries, and rejects malformed input without terminating the process"
+  "retry_when": "a pinned source and toolchain complete the 13-column mixed-schema round trip without SIGSEGV or UNREACHABLE, with the same result independently reproduced on macOS and Linux"
 }

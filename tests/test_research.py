@@ -19,6 +19,11 @@ def test_negative_research_records_are_pinned_and_unranked() -> None:
     assert "checksum-complete dataset" in records["anyblox"]["retry_when"]
     assert ".anyblox bundle" in records["anyblox"]["retry_when"]
 
+    fastlanes_attempt = records["fastlanes"]["attempts"][-1]
+    assert fastlanes_attempt["environment"]["architecture"] == "x86_64"
+    assert fastlanes_attempt["result"]["mixed"].startswith("HARNESS_FAILED")
+    assert fastlanes_attempt["workflow_run"]["run_id"] == "29520329351"
+
     nimble_json = json.dumps(records["nimble"])
     assert "/nix/store/" not in nimble_json
     assert "/opt/homebrew/" not in nimble_json
