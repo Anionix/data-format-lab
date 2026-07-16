@@ -2,19 +2,38 @@
   "schema_version": "1",
   "name": "nimble",
   "repository": "https://github.com/facebookincubator/nimble",
-  "source_commits": {"core": "9da673156acfed828991be52cb393be564108ce0"},
+  "source_commits": {
+    "core": "9da673156acfed828991be52cb393be564108ce0",
+    "velox": "e06dd2b5ee7816b99bccbdbd382fe68b3d8f4a48",
+    "openzl": "6b48fa4868160ed1e5c78ac422639615dd0dcf28"
+  },
   "primary_source": "https://github.com/facebookincubator/nimble",
   "claim": "extensible columnar storage for datasets with thousands of columns",
-  "attempted_on": "2026-07-14",
+  "attempted_on": "2026-07-17",
   "comparability": "UNAVAILABLE",
   "state": "UNSUPPORTED",
-  "claim_summary": "official CMake generation did not complete",
+  "claim_summary": "official CMake configure remains non-reproducible on this host; no wide-table projection was measured",
   "attempts": [
     {
       "entrypoint": "official CMake build with Velox and OpenZL submodules",
       "workload": "configure a release build before the planned 1,024-column projection test",
       "result": "CMake generation could not resolve protobuf::libprotobuf and fmt::fmt in sibling Nimble directories"
+    },
+    {
+      "entrypoint": "official CMake build with pinned submodules and system dependencies",
+      "attempted_on": "2026-07-17",
+      "workload": "configure a release build with CMake 4.1.2, Clang 21.1.8, and VELOX_ENABLE_GEO=OFF",
+      "command": "git submodule update --init --recursive; make cmake",
+      "cmake_args": ["-DCMAKE_BUILD_TYPE=Release", "-DVELOX_ENABLE_GEO=OFF", "-G Ninja"],
+      "environment": {
+        "os": "Darwin 27.0.0",
+        "architecture": "arm64",
+        "clang": "21.1.8",
+        "cmake": "4.1.2",
+        "ninja": "1.13.2"
+      },
+      "result": "protobuf and fmt targets resolved, but the bundled xsimd dependency stopped configuration because its CMake minimum version is older than CMake 4.1.2; no build or projection test was attempted"
     }
   ],
-  "retry_when": "the pinned official tree configures with documented dependency targets or a standalone reader/writer is published"
+  "retry_when": "the pinned official tree configures and builds with its submodules, or a standalone reader/writer is published"
 }
