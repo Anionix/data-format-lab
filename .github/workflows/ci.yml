@@ -49,39 +49,15 @@ jobs:
           tar -xzf "$fallback_archive" --strip-components=1 -C "$fallback_source"
           nix flake check --no-build --all-systems \
             --override-input rust-overlay "path:$fallback_source"
-          nix_bin=$(command -v nix)
-          wrapper_dir=$(mktemp -d)
-          cat > "$wrapper_dir/nix" <<EOF
-          #!/usr/bin/env bash
-          set -euo pipefail
-          nix_bin="$nix_bin"
-          rust_overlay_source="$fallback_source"
-          case "\${1:-}" in
-            flake)
-              shift
-              subcommand="\${1:?missing flake subcommand}"
-              shift
-              exec "\$nix_bin" flake "\$subcommand" --override-input rust-overlay "path:\$rust_overlay_source" "\$@"
-              ;;
-            develop)
-              shift
-              exec "\$nix_bin" develop --override-input rust-overlay "path:\$rust_overlay_source" "\$@"
-              ;;
-            *)
-              exec "\$nix_bin" "\$@"
-              ;;
-          esac
-          EOF
-          chmod +x "$wrapper_dir/nix"
-          echo "PATH=$wrapper_dir:$PATH" >> "$GITHUB_ENV"
+          echo "RUST_OVERLAY_SOURCE=$fallback_source" >> "$GITHUB_ENV"
           exit 0
 
       - name: Synchronize frozen Python environment
-        run: nix develop --command uv sync --frozen
+        run: nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command uv sync --frozen
 
       - name: Run blocking Python quality gates
         run: |
-          nix develop --command bash -euo pipefail -c '
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             ruff --version
             pyright --version
             ruff check src tests
@@ -91,7 +67,7 @@ jobs:
       - name: Run tests and smoke lanes concurrently
         run: |
           # shellcheck disable=SC2016
-          nix develop --command bash -euo pipefail -c '
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             tmp_dir=$(mktemp -d)
             trap "rm -rf \"$tmp_dir\"" EXIT
 
@@ -165,7 +141,7 @@ jobs:
         run: |
           # Run separately from the concurrent smokes so subprocess timeouts remain meaningful.
           # shellcheck disable=SC2016
-          nix develop --command bash -euo pipefail -c '
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             run_dir="runs/ci-smoke-robustness-$BASHPID"
             result=$(.venv/bin/format-bench run \
               --profile robustness \
@@ -192,7 +168,7 @@ jobs:
       - name: Observe ty diagnostics
         continue-on-error: true
         run: |
-          nix develop --command bash -euo pipefail -c '
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             ty version
             ty check src/format_bench
           '
