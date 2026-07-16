@@ -124,7 +124,8 @@ def _save(root: Path, value: str | Path, content: str) -> str:
     path = _relative(root, value)
     path.parent.mkdir(parents=True, exist_ok=True)
     path = _relative(root, value)
-    path.write_text(content, encoding="utf-8", errors="replace")
+    with path.open("x", encoding="utf-8", errors="replace") as handle:
+        handle.write(content)
     return path.relative_to(root).as_posix()
 
 
