@@ -247,6 +247,8 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
     assert "non-ranking evidence" in first
     assert "| Seed | 7 |" in first
     assert "| Verdict | Cases |" in first
+    assert "### Target Summary" in first
+    assert "### Evidence Identities" in first
     assert "| Target | Tier | Engine | Case | Expectation | Observed | Verdict |" in first
     assert "| csv | CORE | coverage-guided | rows-1 | MUST_ROUNDTRIP | ROUNDTRIP_EQUAL | PASS |" in first
     reported = json.loads((tmp_path / "results.json").read_text())

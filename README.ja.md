@@ -53,6 +53,8 @@ uv run --frozen format-bench report --run-dir runs/fair-local
 
 native robustness suiteは固定したArrow、Vortex、FastLanesのtargetを記録します。Arrowは記録したsource commitのcheckoutと`native/arrow/build`のbinary、VortexとFastLanesは記録したsource commitと`HEAD`が一致するcheckoutのharnessを使います。FastLanesはcoverage-guidedではなくproject-seededとして扱います。公式native targetを確認できないLance、object JSONL、TsFileも`UNSUPPORTED`証拠として残します。未ビルドbinaryやsource不一致は成功扱いにしません。`--target`は複数指定でき、`--duration-seconds`と`--artifact-budget-mib`で実行上限を指定します。
 
+robustness reportには、targetごとのケース数、PASS/FAIL、crash、timeout、未完了理由、duration p50、artifact/source identityも集約します。これは信頼性の証拠であり、laneをまたぐscoreではありません。
+
 ```bash
 uv run --frozen format-bench run --profile robustness --suite native --dataset github-stars-2026-07-03 \
   --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900
