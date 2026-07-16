@@ -149,6 +149,34 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _linux_hardware_model() -> str:
+    product = ""
+    try:
+        product = Path("/sys/devices/virtual/dmi/id/product_name").read_text(
+            encoding="utf-8", errors="replace"
+        ).strip()
+    except OSError:
+        pass
+
+    candidates = {"model name": "", "hardware": "", "model": ""}
+    try:
+        for line in Path("/proc/cpuinfo").read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines():
+            key, separator, value = line.partition(":")
+            normalized_key = key.strip().lower()
+            if separator and normalized_key in candidates and not candidates[normalized_key]:
+                candidates[normalized_key] = value.strip()
+    except OSError:
+        pass
+
+    cpu = next(
+        (candidates[key] for key in ("model name", "hardware", "model") if candidates[key]),
+        "",
+    )
+    return " / ".join(dict.fromkeys(value for value in (product, cpu) if value))
+
+
 def _hardware_model() -> str:
     if sys.platform == "darwin":
         probe = subprocess.run(
@@ -160,7 +188,13 @@ def _hardware_model() -> str:
         model = probe.stdout.strip()
         if probe.returncode == 0 and model:
             return model
-    return platform.processor() or platform.machine()
+    if sys.platform.startswith("linux"):
+        model = _linux_hardware_model()
+        if model:
+            return model
+    processor = platform.processor().strip()
+    machine = platform.machine().strip()
+    return processor if processor and processor != machine else machine
 
 
 def environment_info(root: Path) -> dict:

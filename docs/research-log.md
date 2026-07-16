@@ -43,12 +43,13 @@ The 2026-07-17 AnyBlox retry found official bundler and `anyblox2csv` targets at
 Arrow IPC was added as a typed fair-lane format using the already pinned
 PyArrow dependency. On the full 2,331-row Stars snapshot it passed the
 canonical gate and all six fair operations. The incremental macOS ARM run
-measured 672,234 native bytes, 190,263 external-zstd bytes, and a 2.119 ms
+measured 672,234 native bytes, 190,263 external-zstd bytes, and a 6.678 ms
 write p50; detailed p50/p95 values are in the [Arrow IPC evidence report](../reports/revalidation-2026-07-17/macos-arm64/arrow-ipc.md).
-The rerun used commit `c3872fe`, recorded Mac14,7 / Apple M2 / 16 GB, and
-used the standard 10 fresh-process, 5 warmup, 30-measurement protocol. This is
-a fair storage result, not a producer/consumer interoperability matrix, so
-Arrow IPC is not being granted a broad compatibility claim yet.
+The reachable rerun used commit `df5c2524a71531949de82531c1f4b876b8b7dcf2`,
+recorded `Mac14,7`, and used the standard 10 fresh-process, 5 warmup,
+30-measurement protocol. This is a fair storage result, not a
+producer/consumer interoperability matrix, so Arrow IPC is not being granted
+a broad compatibility claim yet.
 
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 
