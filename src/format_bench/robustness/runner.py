@@ -113,7 +113,13 @@ def _worker_response(stdout: str) -> WorkerResponse:
 
 
 def _bounded_details(details: dict[str, object]) -> dict[str, object]:
-    encoded = (json.dumps(details, indent=2, sort_keys=True) + "\n").encode()
+    try:
+        encoded = (json.dumps(details, indent=2, sort_keys=True) + "\n").encode()
+    except (RecursionError, TypeError, ValueError) as error:
+        return {
+            "truncated": True,
+            "error_type": type(error).__name__,
+        }
     if len(encoded) <= MAX_WORKER_DETAILS_BYTES:
         return details
     return {
@@ -333,7 +339,7 @@ def _outcome(
     try:
         response = _worker_response(stdout)
         return ObservedOutcome(response["observed"]), response["details"]
-    except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+    except (json.JSONDecodeError, KeyError, RecursionError, ValueError, TypeError):
         return ObservedOutcome.HARNESS_FAILED, {}
 
 

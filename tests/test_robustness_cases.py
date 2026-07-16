@@ -57,6 +57,8 @@ def test_generated_cases_preserve_requested_rows() -> None:
         assert table.num_rows == case.options["rows"]
         if case.options["rows"]:
             assert case.options["cardinality"] <= case.options["rows"]
+        else:
+            assert case.options["cardinality"] == 0
 
 
 def test_malformed_case_has_no_valid_arrow_materialization() -> None:
