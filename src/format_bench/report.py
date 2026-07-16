@@ -22,17 +22,40 @@ def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
     return output
 
 
-def _environment(results: dict) -> list[str]:
-    environment = results["environment"]
+def _package_versions(environment: dict) -> str:
+    packages = environment.get("packages", {})
+    return json.dumps(
+        {name: value for name, value in sorted(packages.items()) if value},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _environment_rows(environment: dict) -> list[list[object]]:
     rows = [
-        ["Git commit", environment["git_commit"]],
-        ["Flake lock SHA-256", environment["flake_lock_sha256"]],
-        ["Platform", environment["platform"]],
-        ["Machine", environment["machine"]],
+        ["Git commit", environment.get("git_commit")],
+        ["Flake lock SHA-256", environment.get("flake_lock_sha256")],
+        ["Platform", environment.get("platform")],
+        ["Machine", environment.get("machine")],
         ["Hardware model", environment.get("hardware_model", "N/A")],
-        ["Python", environment["python"]],
+        ["Python", environment.get("python")],
+        ["Packages", _package_versions(environment)],
     ]
-    return ["## Environment", "", *_table(["Field", "Value"], rows)]
+    return rows
+
+
+def _environment(manifest: dict, results: dict) -> list[str]:
+    return [
+        "## Environment",
+        "",
+        "### Encoding",
+        "",
+        *_table(["Field", "Value"], _environment_rows(manifest.get("environment", {}))),
+        "",
+        "### Measurement",
+        "",
+        *_table(["Field", "Value"], _environment_rows(results.get("environment", {}))),
+    ]
 
 
 def _input_manifest(run_dir: Path, manifest: dict) -> dict:
@@ -57,7 +80,6 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     columns = input_manifest.get("columns", [])
     rows = input_manifest.get("rows")
     dimensions = f"{rows} / {len(columns)}" if rows is not None else None
-    package_versions = {name: value for name, value in sorted(packages.items()) if value}
     format_settings = [
         [
             entry.get("format"),
@@ -85,7 +107,7 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
             ),
         ],
         ["PyArrow", packages.get("pyarrow")],
-        ["Packages", json.dumps(package_versions, sort_keys=True, separators=(",", ":"))],
+        ["Packages", _package_versions(environment)],
         ["Protocol", protocol],
         ["Seed", measurement.get("seed", manifest.get("seed"))],
         ["OS cache purged", measurement.get("os_cache_purged")],
@@ -430,7 +452,7 @@ def render_report(run_dir: Path) -> Path:
         f"Run: `{results['run_id']}`<br>",
         "No result in this report is comparable across lanes or hardware runs.",
         "",
-        *_environment(results),
+        *_environment(manifest, results),
         "",
         *_provenance(run_dir, manifest, results),
         "",

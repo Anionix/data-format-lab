@@ -71,6 +71,14 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
         "rankable": True,
         "seed": 20260703,
         "input": {"manifest": "input/manifest.json"},
+        "environment": {
+            "git_commit": "encoding-commit",
+            "flake_lock_sha256": "encoding-flake",
+            "platform": "encoding-os",
+            "machine": "encoding-cpu",
+            "python": "3.12.0",
+            "packages": {"pyarrow": "22.0.0"},
+        },
         "formats": [
             {
                 "format": "csv",
@@ -135,6 +143,10 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     assert "| Canonical hash | canonical-sha |" in report
     assert "| Rows / columns | 4 / 1 |" in report
     assert "| PyArrow | 23.0.1 |" in report
+    assert "| Git commit | encoding-commit |" in report
+    assert "| Git commit | abc |" in report
+    assert "| Packages | {\"pyarrow\":\"22.0.0\"} |" in report
+    assert "| Packages | {\"pyarrow\":\"23.0.1\"} |" in report
     assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements |" in report
     assert "| csv | {\"delimiter\":\",\"} |" in report
     reported = json.loads((tmp_path / "manifest.json").read_text())

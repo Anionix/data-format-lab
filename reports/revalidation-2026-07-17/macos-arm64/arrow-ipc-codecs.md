@@ -6,6 +6,8 @@ No result in this report is comparable across lanes or hardware runs.
 
 ## Environment
 
+### Encoding
+
 | Field | Value |
 | --- | --- |
 | Git commit | 85ac7ded30d7fad473de138a6846abf90a278e56 |
@@ -14,6 +16,19 @@ No result in this report is comparable across lanes or hardware runs.
 | Machine | arm64 |
 | Hardware model | Mac14,7 |
 | Python | 3.12.13 |
+| Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
+
+### Measurement
+
+| Field | Value |
+| --- | --- |
+| Git commit | 85ac7ded30d7fad473de138a6846abf90a278e56 |
+| Flake lock SHA-256 | 1d8b3b85a0f5f144f6076ca7d4de031d1b2c7b50bc62c1bd12d43dd0141ad54c |
+| Platform | macOS-27.0-arm64-arm-64bit |
+| Machine | arm64 |
+| Hardware model | Mac14,7 |
+| Python | 3.12.13 |
+| Packages | {"pyarrow":"23.0.1","pylance":"8.0.0","tiktoken":"0.12.0","vortex-data":"0.76.0","zstandard":"0.25.0"} |
 
 ## Reproducibility
 
