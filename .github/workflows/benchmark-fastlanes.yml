@@ -1,0 +1,248 @@
+name: FastLanes mixed-schema retry
+
+on:
+  workflow_dispatch:
+    inputs:
+      numeric_rows:
+        description: Numeric control row count
+        required: true
+        default: "1000000"
+        type: string
+      timeout_seconds:
+        description: Timeout per generated case
+        required: true
+        default: "900"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  FASTLANES_SOURCE_COMMIT: f0edc1020a538f1f8098640fce8347c9ac247a0d
+  RUN_DIR: runs/fastlanes-linux-${{ github.run_id }}
+  ARCHIVE: outputs/release/data-format-lab-fastlanes-linux-x86_64-${{ github.run_id }}.tar.zst
+
+jobs:
+  retry:
+    name: FastLanes official Python round trip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Initialize evidence directory
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUN_DIR"
+          printf 'platform=linux-x86_64\nrun_id=%s\n' "$GITHUB_RUN_ID" \
+            > "$RUN_DIR/context.txt"
+
+      - name: Check out public commit
+        id: checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Synchronize frozen lab environment
+        run: nix develop --command uv sync --frozen
+
+      - name: Check out pinned FastLanes source
+        id: source
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p native
+          git clone --filter=blob:none --no-tags \
+            https://github.com/cwida/FastLanes.git native/fastlanes
+          git -C native/fastlanes checkout --detach "$FASTLANES_SOURCE_COMMIT"
+          git -C native/fastlanes submodule update --init --recursive
+          git -C native/fastlanes rev-parse HEAD > "$RUN_DIR/source-commit.txt"
+
+      - name: Build official Python extension
+        id: build
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUN_DIR"
+          set +e
+          (
+            set -euo pipefail
+            test -f native/fastlanes/CMakeLists.txt
+            nix develop --command python -m venv native/fastlanes/.venv
+            nix develop --command native/fastlanes/.venv/bin/python -m pip install \
+              --disable-pip-version-check --no-cache-dir \
+              scikit-build-core==0.11.6 \
+              cmake==4.4.0 \
+              ninja==1.13.0 \
+              pybind11==2.12.1 \
+              setuptools-scm==8.3.1
+            CMAKE_BUILD_PARALLEL_LEVEL=4 \
+              nix develop --command native/fastlanes/.venv/bin/python -m pip install \
+                --no-build-isolation -e native/fastlanes
+            native/fastlanes/.venv/bin/python -c \
+              'import pyfastlanes; print(pyfastlanes.get_version())'
+          ) > "$RUN_DIR/build.log" 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$RUN_DIR/build-status.txt"
+          exit "$status"
+
+      - name: Record reproducibility metadata
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            printf 'source_commit=%s\n' "$FASTLANES_SOURCE_COMMIT"
+            printf 'requested_numeric_rows=%s\n' '${{ inputs.numeric_rows }}'
+            printf 'requested_timeout_seconds=%s\n' '${{ inputs.timeout_seconds }}'
+            printf 'python='; nix develop --command python --version
+            if test -x native/fastlanes/.venv/bin/python; then
+              printf 'fastlanes_python='; native/fastlanes/.venv/bin/python --version
+            fi
+            printf 'clang='; nix develop --command clang --version
+            printf 'cmake='; nix develop --command cmake --version
+            printf 'ninja='; nix develop --command ninja --version
+            printf 'uname='; uname -a
+          } > "$RUN_DIR/environment.txt" 2>&1 || true
+
+      - name: Run fresh-process FastLanes claims
+        id: measure
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          NUMERIC_ROWS: ${{ inputs.numeric_rows }}
+          CASE_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+        run: |
+          set -euo pipefail
+          set +e
+          PYTHONPATH="$GITHUB_WORKSPACE/src" \
+            native/fastlanes/.venv/bin/python - "$RUN_DIR/results.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          from format_bench.claims.fastlanes import run_fastlanes_claim
+
+          output = Path(sys.argv[1])
+          evidence = run_fastlanes_claim(
+              output.parent / "claims" / "fastlanes-official",
+              numeric_rows=int(os.environ["NUMERIC_ROWS"]),
+              timeout_seconds=float(os.environ["CASE_TIMEOUT_SECONDS"]),
+          )
+          payload = {
+              "schema_version": "1",
+              "contract_version": "1",
+              "lane": "claims",
+              "platform": "linux-x86_64",
+              "source_commit": "f0edc1020a538f1f8098640fce8347c9ac247a0d",
+              "evidence": evidence,
+          }
+          output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+          PY
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$RUN_DIR/measure-status.txt"
+          exit "$status"
+
+      - name: Preserve unavailable or failed evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          if test -s "$RUN_DIR/results.json"; then
+            exit 0
+          fi
+          nix develop --command python - "$RUN_DIR/results.json" \
+            '${{ steps.source.outcome }}' '${{ steps.build.outcome }}' <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          output = Path(sys.argv[1])
+          source, build = sys.argv[2:]
+          output.write_text(
+              json.dumps(
+                  {
+                      "schema_version": "1",
+                      "contract_version": "1",
+                      "lane": "claims",
+                      "platform": "linux-x86_64",
+                      "source_commit": "f0edc1020a538f1f8098640fce8347c9ac247a0d",
+                      "status": "UNSUPPORTED",
+                      "failure_reason": f"source={source}; build={build}",
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n"
+          )
+          PY
+
+      - name: Write concise evidence report
+        if: always()
+        run: |
+          set -euo pipefail
+          nix develop --command python - "$RUN_DIR/results.json" "$RUN_DIR/report.md" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          results = json.loads(Path(sys.argv[1]).read_text())
+          lines = [
+              "# FastLanes Linux x86_64 retry",
+              "",
+              f"- Source commit: `{results['source_commit']}`",
+              f"- Platform: `{results['platform']}`",
+          ]
+          evidence = results.get("evidence")
+          if evidence:
+              lines.extend(["", f"- Status: `{evidence.get('status', 'UNKNOWN')}`"])
+              lines.append(f"- Summary: {evidence.get('summary', 'not available')}")
+          else:
+              lines.extend(["", f"- Status: `{results.get('status', 'UNKNOWN')}`"])
+              lines.append(f"- Failure: {results.get('failure_reason', 'not available')}")
+          Path(sys.argv[2]).write_text("\n".join(lines) + "\n")
+          PY
+
+      - name: Package evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$ARCHIVE")"
+          tar --zstd --sort=name --mtime='UTC 2026-07-17' \
+            -cf "$ARCHIVE" -C "$RUN_DIR" .
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+
+      - name: Upload FastLanes evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: data-format-lab-fastlanes-linux-x86_64-${{ github.run_id }}
+          path: |
+            ${{ env.RUN_DIR }}
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Preserve retry failure status
+        if: always()
+        run: |
+          set -euo pipefail
+          test '${{ steps.checkout.outcome }}' = success
+          test '${{ steps.source.outcome }}' = success
+          test '${{ steps.build.outcome }}' = success
+          nix develop --command python - "$RUN_DIR/results.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          results = json.loads(Path(sys.argv[1]).read_text())
+          evidence = results.get("evidence", {})
+          if evidence.get("status") != "MEASURED":
+              raise SystemExit(f"FastLanes claim status: {evidence.get('status')}")
+          mixed = evidence.get("mixed", {})
+          if mixed.get("outcome") != "ROUNDTRIP_EQUAL":
+              raise SystemExit(f"mixed 13-column outcome: {mixed.get('outcome')}")
+          PY
