@@ -56,15 +56,17 @@ They share one typed-table and query-result contract; future measurements should
 compare their native bytes, external transport bytes, and timings without
 turning codec differences into a separate format or cross-lane score.
 
-The first full codec comparison used public commit
-`949417edf235e350d5c054331101ad89a7a8993a` on macOS `Mac14,7`. Native sizes
+The reproducible codec comparison rerun used public commit
+`85ac7ded30d7fad473de138a6846abf90a278e56` on macOS `Mac14,7`. Native sizes
 were 672,234 bytes (`none`), 327,066 bytes (`lz4`), and 215,482 bytes
-(`zstd`). Warm-operation p50 values ranged from 0.107--0.167 ms for
-uncompressed IPC, 0.285--0.363 ms for LZ4, and 0.391--0.489 ms for Zstandard.
+(`zstd`). Warm-operation p50 values ranged from 0.126--0.196 ms for
+uncompressed IPC, 0.352--0.586 ms for LZ4, and 0.504--0.825 ms for Zstandard.
 The complete table, result hashes, p95, IQR, RSS, and write timings are in the
 [Arrow IPC codec evidence report](../reports/revalidation-2026-07-17/macos-arm64/arrow-ipc-codecs.md).
 This is one host and one dataset: Zstandard won storage size, while
 uncompressed IPC was fastest for these warm reads.
+The corrected report also records the input and canonical hashes, package
+versions, writer settings, seed, and complete measurement protocol.
 
 The format survey was inspired in part by [this Japanese overview](https://zenn.dev/mrasu/articles/47dfb30436ebf3), but implementation claims are checked against each project's primary repository or documentation.
 

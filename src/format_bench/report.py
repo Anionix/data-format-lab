@@ -35,6 +35,72 @@ def _environment(results: dict) -> list[str]:
     return ["## Environment", "", *_table(["Field", "Value"], rows)]
 
 
+def _input_manifest(run_dir: Path, manifest: dict) -> dict:
+    reference = manifest.get("input", {}).get("manifest")
+    if not isinstance(reference, str):
+        return {}
+    path = (run_dir / reference).resolve()
+    try:
+        path.relative_to(run_dir.resolve())
+    except ValueError:
+        return {}
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
+    input_manifest = _input_manifest(run_dir, manifest)
+    environment = results.get("environment", {})
+    packages = environment.get("packages", {})
+    measurement = results.get("measurement", {})
+    columns = input_manifest.get("columns", [])
+    rows = input_manifest.get("rows")
+    dimensions = f"{rows} / {len(columns)}" if rows is not None else None
+    package_versions = {name: value for name, value in sorted(packages.items()) if value}
+    format_settings = [
+        [
+            entry.get("format"),
+            json.dumps(entry.get("settings", {}), sort_keys=True, separators=(",", ":")),
+        ]
+        for entry in manifest.get("formats", [])
+    ]
+    protocol = None
+    if measurement:
+        protocol = (
+            f"{measurement.get('fresh_processes')} fresh processes; "
+            f"{measurement.get('warmups')} warmups; "
+            f"{measurement.get('iterations')} measurements"
+        )
+    rows = [
+        ["Input SHA-256", input_manifest.get("source_sha256")],
+        ["Canonical hash", input_manifest.get("canonical_hash")],
+        ["Rows / columns", dimensions],
+        [
+            "Expected counts",
+            json.dumps(
+                input_manifest.get("expected_counts", {}),
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        ],
+        ["PyArrow", packages.get("pyarrow")],
+        ["Packages", json.dumps(package_versions, sort_keys=True, separators=(",", ":"))],
+        ["Protocol", protocol],
+        ["Seed", measurement.get("seed", manifest.get("seed"))],
+        ["OS cache purged", measurement.get("os_cache_purged")],
+    ]
+    return [
+        "## Reproducibility",
+        "",
+        *_table(["Field", "Value"], rows),
+        "",
+        "### Writer Settings",
+        "",
+        *_table(["Format", "Settings"], format_settings),
+    ]
+
+
 def _fair(manifest: dict, results: dict) -> list[str]:
     formats = manifest["formats"]
     rows = [
@@ -360,11 +426,13 @@ def render_report(run_dir: Path) -> Path:
     lines = [
         f"# Data Format Lab: {profile} report",
         "",
-        f"Dataset: `{results['dataset_id']}`  ",
-        f"Run: `{results['run_id']}`  ",
+        f"Dataset: `{results['dataset_id']}`<br>",
+        f"Run: `{results['run_id']}`<br>",
         "No result in this report is comparable across lanes or hardware runs.",
         "",
         *_environment(results),
+        "",
+        *_provenance(run_dir, manifest, results),
         "",
         *sections[profile](),
         "",
