@@ -13,6 +13,7 @@
   "comparability": "UNAVAILABLE",
   "state": "UNSUPPORTED",
   "claim_summary": "official CMake configure remains non-reproducible on this host; no wide-table projection was measured",
+  "dependency_manifest": "research/probes/nimble-dependency-closure.json",
   "attempts": [
     {
       "entrypoint": "official CMake build with Velox and OpenZL submodules",
