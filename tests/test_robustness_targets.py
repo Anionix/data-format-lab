@@ -152,7 +152,7 @@ def test_worker_reports_raised_builtin_verification_as_value_mismatch(
     assert result["details"]["error_type"] == "ValueError"
 
 
-def test_worker_reports_non_value_verification_errors_as_value_mismatch(
+def test_worker_reports_non_value_verification_errors_as_harness_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class BrokenVerifier:
@@ -176,5 +176,5 @@ def test_worker_reports_non_value_verification_errors_as_value_mismatch(
 
     result = run_request(Path("request.json"))
 
-    assert result["observed"] is ObservedOutcome.VALUE_MISMATCH
+    assert result["observed"] is ObservedOutcome.HARNESS_FAILED
     assert result["details"]["error_type"] == "TypeError"

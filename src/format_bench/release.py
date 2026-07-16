@@ -65,6 +65,9 @@ def _artifact_references(manifest: dict, results: dict) -> list[tuple[str, bool]
             for record in case.get("artifact_records", []):
                 if isinstance(record, dict) and isinstance(record.get("path"), str):
                     references.append((record["path"], True))
+            for record in case.get("corpus_records", []):
+                if isinstance(record, dict) and isinstance(record.get("path"), str):
+                    references.append((record["path"], True))
     return references
 
 

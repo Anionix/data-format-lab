@@ -29,6 +29,7 @@ def _robustness_run(root: Path) -> Path:
         "artifact.csv",
         "stdout.txt",
         "stderr.txt",
+        "source.csv",
         "request.json",
         "result.json",
     ):
@@ -51,6 +52,11 @@ def _robustness_run(root: Path) -> Path:
                         "artifact_records": [
                             {
                                 "path": "robustness/cases/csv/rows-1/artifact.csv"
+                            }
+                        ],
+                        "corpus_records": [
+                            {
+                                "path": "robustness/cases/csv/rows-1/source.csv"
                             }
                         ],
                     }
@@ -119,6 +125,22 @@ def test_release_package_is_deterministic_and_relative(
         "run-1/results.json",
     ]
     assert all(not Path(name).is_absolute() for name in names)
+
+
+def test_release_rejects_missing_corpus_record(tmp_path: Path) -> None:
+    run = _robustness_run(tmp_path)
+    (run / "robustness/cases/csv/rows-1/source.csv").unlink()
+
+    with pytest.raises(FileNotFoundError, match="source.csv"):
+        package_run(run, tmp_path / "out", "linux-x86_64")
+
+
+def test_release_packages_corpus_record(tmp_path: Path) -> None:
+    run = _robustness_run(tmp_path)
+
+    archive = package_run(run, tmp_path / "out", "linux-x86_64")
+
+    assert "run-1/robustness/cases/csv/rows-1/source.csv" in _archive_names(archive)
 
 
 def test_release_rejects_missing_referenced_artifact(tmp_path: Path) -> None:
@@ -210,6 +232,7 @@ def test_release_streams_all_robustness_evidence(
         "run-1/robustness/cases/csv/rows-1/input.arrow",
         "run-1/robustness/cases/csv/rows-1/request.json",
         "run-1/robustness/cases/csv/rows-1/result.json",
+        "run-1/robustness/cases/csv/rows-1/source.csv",
         "run-1/robustness/cases/csv/rows-1/stderr.txt",
         "run-1/robustness/cases/csv/rows-1/stdout.txt",
     ]

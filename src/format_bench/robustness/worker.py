@@ -70,8 +70,14 @@ def run_request(request_path: Path) -> dict:
                     "observed": ObservedOutcome.UNSUPPORTED,
                     "details": {"error_type": type(error).__name__},
                 }
-            except Exception as error:
+            except ValueError as error:
                 observed = ObservedOutcome.VALUE_MISMATCH
+                details = {
+                    "error_type": type(error).__name__,
+                    "message": str(error)[-500:],
+                }
+            except Exception as error:
+                observed = ObservedOutcome.HARNESS_FAILED
                 details = {"error_type": type(error).__name__, "message": str(error)[-500:]}
         else:
             effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
