@@ -73,6 +73,8 @@ class EvidenceStore:
             raise ValueError("artifact source must not contain symlinks")
         size = sum(item.stat().st_size for item in files)
         target = self._target(relative)
+        if source.is_dir() and target.is_relative_to(source):
+            raise ValueError("artifact destination must not be inside source directory")
         if target.exists():
             raise FileExistsError(target)
         self._reserve(size)

@@ -104,6 +104,26 @@ def test_public_cli_runs_and_reports_bounded_fixture(
     assert (run_dir / "report.md").read_text() == first
 
 
+def test_bounded_resolves_relative_run_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = Path(__file__).parents[1]
+    absolute_run = tmp_path / "relative-run"
+    adapter = CsvAdapter()
+    prepare_run(root, DATASET, absolute_run, fixture=True, selected=(adapter,))
+    verify_run(absolute_run, {"csv": adapter})
+    monkeypatch.chdir(tmp_path)
+
+    result_path = run_bounded(
+        root,
+        Path("relative-run"),
+        generated_count=0,
+        mutations_per_target=0,
+        targets=(core_targets()[0],),
+    )
+
+    assert result_path == absolute_run / "results.json"
+    assert result_path.is_file()
+
+
 def test_mutation_uses_actual_member_size_and_rejects_links(tmp_path: Path) -> None:
     artifact = tmp_path / "artifact.bin"
     artifact.write_bytes(bytes(range(256)))

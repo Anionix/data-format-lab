@@ -70,11 +70,11 @@ def generated_cases(seed: int, count: int) -> tuple[CaseSpec, ...]:
     cases = []
     for index in range(count):
         parameters = {
-            "cardinality": rng.randint(1, 256),
             "null_stride": rng.randint(0, 17),
             "rows": rng.randint(0, 2049),
             "string_seed": rng.getrandbits(32),
         }
+        parameters["cardinality"] = rng.randint(1, max(parameters["rows"], 1))
         encoded = json.dumps(parameters, sort_keys=True, separators=(",", ":")).encode()
         suffix = hashlib.sha256(encoded).hexdigest()[:10]
         cases.append(
@@ -101,7 +101,7 @@ def materialize_case(base: pa.Table, case: CaseSpec) -> pa.Table:
         raise ValueError(f"case {case.case_id} has no valid Arrow input")
     options = case.options
     count = options.get("rows", options.get("cardinality", 17))
-    table = _rows(base, max(count, options.get("cardinality", 0)))
+    table = _rows(base, count)
 
     if case.category in {"dictionary", "generated"}:
         cardinality = options["cardinality"]

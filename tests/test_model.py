@@ -88,6 +88,11 @@ def test_not_applicable_takes_precedence_over_observation() -> None:
     ) is RobustnessVerdict.NOT_APPLICABLE
 
 
+def test_robustness_verdict_normalizes_persisted_strings() -> None:
+    assert robustness_verdict("MUST_ROUNDTRIP", "REJECTED") is RobustnessVerdict.FAIL
+    assert robustness_verdict("MUST_REJECT", "REJECTED") is RobustnessVerdict.PASS
+
+
 def test_dataset_asset_path_stays_under_the_run_root() -> None:
     spec = DatasetSpec(
         schema_version="1",

@@ -37,7 +37,25 @@ def run_request(request_path: Path) -> dict:
     try:
         if expectation is RobustnessExpectation.MUST_ROUNDTRIP:
             effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
-            adapter.read(artifact, effective_manifest)
+            try:
+                adapter.read(artifact, effective_manifest)
+            except ModuleNotFoundError as error:
+                return {
+                    "schema_version": "1",
+                    "case_id": case_id,
+                    "observed": ObservedOutcome.UNSUPPORTED,
+                    "details": {"error_type": type(error).__name__},
+                }
+            except Exception as error:
+                return {
+                    "schema_version": "1",
+                    "case_id": case_id,
+                    "observed": ObservedOutcome.REJECTED,
+                    "details": {
+                        "error_type": type(error).__name__,
+                        "message": str(error)[-500:],
+                    },
+                }
             try:
                 verification = adapter.verify_roundtrip(artifact, effective_manifest)
                 observed = (
@@ -45,7 +63,14 @@ def run_request(request_path: Path) -> dict:
                     if verification["passed"]
                     else ObservedOutcome.VALUE_MISMATCH
                 )
-            except ValueError as error:
+            except ModuleNotFoundError as error:
+                return {
+                    "schema_version": "1",
+                    "case_id": case_id,
+                    "observed": ObservedOutcome.UNSUPPORTED,
+                    "details": {"error_type": type(error).__name__},
+                }
+            except Exception as error:
                 observed = ObservedOutcome.VALUE_MISMATCH
                 details = {"error_type": type(error).__name__, "message": str(error)[-500:]}
         else:

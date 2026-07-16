@@ -121,13 +121,22 @@ def _claims(results: dict) -> list[str]:
     for name, item in sorted(results["results"].items()):
         if name == "negative_research":
             for research_name, record in sorted(item.items()):
+                summary = record.get("claim_summary")
+                if summary is None:
+                    attempts = record.get("attempts", [])
+                    summary = (
+                        attempts[-1].get("result")
+                        if attempts and isinstance(attempts[-1], dict)
+                        else None
+                    )
+                summary = summary or "no claim summary recorded"
                 rows.append(
                     [
                         research_name,
                         "RESEARCH_RECORD",
                         record["comparability"],
                         record["state"],
-                        record["claim_summary"],
+                        summary,
                     ]
                 )
         else:

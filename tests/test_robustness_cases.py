@@ -50,6 +50,15 @@ def test_generated_cases_are_seeded_and_have_stable_semantics() -> None:
     assert first_hashes != [canonical_hash(materialize_case(base, case)) for case in other]
 
 
+def test_generated_cases_preserve_requested_rows() -> None:
+    base = _base()
+    for case in generated_cases(20260703, 32):
+        table = materialize_case(base, case)
+        assert table.num_rows == case.options["rows"]
+        if case.options["rows"]:
+            assert case.options["cardinality"] <= case.options["rows"]
+
+
 def test_malformed_case_has_no_valid_arrow_materialization() -> None:
     case = next(case for case in named_cases() if case.case_id == "malformed-extra-column")
     with pytest.raises(ValueError, match="no valid Arrow input"):
