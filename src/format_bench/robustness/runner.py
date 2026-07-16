@@ -20,6 +20,8 @@ from format_bench.model import (
 from format_bench.robustness.paths import reject_symlink_tree
 
 MAX_WORKER_DETAILS_BYTES = 4096
+DEFAULT_OUTPUT_RETENTION_BYTES = 1024 * 1024
+PIPE_DRAIN_GRACE_SECONDS = 0.25
 
 
 class ProcessEvidence(TypedDict):
@@ -199,6 +201,12 @@ def _process(
     stderr_bytes = 0
     timed_out = False
     cleanup_sent = False
+    drain_deadline: float | None = None
+    retention_budget = (
+        output_budget_bytes
+        if output_budget_bytes is not None
+        else DEFAULT_OUTPUT_RETENTION_BYTES
+    )
 
     def cleanup_group() -> None:
         nonlocal cleanup_sent
@@ -220,9 +228,21 @@ def _process(
             while selector.get_map() or process.poll() is None:
                 if process.poll() is not None:
                     cleanup_group()
+                    if drain_deadline is None:
+                        drain_deadline = time.monotonic() + PIPE_DRAIN_GRACE_SECONDS
                 elif time.monotonic() >= deadline:
                     timed_out = True
                     cleanup_group()
+                    if drain_deadline is None:
+                        drain_deadline = time.monotonic() + PIPE_DRAIN_GRACE_SECONDS
+
+                # A descendant can call setsid() and escape killpg(). Bound the
+                # final pipe drain so an escaped child cannot hang the harness.
+                if drain_deadline is not None and time.monotonic() >= drain_deadline:
+                    timed_out = True
+                    for key in tuple(selector.get_map().values()):
+                        selector.unregister(key.fileobj)
+                    break
 
                 if not selector.get_map():
                     if process.poll() is None:
@@ -244,12 +264,12 @@ def _process(
                     if key.data == "stdout":
                         stdout_bytes += len(chunk)
                         _append_tail(
-                            stdout_tail, stderr_tail, stdout_tail, chunk, output_budget_bytes
+                            stdout_tail, stderr_tail, stdout_tail, chunk, retention_budget
                         )
                     else:
                         stderr_bytes += len(chunk)
                         _append_tail(
-                            stdout_tail, stderr_tail, stderr_tail, chunk, output_budget_bytes
+                            stdout_tail, stderr_tail, stderr_tail, chunk, retention_budget
                         )
         process.wait()
     finally:

@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from format_bench.model import ObservedOutcome, RobustnessVerdict
-from format_bench.robustness.runner import _process, run_case
+from format_bench.robustness.runner import (
+    DEFAULT_OUTPUT_RETENTION_BYTES,
+    _process,
+    run_case,
+)
 
 
 def _request(root: Path, expectation: str = "MUST_NOT_CRASH") -> None:
@@ -95,6 +99,35 @@ def test_process_reaps_descendant_after_leader_exit(tmp_path: Path) -> None:
             pass
 
 
+def test_process_bounds_drain_for_detached_descendant(tmp_path: Path) -> None:
+    pid_path = tmp_path / "detached.pid"
+    descendant = (
+        "from pathlib import Path; import os,time; os.setsid(); "
+        f"Path({str(pid_path)!r}).write_text(str(os.getpid())); "
+        "print('DETACHED-TAIL', flush=True); time.sleep(30)"
+    )
+    leader = (
+        "import subprocess,sys; "
+        f"subprocess.Popen([sys.executable, '-c', {descendant!r}], "
+        "stdout=sys.stdout, stderr=sys.stderr)"
+    )
+    started = time.monotonic()
+    process, stdout, _ = _process(
+        (sys.executable, "-c", leader), tmp_path, 2, output_budget_bytes=256
+    )
+    pid = int(pid_path.read_text())
+    try:
+        assert process["timed_out"] is True
+        assert process["signal"] is None
+        assert time.monotonic() - started < 3
+        assert "DETACHED-TAIL" in stdout
+    finally:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: Path) -> None:
     invalid = _run(tmp_path / "invalid", "print('partial')")
     assert invalid["observed"] is ObservedOutcome.HARNESS_FAILED
@@ -118,6 +151,20 @@ def test_runner_reuses_unused_stream_budget(tmp_path: Path) -> None:
     result = _run(tmp_path, code, output_budget_bytes=512)
     assert result["observed"] is ObservedOutcome.REJECTED
     assert result["process"]["output_exhausted"] is False
+
+
+def test_runner_bounds_retained_output_without_explicit_budget(tmp_path: Path) -> None:
+    code = "import sys; print('O'*({size}), file=sys.stdout); print('E'*({size}), file=sys.stderr)".format(
+        size=DEFAULT_OUTPUT_RETENTION_BYTES
+    )
+    process, stdout, stderr = _process(
+        (sys.executable, "-c", code), tmp_path, 2
+    )
+    assert process["output_budget_bytes"] is None
+    assert process["output_exhausted"] is False
+    assert process["stdout_truncated"] is True
+    assert process["stderr_truncated"] is True
+    assert len(stdout.encode()) + len(stderr.encode()) <= DEFAULT_OUTPUT_RETENTION_BYTES
 
 
 def test_runner_rejects_unsafe_request_paths(tmp_path: Path) -> None:
