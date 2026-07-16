@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .model import Comparability, ExecutionState, transition
+from .model import Comparability, ExecutionState, RobustnessVerdict, transition
 
 
 def _cell(value: object) -> str:
@@ -203,6 +203,53 @@ def _prompt(results: dict) -> list[str]:
     ]
 
 
+def _robustness(results: dict) -> list[str]:
+    evidence = results["results"]["robustness_v1"]
+    config = evidence["config"]
+    config_rows = [
+        ["Seed", config["seed"]],
+        ["Generated cases", config["generated_cases"]],
+        ["Mutations per target", config["mutations_per_target"]],
+        ["Case timeout seconds", config["case_timeout_seconds"]],
+        ["Artifact budget MiB", config["artifact_budget_mib"]],
+    ]
+    summary_rows = [
+        [verdict, evidence["summary"].get(verdict.value, 0)]
+        for verdict in RobustnessVerdict
+    ]
+    case_rows = [
+        [
+            item["target"],
+            item["tier"],
+            item["case_id"],
+            item["expectation"],
+            item["observed"],
+            item["verdict"],
+        ]
+        for item in evidence["cases"]
+    ]
+    return [
+        "## Robustness Evidence",
+        "",
+        "Robustness observations are non-ranking evidence and do not change other lane ordering.",
+        "",
+        "### Configuration",
+        "",
+        *_table(["Setting", "Value"], config_rows),
+        "",
+        "### Verdict Summary",
+        "",
+        *_table(["Verdict", "Cases"], summary_rows),
+        "",
+        "### Cases",
+        "",
+        *_table(
+            ["Target", "Tier", "Case", "Expectation", "Observed", "Verdict"],
+            case_rows,
+        ),
+    ]
+
+
 def _report_observations(manifest: dict, results: dict) -> None:
     for entry in manifest.get("formats", []):
         if entry.get("state") == ExecutionState.BENCHMARKED:
@@ -234,6 +281,7 @@ def render_report(run_dir: Path) -> Path:
         "fair": lambda: _fair(manifest, results),
         "claims": lambda: _claims(results),
         "prompt": lambda: _prompt(results),
+        "robustness": lambda: _robustness(results),
     }
     lines = [
         f"# Data Format Lab: {profile} report",

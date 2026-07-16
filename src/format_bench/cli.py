@@ -2,14 +2,41 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
+from typing import TypeVar
 
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .fair_run import run_fair
 from .profile_run import run_claims, run_prompt
 from .release import package_run
 from .report import render_report
+from .robustness.profile import run_bounded
 from .workflow import prepare_run, verify_run
+
+
+_T = TypeVar("_T")
+
+
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
+
+
+def _positive_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be positive")
+    return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,10 +63,18 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--run-dir", type=Path, required=True)
 
     run = subcommands.add_parser("run")
-    run.add_argument("--profile", choices=["fair", "claims", "prompt"], required=True)
+    run.add_argument(
+        "--profile", choices=["fair", "claims", "prompt", "robustness"], required=True
+    )
     run.add_argument("--dataset", required=True)
     run.add_argument("--run-dir", type=Path)
     run.add_argument("--fixture", action="store_true")
+    run.add_argument("--suite", choices=["bounded"])
+    run.add_argument("--seed", type=int)
+    run.add_argument("--generated-cases", type=_non_negative_int)
+    run.add_argument("--mutations-per-target", type=_non_negative_int)
+    run.add_argument("--case-timeout-seconds", type=_positive_float)
+    run.add_argument("--artifact-budget-mib", type=_positive_int)
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
@@ -49,6 +84,29 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--output", type=Path, default=Path("outputs/release"))
     package.add_argument("--platform", required=True)
     return parser
+
+
+def _validate_run_options(args: argparse.Namespace) -> None:
+    robustness_options = (
+        args.suite,
+        args.seed,
+        args.generated_cases,
+        args.mutations_per_target,
+        args.case_timeout_seconds,
+        args.artifact_budget_mib,
+    )
+    if args.profile != "robustness":
+        if any(value is not None for value in robustness_options):
+            raise ValueError(
+                "robustness options only apply with --profile robustness"
+            )
+        return
+    if args.suite != "bounded":
+        raise ValueError("--profile robustness requires --suite bounded")
+
+
+def _default(value: _T | None, default: _T) -> _T:
+    return default if value is None else value
 
 
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
@@ -83,9 +141,21 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "verify":
         path = verify_run(args.run_dir)
     elif args.command == "run":
+        _validate_run_options(args)
         run_dir = _run_directory(root, args)
-        runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
-        path = runners[args.profile](root, run_dir)
+        if args.profile == "robustness":
+            path = run_bounded(
+                root,
+                run_dir,
+                seed=_default(args.seed, 20260703),
+                generated_count=_default(args.generated_cases, 32),
+                mutations_per_target=_default(args.mutations_per_target, 64),
+                timeout_seconds=_default(args.case_timeout_seconds, 30.0),
+                artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
+            )
+        else:
+            runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
+            path = runners[args.profile](root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
     else:

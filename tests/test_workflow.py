@@ -79,3 +79,27 @@ def test_cli_run_prepares_and_verifies_new_explicit_destination(
     )
 
     assert calls == [("prepare", run_dir), ("verify", run_dir), ("run", run_dir)]
+
+
+def test_cli_validates_robustness_profile_options() -> None:
+    invalid_profiles = (
+        (["--profile", "robustness"], "--suite bounded"),
+        (["--profile", "prompt", "--suite", "bounded"], "only apply"),
+    )
+    for arguments, message in invalid_profiles:
+        with pytest.raises(ValueError, match=message):
+            cli.main(["run", *arguments, "--dataset", DATASET])
+    for option, value in (
+        ("--generated-cases", "-1"),
+        ("--mutations-per-target", "-1"),
+        ("--case-timeout-seconds", "0"),
+        ("--case-timeout-seconds", "nan"),
+        ("--artifact-budget-mib", "0"),
+    ):
+        with pytest.raises(SystemExit):
+            cli.build_parser().parse_args(
+                [
+                    "run", "--profile", "robustness", "--suite", "bounded",
+                    "--dataset", DATASET, option, value,
+                ]
+            )

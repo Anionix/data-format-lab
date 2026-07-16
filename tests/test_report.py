@@ -159,3 +159,62 @@ def test_claim_report_preserves_terminal_observations(tmp_path: Path) -> None:
     assert reported["negative_research"]["partial"]["state"] == "FAILED"
     assert "failed build" in (tmp_path / "report.md").read_text()
     assert "robustness crash" not in (tmp_path / "report.md").read_text()
+
+
+def test_robustness_report_separates_case_contract_and_is_deterministic(
+    tmp_path: Path,
+) -> None:
+    manifest = {"state": "BENCHMARKED", "dataset_id": "fixture"}
+    results = {
+        "state": "BENCHMARKED",
+        "dataset_id": "fixture",
+        "run_id": "robustness-fixture",
+        "profile": "robustness",
+        "environment": {
+            "git_commit": "abc",
+            "flake_lock_sha256": "def",
+            "platform": "test-os",
+            "machine": "test-cpu",
+            "python": "3.12.0",
+        },
+        "results": {
+            "robustness_v1": {
+                "contract_version": "1",
+                "state": "BENCHMARKED",
+                "suite": "bounded",
+                "config": {
+                    "seed": 7,
+                    "generated_cases": 8,
+                    "mutations_per_target": 9,
+                    "case_timeout_seconds": 1.5,
+                    "artifact_budget_mib": 64,
+                },
+                "summary": {
+                    "PASS": 1,
+                    "FAIL": 0,
+                    "NOT_APPLICABLE": 0,
+                    "INCOMPLETE": 0,
+                },
+                "cases": [
+                    {
+                        "target": "csv", "tier": "CORE", "case_id": "rows-1",
+                        "expectation": "MUST_ROUNDTRIP",
+                        "observed": "ROUNDTRIP_EQUAL", "verdict": "PASS",
+                    },
+                ],
+            }
+        },
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    (tmp_path / "results.json").write_text(json.dumps(results))
+
+    first = render_report(tmp_path).read_text()
+
+    assert "non-ranking evidence" in first
+    assert "| Seed | 7 |" in first
+    assert "| Verdict | Cases |" in first
+    assert "| Target | Tier | Case | Expectation | Observed | Verdict |" in first
+    assert "| csv | CORE | rows-1 | MUST_ROUNDTRIP | ROUNDTRIP_EQUAL | PASS |" in first
+    reported = json.loads((tmp_path / "results.json").read_text())
+    assert reported["results"]["robustness_v1"]["state"] == "REPORTED"
+    assert render_report(tmp_path).read_text() == first
