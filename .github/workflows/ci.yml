@@ -49,6 +49,31 @@ jobs:
           tar -xzf "$fallback_archive" --strip-components=1 -C "$fallback_source"
           nix flake check --no-build --all-systems \
             --override-input rust-overlay "path:$fallback_source"
+          nix_bin=$(command -v nix)
+          wrapper_dir=$(mktemp -d)
+          cat > "$wrapper_dir/nix" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          nix_bin="$nix_bin"
+          rust_overlay_source="$fallback_source"
+          case "\${1:-}" in
+            flake)
+              shift
+              subcommand="\${1:?missing flake subcommand}"
+              shift
+              exec "\$nix_bin" flake "\$subcommand" --override-input rust-overlay "path:\$rust_overlay_source" "\$@"
+              ;;
+            develop)
+              shift
+              exec "\$nix_bin" develop --override-input rust-overlay "path:\$rust_overlay_source" "\$@"
+              ;;
+            *)
+              exec "\$nix_bin" "\$@"
+              ;;
+          esac
+          EOF
+          chmod +x "$wrapper_dir/nix"
+          echo "PATH=$wrapper_dir:$PATH" >> "$GITHUB_ENV"
           exit 0
 
       - name: Synchronize frozen Python environment
