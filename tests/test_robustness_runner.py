@@ -57,6 +57,12 @@ def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: 
         "import json; print(json.dumps({'observed': 7, 'details': []}))",
     )
     assert wrong_shape["observed"] is ObservedOutcome.HARNESS_FAILED
+    large_details = _run(
+        tmp_path / "large-details",
+        "import json; print(json.dumps({'observed':'REJECTED','details':{'message':'x'*10000}}))",
+    )
+    assert large_details["details"]["truncated"] is True
+    assert large_details["details"]["original_size_bytes"] > 4096
     valid = _run(tmp_path / "valid", "import json; print(json.dumps({'observed':'REJECTED'}))", "MUST_ROUNDTRIP")
     assert valid["verdict"] is RobustnessVerdict.FAIL
 

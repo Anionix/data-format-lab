@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import signal
 import subprocess
@@ -17,6 +18,8 @@ from format_bench.model import (
     robustness_verdict,
 )
 from format_bench.robustness.paths import reject_symlink_tree
+
+MAX_WORKER_DETAILS_BYTES = 4096
 
 
 class ProcessEvidence(TypedDict):
@@ -102,7 +105,18 @@ def _worker_response(stdout: str) -> WorkerResponse:
     details: object = response.get("details", {})
     return {
         "observed": _string_field(response, "observed"),
-        "details": _json_object(details, "worker response details"),
+        "details": _bounded_details(_json_object(details, "worker response details")),
+    }
+
+
+def _bounded_details(details: dict[str, object]) -> dict[str, object]:
+    encoded = (json.dumps(details, indent=2, sort_keys=True) + "\n").encode()
+    if len(encoded) <= MAX_WORKER_DETAILS_BYTES:
+        return details
+    return {
+        "truncated": True,
+        "original_size_bytes": len(encoded),
+        "sha256": hashlib.sha256(encoded).hexdigest(),
     }
 
 

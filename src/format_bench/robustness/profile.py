@@ -17,16 +17,18 @@ from format_bench.model import (
 )
 from format_bench.profile_run import _finish, _load
 from format_bench.robustness.cases import CaseSpec, generated_cases, materialize_case, named_cases
-from format_bench.robustness.evidence import ArtifactBudgetExceeded, EvidenceStore
+from format_bench.robustness.evidence import ArtifactBudgetExceeded, ArtifactRecord, EvidenceStore
 from format_bench.robustness.mutations import apply_mutation, mutation_recipes
 from format_bench.robustness.paths import reject_symlink_tree
-from format_bench.robustness.runner import run_case
+from format_bench.robustness.runner import MAX_WORKER_DETAILS_BYTES, run_case
 from format_bench.robustness.targets import (
     RobustnessTarget,
     core_targets,
     encode_malformed,
     encode_valid,
 )
+
+_PER_CASE_OUTPUT_BUDGET_BYTES = 1024 * 1024
 
 
 def _json(value: object) -> bytes:
@@ -81,6 +83,50 @@ def _record(record) -> dict:
         "size_bytes": record.size_bytes,
         "sha256": record.sha256,
     }
+
+
+def _case_result_reserve(
+    prefix: Path,
+    target: RobustnessTarget,
+    case_id: str,
+    expectation: RobustnessExpectation,
+    input_record: ArtifactRecord,
+    artifact_records: tuple[ArtifactRecord, ...],
+    mutation: dict[str, object] | None,
+    timeout: float,
+    output_budget_bytes: int,
+) -> int:
+    placeholder = {
+        "case_id": case_id,
+        "target": target.name,
+        "expectation": expectation,
+        "observed": ObservedOutcome.BUDGET_EXHAUSTED,
+        "verdict": RobustnessVerdict.NOT_APPLICABLE,
+        "details": {"message": "x" * MAX_WORKER_DETAILS_BYTES},
+        "process": {
+            "exit_code": -(2**63),
+            "signal": 2**31 - 1,
+            "timed_out": True,
+            "duration_ms": max(timeout * 1000 + 1000, 1_000_000_000_000),
+            # fstat() can report the full spool size even when retained tails are capped.
+            "stdout_bytes": 2**63 - 1,
+            "stderr_bytes": 2**63 - 1,
+            "stdout_truncated": True,
+            "stderr_truncated": True,
+            "output_budget_bytes": output_budget_bytes,
+            "output_exhausted": True,
+        },
+        "stdout": f"robustness/{prefix.as_posix()}/stdout.txt",
+        "stderr": f"robustness/{prefix.as_posix()}/stderr.txt",
+        "schema_version": "1",
+        "contract_version": "1",
+        "tier": target.tier,
+        "input_canonical_hash": "0" * 64,
+        "input_arrow": _record(input_record),
+        "artifact_records": [_record(item) for item in artifact_records],
+        **({"mutation": mutation} if mutation is not None else {}),
+    }
+    return len(_json(placeholder))
 
 
 def _execute(
@@ -158,12 +204,33 @@ def _execute(
             request["mutation"] = mutation
         request_record = store.store_bytes(prefix / "request.json", _json(request))
         output = Path(process_directory) / "process"
+        remaining = store.budget_bytes - store.used_bytes
+        result_reserve = _case_result_reserve(
+            prefix,
+            target,
+            case_id,
+            expectation,
+            input_record,
+            artifact_records,
+            mutation,
+            timeout,
+            _PER_CASE_OUTPUT_BUDGET_BYTES,
+        )
+        if remaining < result_reserve:
+            raise ArtifactBudgetExceeded(
+                "artifact budget exhausted before worker launch: "
+                f"required reserve {result_reserve}, remaining {remaining}"
+            )
+        output_budget_bytes = min(
+            _PER_CASE_OUTPUT_BUDGET_BYTES,
+            remaining - result_reserve,
+        )
         result = run_case(
             run_dir,
             f"robustness/{request_record.relative_path}",
             output.relative_to(run_dir),
             timeout,
-            output_budget_bytes=max(0, store.budget_bytes - store.used_bytes),
+            output_budget_bytes=output_budget_bytes,
         )
         stdout = store.store_bytes(prefix / "stdout.txt", (run_dir / result["stdout"]).read_bytes())
         stderr = store.store_bytes(prefix / "stderr.txt", (run_dir / result["stderr"]).read_bytes())
