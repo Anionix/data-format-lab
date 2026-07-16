@@ -217,10 +217,20 @@ def _robustness(results: dict) -> list[str]:
         [verdict, evidence["summary"].get(verdict.value, 0)]
         for verdict in RobustnessVerdict
     ]
+    def case_engine(item: dict) -> object:
+        engine = item.get("engine")
+        if isinstance(engine, str):
+            return engine
+        details = item.get("details")
+        if isinstance(details, dict) and isinstance(details.get("engine"), str):
+            return details["engine"]
+        return "common"
+
     case_rows = [
         [
             item["target"],
             item["tier"],
+            case_engine(item),
             item["case_id"],
             item["expectation"],
             item["observed"],
@@ -244,7 +254,7 @@ def _robustness(results: dict) -> list[str]:
         "### Cases",
         "",
         *_table(
-            ["Target", "Tier", "Case", "Expectation", "Observed", "Verdict"],
+            ["Target", "Tier", "Engine", "Case", "Expectation", "Observed", "Verdict"],
             case_rows,
         ),
     ]

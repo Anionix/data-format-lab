@@ -55,7 +55,12 @@ uv run --frozen format-bench run --profile fair --dataset github-stars-2026-07-0
 uv run --frozen format-bench report --run-dir runs/fair-local
 ```
 
-The native robustness suite reads pinned Arrow fuzz binaries from `native/arrow/build` and records missing binaries as `UNSUPPORTED` evidence. Select targets with repeated `--target` options and set the run budget with `--duration-seconds` and `--artifact-budget-mib`.
+The native robustness suite records pinned Arrow, Vortex, and FastLanes targets. Arrow requires a checkout at the recorded source commit plus binaries in `native/arrow/build`; Vortex and FastLanes require a checkout whose `HEAD` matches the recorded source commit. FastLanes is recorded as project-seeded rather than coverage-guided. Lance, object JSONL, and TsFile have no confirmed official native target and are retained as `UNSUPPORTED` evidence. Missing binaries or mismatched source checkouts never become a silent pass. Select targets with repeated `--target` options and set the run budget with `--duration-seconds` and `--artifact-budget-mib`.
+
+```bash
+uv run --frozen format-bench run --profile robustness --suite native --dataset github-stars-2026-07-03 \
+  --target vortex-file-io --target vortex-compress-roundtrip --duration-seconds 900
+```
 
 Run `claims` and `prompt` in separate run directories. Omitting `--run-dir` makes `run` prepare and verify a new timestamped directory automatically.
 
