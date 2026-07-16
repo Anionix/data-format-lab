@@ -31,9 +31,10 @@
         "clang": "21.1.8",
         "cmake": "4.1.2",
         "ninja": "1.13.2",
-        "protobuf_library": "35.1 from /nix/store/3c2m4p8mc0pzc3ksca19asazsk6b8iqp-protobuf-35.1",
-        "protobuf_compiler": "33.4 from /opt/homebrew/bin/protoc",
-        "fmt": "12.1.0 from /opt/homebrew/Cellar/fmt/12.1.0",
+        "protobuf_library": "35.1 from the Nix flake environment",
+        "protobuf_compiler": "33.4 from the Homebrew environment",
+        "fmt": "12.1.0 from the Homebrew environment",
+        "dependency_acquisition": "mixed Nix and Homebrew environments; no absolute paths retained",
         "dependency_warning": "CMake reported that protoc 33.4 did not match the protobuf library 7.35.1"
       },
       "result": "protobuf and fmt targets resolved, but the bundled xsimd dependency stopped configuration because its CMake minimum version is older than CMake 4.1.2; no build or projection test was attempted"
