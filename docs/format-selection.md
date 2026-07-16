@@ -15,8 +15,7 @@ different inputs and success rules.
 | LLM prompt payload | Compact TSV | It used the fewest measured tokens for the shared seven-field prompt contract. Include the taxonomy dictionary and schema, and use a self-describing representation when consumers cannot share that contract. |
 | Human-readable structured exchange | Object JSONL | Field names travel with each record, making inspection and ad hoc tooling easier. It costs more bytes and tokens than array JSONL or Compact TSV. |
 | Simple line-oriented interchange | CSV | It is widely supported and easy to inspect, but schema, NULL, quoting, and type rules must be supplied separately. It is not the typed storage baseline. |
-| Time-series workloads | TsFile | The adapted million-row time-series workload supported the time-range claim. It was not a fair Stars comparison and had slower writes, so do not select it for general tabular data from this study. |
-| Experimental numeric pipeline | FastLanes | The corrected pipe-delimited numeric run round-tripped. String partial-vector cases and malformed-input crash evidence remain, and the pinned Python binding currently has a reproducible macOS build blocker. |
+| Measured device/tag time-range query | TsFile | The adapted synthetic workload used 100 devices with 10,000 points each and measured a 1,000-row time range. It was not a fair Stars comparison and had slower writes; other time-series access patterns were not evaluated. |
 
 ## Formats Without A Selection
 
@@ -24,6 +23,12 @@ Nimble and AnyBlox do not have a reproducible reader/writer path in the pinned
 attempts. They remain research leads, not production recommendations. Their
 exact commits, failures, and retry conditions are recorded in the
 [negative-evidence records](../research/formats/).
+
+FastLanes also has no general selection yet. Its corrected pipe-delimited
+numeric case round-tripped, but partial-vector string cases failed, malformed
+input terminated the process, and the pinned Python binding hit a reproducible
+macOS build blocker. Keep it as experimental evidence until those retry
+conditions are resolved.
 
 DuckDB is a query engine and can be useful with several of these formats. It is
 not a competing file-format row in this guide.
