@@ -69,6 +69,16 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
         "state": "BENCHMARKED",
         "dataset_id": "fixture",
         "rankable": True,
+        "seed": 20260703,
+        "input": {"manifest": "input/manifest.json"},
+        "environment": {
+            "git_commit": "encoding-commit",
+            "flake_lock_sha256": "encoding-flake",
+            "platform": "encoding-os",
+            "machine": "encoding-cpu",
+            "python": "3.12.0",
+            "packages": {"pyarrow": "22.0.0"},
+        },
         "formats": [
             {
                 "format": "csv",
@@ -76,6 +86,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
                 "state": "BENCHMARKED",
                 "native_bytes": 10,
                 "transport_zstd_bytes": 8,
+                "settings": {"delimiter": ","},
             }
         ],
     }
@@ -90,6 +101,14 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
             "platform": "test-os",
             "machine": "test-cpu",
             "python": "3.12.0",
+            "packages": {"pyarrow": "23.0.1"},
+        },
+        "measurement": {
+            "fresh_processes": 10,
+            "warmups": 5,
+            "iterations": 30,
+            "seed": 20260703,
+            "os_cache_purged": False,
         },
         "results": {
             "csv/read_all": {
@@ -102,12 +121,34 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
             }
         },
     }
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "manifest.json").write_text(
+        json.dumps(
+            {
+                "source_sha256": "input-sha",
+                "canonical_hash": "canonical-sha",
+                "rows": 4,
+                "columns": [{"name": "value"}],
+                "expected_counts": {"rows": 4},
+            }
+        )
+    )
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     (tmp_path / "results.json").write_text(json.dumps(results))
 
     report = render_report(tmp_path).read_text()
 
     assert "| csv | read_all | 1 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
+    assert "| Input SHA-256 | input-sha |" in report
+    assert "| Canonical hash | canonical-sha |" in report
+    assert "| Rows / columns | 4 / 1 |" in report
+    assert "| PyArrow | 23.0.1 |" in report
+    assert "| Git commit | encoding-commit |" in report
+    assert "| Git commit | abc |" in report
+    assert "| Packages | {\"pyarrow\":\"22.0.0\"} |" in report
+    assert "| Packages | {\"pyarrow\":\"23.0.1\"} |" in report
+    assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements |" in report
+    assert "| csv | {\"delimiter\":\",\"} |" in report
     reported = json.loads((tmp_path / "manifest.json").read_text())
     assert reported["formats"][0]["state"] == "REPORTED"
     assert render_report(tmp_path).read_text() == report
