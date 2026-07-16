@@ -39,6 +39,7 @@ Formalize the existing canonical verification as the conformance gate and add a 
 - Add deterministic Arrow-table generation and empty, truncate, bit-flip, zero-range, append, and region mutation recipes.
 - Default full bounded runs to seed 20260703, 32 generated cases, 64 mutations per target, 30 seconds per case, and a 1 GiB artifact budget.
 - Preserve all input, output, recipe, process, digest, and case-result artifacts until the budget is exhausted.
+- Record `cleanup_incomplete` when a detached descendant outlives the process-group drain grace; classify that case as `TIMED_OUT` rather than silently claiming cleanup success.
 - Stream deterministic release archives rather than buffering an entire tar file in memory.
 - Pin native sources to Apache Arrow `7932e197eaa00577ff3e83ddf956022df3ef174c`, Vortex `5abaf9823dee973dde7295a6a36234935f08d060`, and FastLanes `f0edc1020a538f1f8098640fce8347c9ac247a0d`.
 - Run official Arrow CSV and Parquet fuzz executables, Vortex `file_io` and `compress_roundtrip`, and FastLanes `quick_fuzz_test`. Record the FastLanes target as project-seeded rather than coverage-guided.
