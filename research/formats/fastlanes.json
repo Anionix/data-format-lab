@@ -38,8 +38,10 @@
         "host_python": "3.12.3",
         "python": "3.12.13",
         "clang": "21.1.8",
-        "cmake": "4.1.2",
-        "ninja": "1.13.2",
+        "outer_nix_cmake": "4.1.2",
+        "outer_nix_ninja": "1.13.2",
+        "build_venv_cmake": "4.4.0",
+        "build_venv_ninja": "1.13.0",
         "scikit_build_core": "0.11.6",
         "pybind11": "2.12.1",
         "setuptools_scm": "8.3.1",
@@ -136,7 +138,10 @@
         "archive_path": "outputs/release/data-format-lab-fastlanes-linux-x86_64-29528725613.tar.zst",
         "archive_sha256": "324900b5c84492c70392c43f33c3324d02caece10171e386587f915fb7752ea2",
         "input_data_sha256": "f89350885f783fdb6a24e771fa21d8a72a1a98761abf31ac77bc89e15ab47968",
-        "input_schema_sha256": "5f130b49cff7ccb564e804c50e8eb14399d9974b88967448955d1673bcd799b8"
+        "input_schema_sha256": "5f130b49cff7ccb564e804c50e8eb14399d9974b88967448955d1673bcd799b8",
+        "release_tag": "v0.1.0",
+        "release_asset_url": "https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fastlanes-linux-x86_64-29528725613.tar.zst",
+        "release_checksum_url": "https://github.com/Anionix/data-format-lab/releases/download/v0.1.0/data-format-lab-fastlanes-linux-x86_64-29528725613.tar.zst.sha256"
       }
     }
   ],
