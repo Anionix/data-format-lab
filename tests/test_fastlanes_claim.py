@@ -1,8 +1,10 @@
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from format_bench.claims.fastlanes import _fatal_cases, _run_case
+from format_bench.claims import fastlanes_worker
 from format_bench.claims.fastlanes_worker import MIXED_COLUMNS, _input
 from format_bench.model import ObservedOutcome
 
@@ -56,7 +58,7 @@ def test_fastlanes_worker_failure_is_classified_as_target_failure(
         subprocess,
         "run",
         lambda *args, **kwargs: subprocess.CompletedProcess(
-            args, 0, '{"status":"FAILED"}\n', ""
+            args, 0, '{"failure_class":"TARGET","status":"FAILED"}\n', ""
         ),
     )
 
@@ -64,6 +66,22 @@ def test_fastlanes_worker_failure_is_classified_as_target_failure(
 
     assert result["status"] == "FAILED"
     assert result["outcome"] is ObservedOutcome.TARGET_FAILED
+
+
+def test_fastlanes_worker_harness_failure_is_not_target_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, '{"failure_class":"HARNESS","status":"FAILED"}\n', ""
+        ),
+    )
+
+    result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
+
+    assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
 
 
 def test_fastlanes_invalid_worker_output_remains_a_harness_failure(
@@ -78,6 +96,52 @@ def test_fastlanes_invalid_worker_output_remains_a_harness_failure(
     result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
 
     assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
+
+
+def test_fastlanes_worker_protocol_marks_target_failure(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    def raise_target(*args, **kwargs):
+        raise fastlanes_worker.TargetFailure("target error")
+
+    monkeypatch.setattr(
+        fastlanes_worker,
+        "run",
+        raise_target,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["worker", "--case", "mixed", "--rows", "1", "--output", str(tmp_path)],
+    )
+
+    fastlanes_worker.main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failure_class"] == "TARGET"
+
+
+def test_fastlanes_worker_protocol_marks_harness_failure(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    def raise_harness(*args, **kwargs):
+        raise OSError("harness error")
+
+    monkeypatch.setattr(
+        fastlanes_worker,
+        "run",
+        raise_harness,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["worker", "--case", "mixed", "--rows", "1", "--output", str(tmp_path)],
+    )
+
+    fastlanes_worker.main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failure_class"] == "HARNESS"
 
 
 def test_fastlanes_numeric_failure_is_fatal() -> None:

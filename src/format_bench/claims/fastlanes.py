@@ -80,7 +80,10 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
             if not isinstance(payload, dict):
                 raise TypeError("worker output must be a JSON object")
             result.update(payload)
-            if result.get("status") == "FAILED":
+            if (
+                result.get("status") == "FAILED"
+                and result.get("failure_class") == "TARGET"
+            ):
                 result["outcome"] = ObservedOutcome.TARGET_FAILED
             elif "outcome" not in result:
                 result["outcome"] = ObservedOutcome.HARNESS_FAILED

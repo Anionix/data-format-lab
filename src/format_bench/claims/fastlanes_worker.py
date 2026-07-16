@@ -22,6 +22,10 @@ MIXED_COLUMNS = (
 )
 
 
+class TargetFailure(RuntimeError):
+    """The official FastLanes call or its decoded output violated the target contract."""
+
+
 def _input(directory: Path, case: str, rows: int) -> tuple[Path, Path, bytes]:
     directory.mkdir(parents=True, exist_ok=True)
     if case == "numeric":
@@ -77,15 +81,19 @@ def run(case: str, rows: int, output: Path) -> dict:
     _, csv_path, source = _input(output / "input", case, rows)
     fls_path = output / "data.fls"
     decoded_path = output / "decoded.csv"
-    pyfastlanes.connect().read_csv(str(csv_path.parent)).to_fls(str(fls_path))
-    pyfastlanes.connect().read_fls(str(fls_path)).to_csv(str(decoded_path))
+    try:
+        pyfastlanes.connect().read_csv(str(csv_path.parent)).to_fls(str(fls_path))
+        pyfastlanes.connect().read_fls(str(fls_path)).to_csv(str(decoded_path))
+    except Exception as error:
+        raise TargetFailure(str(error)) from error
     decoded = decoded_path.read_bytes()
+    artifact_bytes = fls_path.stat().st_size
     if decoded != source:
-        raise ValueError(f"decoded bytes differ: {len(source)} != {len(decoded)}")
+        raise TargetFailure(f"decoded bytes differ: {len(source)} != {len(decoded)}")
     return {
         "outcome": "ROUNDTRIP_EQUAL",
         "source_bytes": len(source),
-        "artifact_bytes": fls_path.stat().st_size,
+        "artifact_bytes": artifact_bytes,
         "decoded_bytes": len(decoded),
     }
 
@@ -98,8 +106,20 @@ def main() -> None:
     args = parser.parse_args()
     try:
         result = run(args.case, args.rows, args.output)
+    except TargetFailure as error:
+        result = {
+            "status": "FAILED",
+            "failure_class": "TARGET",
+            "error_type": type(error).__name__,
+            "error": str(error)[-500:],
+        }
     except Exception as error:
-        result = {"status": "FAILED", "error_type": type(error).__name__, "error": str(error)[-500:]}
+        result = {
+            "status": "FAILED",
+            "failure_class": "HARNESS",
+            "error_type": type(error).__name__,
+            "error": str(error)[-500:],
+        }
     print(json.dumps(result, sort_keys=True))
 
 
