@@ -14,6 +14,7 @@ interoperability matrix.
 | Hardware model | `Mac14,7` |
 | PyArrow | 23.0.1 |
 | Protocol | 10 fresh processes, 5 warmups, 30 measurements; OS cache retained |
+| Seed | `20260703` |
 | Input SHA-256 | `39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e` |
 
 ## Conformance
