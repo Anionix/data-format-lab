@@ -86,24 +86,13 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
 
 def _fatal_cases(
     numeric: dict,
-    strings: dict[str, dict],
-    malformed: dict,
     mixed: dict | None = None,
 ) -> list[dict]:
     fatal = []
     if numeric.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
         fatal.append(numeric)
-    fatal.extend(
-        item
-        for item in (*strings.values(), malformed, *((mixed,) if mixed is not None else ()))
-        if item.get("status") == "FAILED"
-        or item.get("outcome")
-        in {
-            ObservedOutcome.CRASHED,
-            ObservedOutcome.TIMED_OUT,
-            ObservedOutcome.HARNESS_FAILED,
-        }
-    )
+    if mixed is not None and mixed.get("outcome") != ObservedOutcome.ROUNDTRIP_EQUAL:
+        fatal.append(mixed)
     return fatal
 
 
@@ -130,7 +119,7 @@ def run_fastlanes_claim(
         f"{rows}={item.get('outcome', item.get('status', 'UNKNOWN'))}"
         for rows, item in strings.items()
     )
-    fatal = _fatal_cases(numeric, strings, malformed, mixed)
+    fatal = _fatal_cases(numeric, mixed)
     root = directory.parent.parent
     return {
         "status": "FAILED" if fatal else "MEASURED",

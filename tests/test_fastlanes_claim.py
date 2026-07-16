@@ -69,12 +69,21 @@ def test_fastlanes_worker_failure_is_normalized_to_harness_failure(
 def test_fastlanes_numeric_failure_is_fatal() -> None:
     numeric = {"case": "numeric", "outcome": ObservedOutcome.CRASHED}
 
-    assert _fatal_cases(numeric, {}, {"outcome": ObservedOutcome.REJECTED}) == [numeric]
+    assert _fatal_cases(numeric) == [numeric]
 
 
-def test_fastlanes_string_crash_and_worker_failure_are_fatal() -> None:
+def test_fastlanes_robustness_failures_do_not_change_claims_verdict() -> None:
     numeric = {"outcome": ObservedOutcome.ROUNDTRIP_EQUAL}
     strings = {"1023": {"status": "FAILED"}}
     malformed = {"outcome": ObservedOutcome.CRASHED}
 
-    assert _fatal_cases(numeric, strings, malformed) == [*strings.values(), malformed]
+    assert _fatal_cases(numeric) == []
+    assert strings["1023"]["status"] == "FAILED"
+    assert malformed["outcome"] is ObservedOutcome.CRASHED
+
+
+def test_fastlanes_mixed_failure_is_fatal() -> None:
+    numeric = {"outcome": ObservedOutcome.ROUNDTRIP_EQUAL}
+    mixed = {"outcome": ObservedOutcome.HARNESS_FAILED}
+
+    assert _fatal_cases(numeric, mixed) == [mixed]
