@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -210,6 +211,18 @@ def _corpus_source(run_dir: Path, run: dict, target: NativeTarget) -> Path:
     return _safe_run_file(run_root, run["input"]["source"], "native corpus")
 
 
+def _copy_corpus_seed(
+    run_dir: Path, run: dict, target: NativeTarget, destination: Path
+) -> tuple[Path, Path]:
+    # Resolve and isolate the seed before _process changes the child's cwd.
+    # libFuzzer writes new units into its corpus directory, so never hand it a
+    # shared run directory managed by the evidence store.
+    source = _corpus_source(run_dir, run, target)
+    destination.mkdir()
+    shutil.copy2(source, destination / source.name)
+    return source, destination
+
+
 def _safe_run_file(run_root: Path, value: object, label: str) -> Path:
     if not isinstance(value, str):
         raise ValueError(f"{label} path must be a string")
@@ -302,19 +315,25 @@ def _case(
                 "source_commit": target.source_commit,
             },
         }
-    try:
-        source = _corpus_source(run_dir, run, target) if target.engine == "coverage-guided" and target.binary_name else None
-    except ValueError as error:
-        return {
-            **base,
-            "observed": ObservedOutcome.HARNESS_FAILED,
-            "verdict": RobustnessVerdict.INCOMPLETE,
-            "details": {"reason": str(error)},
-        }
     prefix = Path("native") / target.name
     with tempfile.TemporaryDirectory(dir=run_root) as temporary:
         artifacts = Path(temporary) / "artifacts"
         artifacts.mkdir()
+        corpus_source: Path | None = None
+        corpus: Path | None = None
+        try:
+            corpus_source, corpus = (
+                _copy_corpus_seed(run_dir, run, target, Path(temporary) / "corpus")
+                if target.engine == "coverage-guided" and target.binary_name
+                else (None, None)
+            )
+        except (OSError, ValueError) as error:
+            return {
+                **base,
+                "observed": ObservedOutcome.HARNESS_FAILED,
+                "verdict": RobustnessVerdict.INCOMPLETE,
+                "details": {"reason": str(error)},
+            }
         limits = [
             f"-max_total_time={_fuzz_seconds(duration_seconds)}",
             f"-artifact_prefix={artifacts.as_posix()}/",
@@ -322,11 +341,11 @@ def _case(
         if target.engine == "coverage-guided" and target.binary_name is None:
             command = ["cargo", "fuzz", "run", target.official_target, "--", *limits]
         elif target.engine == "coverage-guided":
-            assert source is not None
+            assert corpus is not None
             command = [
                 str(binary), "-print_final_stats=1",
                 f"-timeout={_fuzz_seconds(duration_seconds)}",
-                *limits, source.as_posix(),
+                *limits,
             ]
         else:
             command = [
@@ -337,6 +356,8 @@ def _case(
             ]
         if target.engine == "coverage-guided" and fixture:
             command.append("-runs=1")
+        if corpus is not None:
+            command.append(corpus.as_posix())
         process, stdout, stderr = _process(
             command, work_dir, duration_seconds + 5, output_budget_bytes=_NATIVE_OUTPUT_BUDGET_BYTES
         )
@@ -357,8 +378,9 @@ def _case(
         }
         if binary is not None:
             details["binary_sha256"] = _sha256(binary)
-        if source is not None:
-            details["corpus"] = source.relative_to(run_root).as_posix()
+        if corpus_source is not None:
+            details["corpus"] = corpus_source.relative_to(run_root).parent.as_posix()
+            details["corpus_isolated"] = True
         result = {
             **base,
             "observed": observed,

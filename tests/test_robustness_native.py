@@ -60,6 +60,7 @@ def test_native_suite_records_arrow_target_and_process_evidence(
     run_dir = Path(os.path.relpath(tmp_path / "run", root))
     build_dir = tmp_path / "build"
     _verified_fixture(root, run_dir)
+    (run_dir / "input" / "unrelated.bin").write_bytes(b"must not reach fuzzer")
     _fake_target(build_dir, "arrow-csv-fuzz", "print('native smoke')")
 
     result_path = run_native(
@@ -85,6 +86,46 @@ def test_native_suite_records_arrow_target_and_process_evidence(
     assert case["process"]["exit_code"] == 0
     assert len(case["details"]["binary_sha256"]) == 64
     assert not Path(case["stdout"]).is_absolute()
+
+
+def test_native_suite_passes_absolute_directory_corpus_for_relative_run_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = Path(__file__).parents[1]
+    monkeypatch.chdir(root)
+    run_dir = Path(os.path.relpath(tmp_path / "run", root))
+    build_dir = tmp_path / "build"
+    _verified_fixture(root, run_dir)
+    (run_dir / "input" / "unrelated.bin").write_bytes(b"must not reach fuzzer")
+    _fake_target(build_dir, "arrow-csv-fuzz", "print('native smoke')")
+    commands: list[list[str]] = []
+    corpus_contents: list[str] = []
+
+    def fake_process(command, cwd, timeout, output_budget_bytes):
+        commands.append(list(command))
+        corpus = Path(command[-1])
+        assert corpus.is_dir()
+        corpus_contents.extend(sorted(item.name for item in corpus.iterdir()))
+        return {"timed_out": False, "signal": None, "exit_code": 0}, "", ""
+
+    monkeypatch.setattr(native, "_process", fake_process)
+    result_path = run_native(
+        root,
+        run_dir,
+        duration_seconds=1,
+        artifact_budget_mib=4,
+        targets=(replace(ARROW_NATIVE_TARGETS[0], source_commit=None),),
+        build_dir=build_dir,
+    )
+
+    case = json.loads(result_path.read_text())["results"]["robustness_v1"]["cases"][0]
+    corpus = Path(commands[0][-1])
+    assert corpus.is_absolute()
+    assert corpus_contents == ["source.csv"]
+    assert case["details"]["corpus"] == "input"
+    assert case["details"]["corpus_isolated"] is True
+    assert case["observed"] == ObservedOutcome.ACCEPTED.value
+    assert case["verdict"] == RobustnessVerdict.PASS.value
 
 
 def test_native_suite_keeps_missing_target_as_unsupported(tmp_path: Path) -> None:
