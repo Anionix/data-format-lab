@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -201,7 +202,7 @@ def _refresh_fastlanes(root: Path, target: NativeTarget) -> str | None:
     return None
 
 
-def _corpus_source(run_dir: Path, run: dict, target: NativeTarget) -> Path:
+def _corpus_seed(run_dir: Path, run: dict, target: NativeTarget) -> Path:
     run_root = run_dir.resolve()
     if target.name != "arrow-csv-fuzz":
         for entry in run["formats"]:
@@ -303,7 +304,7 @@ def _case(
             },
         }
     try:
-        source = _corpus_source(run_dir, run, target) if target.engine == "coverage-guided" and target.binary_name else None
+        source = _corpus_seed(run_dir, run, target) if target.engine == "coverage-guided" and target.binary_name else None
     except ValueError as error:
         return {
             **base,
@@ -315,6 +316,11 @@ def _case(
     with tempfile.TemporaryDirectory(dir=run_root) as temporary:
         artifacts = Path(temporary) / "artifacts"
         artifacts.mkdir()
+        corpus_dir: Path | None = None
+        if source is not None:
+            corpus_dir = Path(temporary) / "corpus"
+            corpus_dir.mkdir()
+            shutil.copy2(source, corpus_dir / source.name)
         limits = [
             f"-max_total_time={_fuzz_seconds(duration_seconds)}",
             f"-artifact_prefix={artifacts.as_posix()}/",
@@ -323,10 +329,11 @@ def _case(
             command = ["cargo", "fuzz", "run", target.official_target, "--", *limits]
         elif target.engine == "coverage-guided":
             assert source is not None
+            assert corpus_dir is not None
             command = [
                 str(binary), "-print_final_stats=1",
                 f"-timeout={_fuzz_seconds(duration_seconds)}",
-                *limits, source.as_posix(),
+                *limits, corpus_dir.as_posix(),
             ]
         else:
             command = [
@@ -358,7 +365,8 @@ def _case(
         if binary is not None:
             details["binary_sha256"] = _sha256(binary)
         if source is not None:
-            details["corpus"] = source.relative_to(run_root).as_posix()
+            details["corpus_seed"] = source.relative_to(run_root).as_posix()
+            details["corpus"] = f"robustness/{(prefix / 'corpus').as_posix()}"
         result = {
             **base,
             "observed": observed,
@@ -368,6 +376,11 @@ def _case(
         }
         try:
             records = store.import_path(artifacts, prefix / "artifacts")
+            corpus_records = (
+                store.import_path(corpus_dir, prefix / "corpus")
+                if corpus_dir is not None
+                else ()
+            )
             stdout_record = store.store_bytes(prefix / "stdout.txt", stdout.encode())
             stderr_record = store.store_bytes(prefix / "stderr.txt", stderr.encode())
             result.update(
@@ -376,6 +389,14 @@ def _case(
                 artifact_records=[
                     {"path": f"robustness/{record.relative_path}", "size_bytes": record.size_bytes, "sha256": record.sha256}
                     for record in records
+                ],
+                corpus_records=[
+                    {
+                        "path": f"robustness/{record.relative_path}",
+                        "size_bytes": record.size_bytes,
+                        "sha256": record.sha256,
+                    }
+                    for record in corpus_records
                 ],
             )
             store.store_bytes(prefix / "result.json", _json(result))

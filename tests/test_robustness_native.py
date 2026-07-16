@@ -87,6 +87,44 @@ def test_native_suite_records_arrow_target_and_process_evidence(
     assert not Path(case["stdout"]).is_absolute()
 
 
+def test_native_suite_passes_a_corpus_directory_to_arrow_fuzzer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "non-fixture-run"
+    build_dir = tmp_path / "build"
+    _verified_fixture(root, run_dir)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update(fixture=False, rankable=True)
+    manifest_path.write_text(json.dumps(manifest))
+    _fake_target(build_dir, "parquet-arrow-fuzz", "print('native smoke')")
+    commands: list[list[str]] = []
+
+    def fake_process(command, cwd, timeout, output_budget_bytes):
+        commands.append(list(command))
+        corpus = Path(command[-1])
+        assert corpus.is_dir()
+        assert [item.name for item in corpus.iterdir()] == ["source.csv"]
+        return {"timed_out": False, "signal": None, "exit_code": 0}, "", ""
+
+    monkeypatch.setattr(native, "_process", fake_process)
+    target = replace(ARROW_NATIVE_TARGETS[1], source_commit=None)
+    result_path = run_native(
+        root,
+        run_dir,
+        duration_seconds=1,
+        artifact_budget_mib=4,
+        targets=(target,),
+        build_dir=build_dir,
+    )
+
+    case = json.loads(result_path.read_text())["results"]["robustness_v1"]["cases"][0]
+    assert case["details"]["corpus_seed"].endswith("source.csv")
+    assert case["details"]["corpus"] == "robustness/native/parquet-arrow-fuzz/corpus"
+    assert case["corpus_records"][0]["path"].endswith("/source.csv")
+
+
 def test_native_suite_keeps_missing_target_as_unsupported(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"
