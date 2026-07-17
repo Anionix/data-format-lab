@@ -12,6 +12,8 @@ from format_bench.model import (
     RobustnessExpectation,
     RobustnessVerdict,
     TargetTier,
+    WorkloadKind,
+    WorkloadSpec,
     robustness_verdict,
     transition,
 )
@@ -111,3 +113,10 @@ def test_dataset_asset_path_stays_under_the_run_root() -> None:
     unsafe = DatasetSpec(**{**spec.__dict__, "asset_name": "../source.csv"})
     with pytest.raises(ValueError, match="safe relative path"):
         unsafe.asset_path(Path("datasets"))
+
+
+def test_workload_spec_rejects_incomplete_predicates() -> None:
+    with pytest.raises(ValueError, match="supported predicate"):
+        WorkloadSpec.from_mapping(
+            "filter", {"kind": WorkloadKind.FILTER, "column": "value"}
+        )

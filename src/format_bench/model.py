@@ -12,6 +12,8 @@ class Lane(StrEnum):
     CLAIMS = "claims"
     PROMPT = "prompt"
     ROBUSTNESS = "robustness"
+    EQUIVALENCE = "equivalence"
+    ENGINE_CONTAINER = "engine_container"
 
 
 class Comparability(StrEnum):
@@ -133,6 +135,64 @@ class ColumnSpec:
     name: str
     arrow_type: str
     nullable: bool = True
+
+
+class WorkloadKind(StrEnum):
+    READ_ALL = "read_all"
+    PROJECTION = "projection"
+    FILTER = "filter"
+    HEAD = "head"
+
+
+@dataclass(frozen=True)
+class WorkloadSpec:
+    """Dataset-declared operation; generic runners never know Stars columns."""
+
+    operation: str
+    kind: WorkloadKind
+    columns: tuple[str, ...] = ()
+    column: str | None = None
+    operator: str | None = None
+    value: object | None = None
+    limit: int | None = None
+    expected_rows: int | None = None
+
+    @classmethod
+    def from_mapping(cls, operation: str, payload: Mapping[str, object]) -> "WorkloadSpec":
+        try:
+            kind = WorkloadKind(str(payload["kind"]))
+        except (KeyError, ValueError) as error:
+            raise ValueError(f"invalid workload kind for {operation}") from error
+        columns = tuple(str(item) for item in payload.get("columns", ()))
+        column = payload.get("column")
+        operator = payload.get("operator")
+        expected = payload.get("expected_rows")
+        limit = payload.get("limit")
+        spec = cls(
+            operation=operation,
+            kind=kind,
+            columns=columns,
+            column=str(column) if column is not None else None,
+            operator=str(operator) if operator is not None else None,
+            value=payload.get("value"),
+            limit=int(limit) if limit is not None else None,
+            expected_rows=int(expected) if expected is not None else None,
+        )
+        spec.validate()
+        return spec
+
+    def validate(self) -> None:
+        if not self.operation:
+            raise ValueError("workload operation must not be empty")
+        if self.kind is WorkloadKind.PROJECTION and not self.columns:
+            raise ValueError(f"projection workload {self.operation} needs columns")
+        if self.kind is WorkloadKind.FILTER:
+            if not self.column or self.operator not in {"eq", "gt", "gte", "lt", "lte"}:
+                raise ValueError(f"filter workload {self.operation} needs a supported predicate")
+        if self.kind is WorkloadKind.HEAD and (self.limit is None or self.limit <= 0):
+            raise ValueError(f"head workload {self.operation} needs a positive limit")
+        if self.expected_rows is not None and self.expected_rows < 0:
+            raise ValueError(f"workload {self.operation} has a negative expected row count")
 
 
 @dataclass(frozen=True)

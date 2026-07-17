@@ -3,10 +3,10 @@ from __future__ import annotations
 from enum import StrEnum
 
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.dataset as ds
 
 from .canonical import canonical_hash
+from .workloads import apply_workload, expected_workload_rows, load_workloads
 
 
 class FairOperation(StrEnum):
@@ -22,7 +22,8 @@ OPERATIONS = tuple(FairOperation)
 
 
 def columns_for(operation: FairOperation) -> list[str] | None:
-    return ["full_name", "repo_stars"] if operation is FairOperation.PROJECT_TWO else None
+    spec = load_workloads({})[operation.value]
+    return list(spec.columns) if spec.columns else None
 
 
 def arrow_filter(operation: FairOperation):
@@ -50,28 +51,13 @@ def limit_for(operation: FairOperation, rows: int) -> int | None:
 
 
 def apply_arrow(table: pa.Table, operation: FairOperation) -> pa.Table:
-    if operation is FairOperation.PROJECT_TWO:
-        return table.select(columns_for(operation))
-    if operation is FairOperation.FILTER_AI_LLM:
-        return table.filter(pc.equal(table["group"], "AI / LLM"))
-    if operation is FairOperation.FILTER_POPULAR:
-        return table.filter(pc.greater(table["repo_stars"], 100000))
-    if operation is FairOperation.EXACT_MATCH:
-        return table.filter(pc.equal(table["full_name"], "anomalyco/opencode"))
-    if operation is FairOperation.HEAD_10:
-        return table.slice(0, 10)
-    return table
+    return apply_workload(table, load_workloads({})[operation.value])
 
 
 def expected_rows(operation: FairOperation, manifest: dict) -> int:
-    counts = manifest["expected_counts"]
-    expected = {
-        FairOperation.FILTER_AI_LLM: counts["group_ai_llm"],
-        FairOperation.FILTER_POPULAR: counts["repo_stars_gt_100000"],
-        FairOperation.EXACT_MATCH: counts["full_name_anomalyco_opencode"],
-        FairOperation.HEAD_10: min(10, manifest["rows"]),
-    }
-    return expected.get(operation, manifest["rows"])
+    workloads = load_workloads(manifest)
+    spec = workloads[operation.value]
+    return expected_workload_rows(operation.value, manifest, spec)
 
 
 def result_evidence(table: pa.Table) -> dict:
