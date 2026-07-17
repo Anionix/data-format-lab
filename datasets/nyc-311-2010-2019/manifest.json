@@ -2,20 +2,29 @@
   "schema_version": "1",
   "dataset_id": "nyc-311-2010-2019",
   "title": "311 Service Requests from 2010 to 2019",
-  "scope": "fixture_contract",
+  "scope": "full_benchmark",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.2.0-rc1",
+    "name": "nyc-311-2010-2019.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 5854206,
+    "compressed_sha256": "b5e6f895b475e4577eb330b609b54ca66eab8433ac8b6bc3c1f6365c70cef7f6"
+  },
   "source_format": "socrata_csv_query",
   "source": {
     "dataset_id": "76ig-c548",
     "url": "https://data.cityofnewyork.us/resource/76ig-c548.csv",
     "metadata_url": "https://data.cityofnewyork.us/api/views/76ig-c548",
-    "query": "WHERE created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00' ORDER BY unique_key ASC",
+    "query": "SELECT unique_key,created_date,complaint_type,borough,descriptor AS complaint_text WHERE created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00' ORDER BY unique_key ASC",
     "pagination": "explicit select, limit 50000, offset/keyset pages",
+    "snapshot_rows_target": 1000000,
     "license": "not machine-readable; retain NYC Open Data terms",
     "terms_url": "https://opendata.cityofnewyork.us/overview/"
   },
-  "source_sha256": "d3357ee066a82f1b1966b6924b3685315c82cbb6cad9f58ac027f10d71c49257",
-  "canonical_hash": "36d88cd1d6790a2ca1dba14e3564f74ff3c8ed0e3e4584068e8a4ce8a8a32941",
-  "rows": 4,
+  "source_sha256": "c7405499910b69358c7eb855c3b6b6f9490e08f63ce97c36d3f9ad42c4065034",
+  "canonical_hash": "5ba7ef7b82308e0eb8a0911590e6bbf87c79bbe4deb9c4f75eb65a61776b7bf6",
+  "rows": 1000000,
   "columns": [
     {"name": "unique_key", "arrow_type": "int64", "nullable": true},
     {"name": "created_date", "arrow_type": "string", "nullable": true},
@@ -23,7 +32,7 @@
     {"name": "borough", "arrow_type": "string", "nullable": true},
     {"name": "complaint_text", "arrow_type": "string", "nullable": true}
   ],
-  "expected_counts": {"filter_manhattan": 1, "filter_noise": 1, "head_10": 4, "project_two": 4, "read_all": 4},
+  "expected_counts": {"filter_manhattan": 129929, "filter_noise": 56732, "head_10": 10, "project_two": 1000000, "read_all": 1000000},
   "workloads": {
     "read_all": {"kind": "read_all"},
     "project_two": {"kind": "projection", "columns": ["complaint_type", "borough"]},
@@ -32,5 +41,5 @@
     "head_10": {"kind": "head", "limit": 10}
   },
   "fixture": "fixture.csv",
-  "provenance": {"retrieved_at": "2026-07-17", "snapshot_rows_target": 1000000, "raw_pages_retained": false}
+  "provenance": {"retrieved_at": "2026-07-17", "raw_pages_retained": false}
 }

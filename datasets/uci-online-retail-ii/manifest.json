@@ -2,7 +2,15 @@
   "schema_version": "1",
   "dataset_id": "uci-online-retail-ii",
   "title": "Online Retail II",
-  "scope": "fixture_contract",
+  "scope": "full_benchmark",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.2.0-rc1",
+    "name": "uci-online-retail-ii.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 6384363,
+    "compressed_sha256": "1d5c819a12e3bfb473bd9e51f68b6da0b65b8e10b8257d23f05a95c839947375"
+  },
   "source_format": "xlsx_normalized_to_csv",
   "source": {
     "url": "https://archive.ics.uci.edu/static/public/502/online%2Bretail%2Bii.zip",
@@ -14,9 +22,9 @@
     "license": "CC BY 4.0",
     "normalization": "concatenate both sheets, preserve typed values, normalize to UTF-8 CSV"
   },
-  "source_sha256": "b12519dd5d60b34bcab599a905ab9c637517e5d3ee226e1b888bc09f6938443d",
-  "canonical_hash": "bdcb876d6426d71ed9cb0e052ebd2f5d6821a645565df06b4bf455e5a938cbe3",
-  "rows": 4,
+  "source_sha256": "a6e6437b10eb69cb61567fc91cc9d664ed8db5e87c3ce2a6f5c5edd89061969f",
+  "canonical_hash": "c49be5027f400ed541b1f3e240bc0de8854bfe5b0a03b867b174ba124daf4e86",
+  "rows": 1067371,
   "columns": [
     {"name": "Invoice", "arrow_type": "string", "nullable": true},
     {"name": "StockCode", "arrow_type": "string", "nullable": true},
@@ -27,7 +35,7 @@
     {"name": "Customer_ID", "arrow_type": "string", "nullable": true},
     {"name": "Country", "arrow_type": "string", "nullable": true}
   ],
-  "expected_counts": {"filter_country": 2, "filter_high_price": 1, "head_10": 4, "project_two": 4, "read_all": 4},
+  "expected_counts": {"filter_country": 981330, "filter_high_price": 51739, "head_10": 10, "project_two": 1067371, "read_all": 1067371},
   "workloads": {
     "read_all": {"kind": "read_all"},
     "project_two": {"kind": "projection", "columns": ["Description", "Price"]},

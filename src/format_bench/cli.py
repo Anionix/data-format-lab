@@ -19,10 +19,10 @@ from .report import render_report
 from .robustness.profile import run_bounded
 from .robustness.native import NATIVE_TARGETS, run_native
 from .interop import run_arrow_ipc_interoperability
-from .runner import environment_info
+from .runner import MeasurementConfig, environment_info
 from .workflow import _fixture_manifest, prepare_run, verify_run
 from .workloads import load_workloads
-from .registry import adapters
+from .registry import adapter_map, adapters
 
 
 _T = TypeVar("_T")
@@ -90,6 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--case-timeout-seconds", type=_positive_float)
     run.add_argument("--artifact-budget-mib", type=_positive_int)
     run.add_argument("--pair", action="append", choices=sorted(PAIR_SPECS))
+    run.add_argument("--fresh-processes", type=_positive_int)
+    run.add_argument("--warmups", type=_non_negative_int)
+    run.add_argument("--iterations", type=_positive_int)
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
@@ -123,6 +126,11 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.duration_seconds,
         args.pair,
     )
+    measurement_options = (args.fresh_processes, args.warmups, args.iterations)
+    if args.profile not in {"fair", "equivalence"} and any(
+        value is not None for value in measurement_options
+    ):
+        raise ValueError("measurement options require --profile fair or equivalence")
     if args.profile not in {"robustness", "equivalence"}:
         if any(value is not None for value in robustness_options):
             raise ValueError(
@@ -170,9 +178,22 @@ def _default(value: _T | None, default: _T) -> _T:
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     load_manifest(root, args.dataset)
     if args.run_dir is None or not args.run_dir.exists():
-        run_dir = prepare_run(
-            root, args.dataset, args.run_dir, fixture=args.fixture
-        )
+        selected = None
+        if args.profile == "equivalence":
+            names = {
+                name
+                for pair in (args.pair or tuple(PAIR_SPECS))
+                for name in (
+                    PAIR_SPECS[pair]["reference"],
+                    *PAIR_SPECS[pair]["candidates"],
+                )
+            }
+            registered = adapter_map()
+            selected = tuple(registered[name] for name in sorted(names))
+        prepare_kwargs = {"fixture": args.fixture}
+        if selected is not None:
+            prepare_kwargs["selected"] = selected
+        run_dir = prepare_run(root, args.dataset, args.run_dir, **prepare_kwargs)
         verify_run(run_dir)
         return run_dir
     if args.fixture:
@@ -201,6 +222,13 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "run":
         _validate_run_options(args)
         run_dir = _run_directory(root, args)
+        measurement = None
+        if any(value is not None for value in (args.fresh_processes, args.warmups, args.iterations)):
+            measurement = MeasurementConfig(
+                fresh_processes=_default(args.fresh_processes, 10),
+                warmups=_default(args.warmups, 5),
+                iterations=_default(args.iterations, 30),
+            )
         if args.profile == "robustness":
             if args.suite == "native":
                 selected = None
@@ -229,10 +257,15 @@ def main(argv: list[str] | None = None) -> None:
                 )
         else:
             if args.profile == "equivalence":
-                path = run_equivalence(root, run_dir, pairs=tuple(args.pair) if args.pair else None)
+                path = run_equivalence(
+                    root,
+                    run_dir,
+                    pairs=tuple(args.pair) if args.pair else None,
+                    config=measurement,
+                )
             else:
                 runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
-                path = runners[args.profile](root, run_dir)
+                path = runners[args.profile](root, run_dir, config=measurement) if measurement else runners[args.profile](root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
     elif args.command == "interop":

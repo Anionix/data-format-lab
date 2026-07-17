@@ -154,12 +154,15 @@ class DuckDbAdapter(SqliteAdapter):
 
             connection = duckdb.connect(str(path))
             try:
-                connection.execute(_create_statement(table.schema))
-                placeholders = ",".join("?" for _ in range(len(table.schema) + 1))
-                connection.executemany(
-                    f"INSERT INTO data VALUES ({placeholders})", _rows(table)
+                connection.register("_format_bench_input", table)
+                columns = ", ".join(_quote(field.name) for field in table.schema)
+                connection.execute(
+                    f"CREATE TABLE data AS SELECT {columns}, "
+                    f"row_number() OVER () - 1 AS {_quote(_ROW_ID)} "
+                    "FROM _format_bench_input"
                 )
             finally:
+                connection.unregister("_format_bench_input")
                 connection.close()
 
         return write_artifact(path, write)

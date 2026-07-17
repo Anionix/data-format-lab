@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 import zstandard as zstd
 
 from .model import WorkloadSpec
+from .dataset_sources import materialize_official
 
 
 API_VERSION = "2026-03-10"
@@ -124,12 +125,26 @@ def load_manifest(root: Path, dataset_id: str) -> dict:
 
 
 def _download(url: str) -> bytes:
-    with urlopen(url, timeout=60) as response:
+    request = Request(url, headers={"User-Agent": "data-format-lab/0.2", "Accept": "*/*"})
+    with urlopen(request, timeout=120) as response:
         return response.read()
 
 
 def fetch_dataset(root: Path, dataset_id: str, output: Path | None = None) -> Path:
     manifest = load_manifest(root, dataset_id)
+    destination = output or root / ".data" / dataset_id
+    if "asset" not in manifest:
+        source = manifest.get("source")
+        if not isinstance(source, Mapping) or not isinstance(source.get("url"), str):
+            raise ValueError("dataset manifest needs a release asset or source URL")
+        if dataset_id == "nyc-311-2010-2019":
+            return materialize_official(dataset_id, manifest, b"", destination)
+        raw = _download(source["url"])
+        expected_raw = source.get("archive_sha256_observed", source.get("observed_sha256"))
+        if expected_raw is not None and sha256_bytes(raw) != expected_raw:
+            raise ValueError("official source SHA-256 mismatch")
+        return materialize_official(dataset_id, manifest, raw, destination)
+
     asset = manifest["asset"]
     url = (
         f"https://github.com/{asset['repository']}/releases/download/"
@@ -142,7 +157,6 @@ def fetch_dataset(root: Path, dataset_id: str, output: Path | None = None) -> Pa
     if sha256_bytes(source) != manifest["source_sha256"]:
         raise ValueError("dataset source SHA-256 mismatch")
 
-    destination = output or root / ".data" / dataset_id
     destination.mkdir(parents=True, exist_ok=False)
     (destination / asset["name"]).write_bytes(archive)
     source_path = destination / "source.csv"

@@ -77,7 +77,7 @@ def prepare_run(
     entries = []
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     # Active evidence may terminate as UNSUPPORTED or FAILED; terminal evidence never ranks.
-    for adapter in selected or adapters():
+    for adapter in adapters() if selected is None else selected:
         description = adapter.describe()
         artifact_path = destination / "artifacts" / (
             description.name + description.extension
