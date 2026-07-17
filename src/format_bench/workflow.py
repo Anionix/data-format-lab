@@ -31,9 +31,9 @@ def _fixture_manifest(manifest: dict, table, source: Path) -> dict:
             "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "canonical_hash": canonical_hash(table),
             "rows": table.num_rows,
-            "expected_counts": query_counts(table),
         }
     )
+    effective["expected_counts"] = query_counts(table, effective)
     return effective
 
 
