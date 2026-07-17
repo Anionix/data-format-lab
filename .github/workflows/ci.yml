@@ -176,12 +176,14 @@ jobs:
 
       - name: Gate implementation audit
         run: |
-          set -euo pipefail
-          .venv/bin/format-bench audit \
-            --dataset github-stars-2026-07-03 \
-            --output /tmp/implementation-audit.json
-          .venv/bin/python -c \
-            "import json; assert json.load(open('/tmp/implementation-audit.json'))['audit']['status']=='PASS'"
+          # Keep the audit inside the pinned shell so PyArrow sees the same C++ runtime as every other gate.
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
+            .venv/bin/format-bench audit \
+              --dataset github-stars-2026-07-03 \
+              --output /tmp/implementation-audit.json
+            .venv/bin/python -c \
+              "import json; assert json.load(open(\"/tmp/implementation-audit.json\"))[\"audit\"][\"status\"]==\"PASS\""
+          '
 
       - name: Observe ty diagnostics
         continue-on-error: true
