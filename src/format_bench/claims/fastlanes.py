@@ -76,10 +76,18 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
         result["outcome"] = ObservedOutcome.HARNESS_FAILED
     else:
         try:
-            result.update(json.loads(stdout.strip().splitlines()[-1]))
-            if "outcome" not in result:
+            payload = json.loads(stdout.strip().splitlines()[-1])
+            if not isinstance(payload, dict):
+                raise TypeError("worker output must be a JSON object")
+            result.update(payload)
+            if (
+                result.get("status") == "FAILED"
+                and result.get("failure_class") == "TARGET"
+            ):
+                result["outcome"] = ObservedOutcome.TARGET_FAILED
+            elif "outcome" not in result:
                 result["outcome"] = ObservedOutcome.HARNESS_FAILED
-        except (IndexError, json.JSONDecodeError) as error:
+        except (IndexError, TypeError, json.JSONDecodeError) as error:
             result["outcome"] = ObservedOutcome.HARNESS_FAILED
             result["error"] = f"invalid worker output: {error}"
     return result
