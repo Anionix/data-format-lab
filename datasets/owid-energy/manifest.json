@@ -2,7 +2,15 @@
   "schema_version": "1",
   "dataset_id": "owid-energy",
   "title": "Our World in Data Energy Data",
-  "scope": "fixture_contract",
+  "scope": "full_benchmark",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.2.0-rc1",
+    "name": "owid-energy.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 228083,
+    "compressed_sha256": "71b5994d33b4eaf7f2ea61cea129e1e24b2a9e9f4196f69cb6d028e9e74db14a"
+  },
   "source_format": "csv",
   "source": {
     "url": "https://owid-public.owid.io/data/energy/owid-energy-data.csv",
@@ -14,20 +22,20 @@
     "license": "OWID-produced data CC BY; underlying sources retain their licenses",
     "normalization": "preserve country/year rows and codebook names"
   },
-  "source_sha256": "1807fa5e4ab0b696da85c31e699aed25fdb99c6d18692a9ff9e18063fc5dd093",
-  "canonical_hash": "ec5a74bb42ca6b041cd1b93699cd5f104c535f96046deb4bd28abe5a4bb8c737",
-  "rows": 4,
+  "source_sha256": "c1548589b10924ca69a62b98f5bfcda284f2ad5616c4350e2388b287d6366281",
+  "canonical_hash": "bbbe4efc2298dad6517626cabb802974f9521ba5bb6fe4ee44876b9141f4dac9",
+  "rows": 23377,
   "columns": [
     {"name": "country", "arrow_type": "string", "nullable": true},
     {"name": "year", "arrow_type": "int64", "nullable": true},
     {"name": "population", "arrow_type": "int64", "nullable": true},
-    {"name": "renewable_share", "arrow_type": "float64", "nullable": true},
+    {"name": "renewables_share_energy", "arrow_type": "float64", "nullable": true},
     {"name": "energy_per_capita", "arrow_type": "float64", "nullable": true}
   ],
-  "expected_counts": {"filter_high_energy": 2, "filter_japan": 2, "head_10": 4, "project_two": 4, "read_all": 4},
+  "expected_counts": {"filter_high_energy": 2495, "filter_japan": 126, "head_10": 10, "project_two": 23377, "read_all": 23377},
   "workloads": {
     "read_all": {"kind": "read_all"},
-    "project_two": {"kind": "projection", "columns": ["country", "renewable_share"]},
+    "project_two": {"kind": "projection", "columns": ["country", "renewables_share_energy"]},
     "filter_high_energy": {"kind": "filter", "column": "energy_per_capita", "operator": "gte", "value": 40000.0},
     "filter_japan": {"kind": "filter", "column": "country", "operator": "eq", "value": "Japan"},
     "head_10": {"kind": "head", "limit": 10}

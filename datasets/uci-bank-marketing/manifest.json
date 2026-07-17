@@ -2,7 +2,15 @@
   "schema_version": "1",
   "dataset_id": "uci-bank-marketing",
   "title": "Bank Marketing, bank-additional-full.csv",
-  "scope": "fixture_contract",
+  "scope": "full_benchmark",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.2.0-rc1",
+    "name": "uci-bank-marketing.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 154844,
+    "compressed_sha256": "6ebb84c37537648c35d51d1344f41e997f55f52b963663d34ebd722ea26607ec"
+  },
   "source_format": "semicolon_csv",
   "source": {
     "url": "https://archive.ics.uci.edu/static/public/222/bank%2Bmarketing.zip",
@@ -14,22 +22,22 @@
     "license": "CC BY 4.0",
     "normalization": "preserve semicolon CSV fields and literal unknown values"
   },
-  "source_sha256": "a438d7b1d42ae38e4e5074093eb64614f65f93e429f033d7562e3674d061d750",
-  "canonical_hash": "868dc7a736f9eed28800d5768713af2005a0ea90d2cfc29104a4d66fb9cbc7f1",
-  "rows": 4,
+  "source_sha256": "d150e4f0a38425adf18ce7b10d8f5da264e74be2d5e6a2b143dfcdc3e72fd74e",
+  "canonical_hash": "9d23f569048f34002516d2c4e2f0844ee7858756c1464cfbf171130d89d66904",
+  "rows": 41188,
   "columns": [
     {"name": "age", "arrow_type": "int64", "nullable": true},
     {"name": "job", "arrow_type": "string", "nullable": true},
     {"name": "marital", "arrow_type": "string", "nullable": true},
-    {"name": "balance", "arrow_type": "int64", "nullable": true},
+    {"name": "duration", "arrow_type": "int64", "nullable": true},
     {"name": "loan", "arrow_type": "string", "nullable": true},
     {"name": "y", "arrow_type": "string", "nullable": true}
   ],
-  "expected_counts": {"filter_high_balance": 1, "filter_yes": 1, "head_10": 4, "project_two": 4, "read_all": 4},
+  "expected_counts": {"filter_long_duration": 961, "filter_yes": 4640, "head_10": 10, "project_two": 41188, "read_all": 41188},
   "workloads": {
     "read_all": {"kind": "read_all"},
-    "project_two": {"kind": "projection", "columns": ["age", "balance"]},
-    "filter_high_balance": {"kind": "filter", "column": "balance", "operator": "gte", "value": 1000},
+    "project_two": {"kind": "projection", "columns": ["age", "duration"]},
+    "filter_long_duration": {"kind": "filter", "column": "duration", "operator": "gte", "value": 1000},
     "filter_yes": {"kind": "filter", "column": "y", "operator": "eq", "value": "yes"},
     "head_10": {"kind": "head", "limit": 10}
   },

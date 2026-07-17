@@ -12,6 +12,7 @@ dependencies = [
   "duckdb==1.4.3",
   "fastavro==1.12.1",
   "msgpack==1.1.1",
+  "openpyxl==3.1.5",
   "pyarrow==23.0.1",
   "pylance==8.0.0",
   "tiktoken==0.12.0",

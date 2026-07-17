@@ -2,7 +2,15 @@
   "schema_version": "1",
   "dataset_id": "geonames-cities500",
   "title": "GeoNames cities500",
-  "scope": "fixture_contract",
+  "scope": "full_benchmark",
+  "asset": {
+    "repository": "Anionix/data-format-lab",
+    "release_tag": "v0.2.0-rc1",
+    "name": "geonames-cities500.csv.zst",
+    "compression": "zstd",
+    "compressed_bytes": 3892174,
+    "compressed_sha256": "e2c03c7754fac9946a2c2a4cc8bdbbbc0f72731521afe2b8b74ad8d81393e97d"
+  },
   "source_format": "headerless_tab_csv",
   "source": {
     "url": "https://download.geonames.org/export/dump/cities500.zip",
@@ -13,9 +21,9 @@
     "attribution": "GeoNames",
     "normalization": "strict 19-field UTF-8 tab rows, blanks to NULL, sort by geonameid and full row"
   },
-  "source_sha256": "18b4473ba711b6100b96bb93927d9d6dc506be76bf977326ddfa6bee008bac5b",
-  "canonical_hash": "8c9cc9d4e1499f05f0270f2b1833929e13f53bb7718c1c93cbe6e58d040e09ca",
-  "rows": 4,
+  "source_sha256": "5e51bb451042c690aa9730c316d66d8b3322500d43304f35a4f61da3771b17da",
+  "canonical_hash": "0789a602673f18ea4e943102b8cc3c79194d95ab2e2c72fdbe9e959b6c2672dd",
+  "rows": 234934,
   "columns": [
     {"name": "geonameid", "arrow_type": "int64", "nullable": true},
     {"name": "name", "arrow_type": "string", "nullable": true},
@@ -25,7 +33,7 @@
     {"name": "population", "arrow_type": "int64", "nullable": true},
     {"name": "timezone", "arrow_type": "string", "nullable": true}
   ],
-  "expected_counts": {"filter_gb": 1, "filter_large": 3, "head_10": 4, "project_two": 4, "read_all": 4},
+  "expected_counts": {"filter_gb": 5913, "filter_large": 59, "head_10": 10, "project_two": 234934, "read_all": 234934},
   "workloads": {
     "read_all": {"kind": "read_all"},
     "project_two": {"kind": "projection", "columns": ["name", "population"]},
