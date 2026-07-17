@@ -9,6 +9,7 @@ from pathlib import Path
 import pyarrow as pa
 
 from .formats.arrow_ipc import ArrowIpcAdapter
+from .runner import environment_info
 
 
 def _sha256(path: Path) -> str:
@@ -88,7 +89,11 @@ def _markdown(evidence: dict) -> str:
 
 
 def run_arrow_ipc_interoperability(
-    table: pa.Table, manifest: dict, output: Path
+    table: pa.Table,
+    manifest: dict,
+    output: Path,
+    *,
+    environment: dict | None = None,
 ) -> Path:
     output.mkdir(parents=True, exist_ok=True)
     variants = []
@@ -123,6 +128,8 @@ def run_arrow_ipc_interoperability(
             "python": sys.version.split()[0],
             "pyarrow": pa.__version__,
         },
+        "environment": environment
+        or environment_info(Path(__file__).resolve().parents[2]),
         "canonical_hash": manifest["canonical_hash"],
         "expected_counts": manifest["expected_counts"],
         "variants": variants,

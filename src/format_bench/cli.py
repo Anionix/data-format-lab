@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 from typing import TypeVar
 
-from .canonical import canonical_hash, load_dataset, query_counts, read_csv
+from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .fair_run import run_fair
 from .profile_run import run_claims, run_prompt
@@ -14,8 +14,9 @@ from .release import package_run
 from .report import render_report
 from .robustness.profile import run_bounded
 from .robustness.native import NATIVE_TARGETS, run_native
-from .workflow import prepare_run, verify_run
 from .interop import run_arrow_ipc_interoperability
+from .runner import environment_info
+from .workflow import _fixture_manifest, prepare_run, verify_run
 
 
 _T = TypeVar("_T")
@@ -207,15 +208,12 @@ def main(argv: list[str] | None = None) -> None:
         if args.fixture:
             manifest = load_manifest(root, args.dataset)
             table = read_csv(source, manifest)
-            manifest = {
-                **manifest,
-                "rows": table.num_rows,
-                "canonical_hash": canonical_hash(table),
-                "expected_counts": query_counts(table),
-            }
+            manifest = _fixture_manifest(manifest, table, source)
         else:
             manifest, table = load_dataset(root, args.dataset, source=source)
-        path = run_arrow_ipc_interoperability(table, manifest, args.output)
+        path = run_arrow_ipc_interoperability(
+            table, manifest, args.output, environment=environment_info(root)
+        )
     else:
         path = package_run(args.run_dir, args.output, args.platform)
     print(path)

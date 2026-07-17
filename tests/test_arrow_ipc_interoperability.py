@@ -2,9 +2,12 @@ import json
 from pathlib import Path
 
 import pyarrow as pa
+import pytest
 
-from format_bench.canonical import canonical_hash, query_counts, read_csv
+from format_bench.canonical import canonical_hash, load_dataset, query_counts, read_csv
+from format_bench.datasets import sha256_bytes
 from format_bench.interop import run_arrow_ipc_interoperability
+from format_bench.workflow import _fixture_manifest
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -23,6 +26,7 @@ def test_arrow_ipc_independent_consumer_records_contract_and_controls(tmp_path: 
     evidence = json.loads(evidence_path.read_text())
 
     assert evidence["contract_version"] == "1"
+    assert evidence["environment"]["hardware_model"]
     assert [item["status"] for item in evidence["variants"]] == ["PASS"] * 3
     assert all(item["artifact_sha256"] for item in evidence["variants"])
     assert all(item["canonical_hash"] == manifest["canonical_hash"] for item in evidence["variants"])
@@ -50,3 +54,29 @@ def test_interoperability_evidence_has_exact_null_positions(tmp_path: Path) -> N
     evidence = json.loads(run_arrow_ipc_interoperability(table, manifest, tmp_path).read_text())
 
     assert evidence["variants"][0]["null_positions"]["group"] == [0]
+
+
+def test_load_dataset_rejects_modified_production_source(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    dataset = root / "datasets" / "fixture"
+    source_dir = root / ".data" / "fixture"
+    dataset.mkdir(parents=True)
+    source_dir.mkdir(parents=True)
+    manifest = json.loads((DATASET / "manifest.json").read_text())
+    (dataset / "manifest.json").write_text(json.dumps(manifest))
+    source = source_dir / "source.csv"
+    source.write_text("changed\n")
+
+    with pytest.raises(ValueError, match="source SHA-256 mismatch"):
+        load_dataset(root, "fixture")
+
+
+def test_fixture_manifest_records_effective_source_provenance() -> None:
+    manifest = json.loads((DATASET / "manifest.json").read_text())
+    source = DATASET / "fixture.csv"
+    table = read_csv(source, manifest)
+
+    effective = _fixture_manifest(manifest, table, source)
+
+    assert effective["fixture"] is True
+    assert effective["source_sha256"] == sha256_bytes(source.read_bytes())
