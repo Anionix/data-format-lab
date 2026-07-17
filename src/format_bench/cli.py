@@ -190,9 +190,10 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
             }
             registered = adapter_map()
             selected = tuple(registered[name] for name in sorted(names))
-        run_dir = prepare_run(
-            root, args.dataset, args.run_dir, fixture=args.fixture, selected=selected
-        )
+        prepare_kwargs = {"fixture": args.fixture}
+        if selected is not None:
+            prepare_kwargs["selected"] = selected
+        run_dir = prepare_run(root, args.dataset, args.run_dir, **prepare_kwargs)
         verify_run(run_dir)
         return run_dir
     if args.fixture:
