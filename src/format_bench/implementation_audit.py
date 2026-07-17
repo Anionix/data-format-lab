@@ -136,7 +136,7 @@ def audit_lifecycle(states: Sequence[ExecutionState | str]) -> AuditEvidence:
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     normalized = tuple(ExecutionState(state) for state in states)
     illegal: list[str] = []
-    for current, target in zip(normalized, normalized[1:]):
+    for current, target in zip(normalized, normalized[1:], strict=False):
         try:
             transition(current, target)
         except ValueError:

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
+from typing import cast
 
 
 class Lane(StrEnum):
@@ -163,11 +164,25 @@ class WorkloadSpec:
             kind = WorkloadKind(str(payload["kind"]))
         except (KeyError, ValueError) as error:
             raise ValueError(f"invalid workload kind for {operation}") from error
-        columns = tuple(str(item) for item in payload.get("columns", ()))
+        raw_columns = payload.get("columns", ())
+        if not isinstance(raw_columns, (list, tuple)):
+            raise ValueError(f"workload columns for {operation} must be a list")
+        typed_columns = cast(list[object] | tuple[object, ...], raw_columns)
+        columns = tuple(str(item) for item in typed_columns)
         column = payload.get("column")
         operator = payload.get("operator")
         expected = payload.get("expected_rows")
         limit = payload.get("limit")
+        def optional_int(value: object, field: str) -> int | None:
+            if value is None:
+                return None
+            if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                raise ValueError(f"workload {field} must be an integer")
+            try:
+                return int(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError(f"workload {field} must be an integer") from error
+
         spec = cls(
             operation=operation,
             kind=kind,
@@ -175,8 +190,8 @@ class WorkloadSpec:
             column=str(column) if column is not None else None,
             operator=str(operator) if operator is not None else None,
             value=payload.get("value"),
-            limit=int(limit) if limit is not None else None,
-            expected_rows=int(expected) if expected is not None else None,
+            limit=optional_int(limit, "limit"),
+            expected_rows=optional_int(expected, "expected_rows"),
         )
         spec.validate()
         return spec

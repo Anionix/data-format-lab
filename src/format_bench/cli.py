@@ -11,6 +11,8 @@ from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
+from .implementation_audit import audit_implementation
+from .model import ExecutionState
 from .profile_run import run_claims, run_prompt
 from .release import package_run
 from .report import render_report
@@ -19,6 +21,8 @@ from .robustness.native import NATIVE_TARGETS, run_native
 from .interop import run_arrow_ipc_interoperability
 from .runner import environment_info
 from .workflow import _fixture_manifest, prepare_run, verify_run
+from .workloads import load_workloads
+from .registry import adapters
 
 
 _T = TypeVar("_T")
@@ -99,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--run-dir", type=Path, required=True)
     package.add_argument("--output", type=Path, default=Path("outputs/release"))
     package.add_argument("--platform", required=True)
+
+    audit = subcommands.add_parser("audit")
+    audit.add_argument("--dataset", required=True)
+    audit.add_argument("--run-dir", type=Path)
+    audit.add_argument("--output", type=Path)
     return parser
 
 
@@ -244,6 +253,52 @@ def main(argv: list[str] | None = None) -> None:
         path = run_arrow_ipc_interoperability(
             table, manifest, output, environment=environment_info(root)
         )
+    elif args.command == "audit":
+        dataset_manifest = load_manifest(root, args.dataset)
+        run_manifest = (
+            json.loads((args.run_dir / "manifest.json").read_text(encoding="utf-8"))
+            if args.run_dir is not None
+            else None
+        )
+        artifact_paths = (
+            [entry["artifact"] for entry in run_manifest["formats"]]
+            if run_manifest is not None
+            else [
+                "artifacts/" + adapter.describe().name + adapter.describe().extension
+                for adapter in adapters()
+            ]
+        )
+        evidence = audit_implementation(
+            adapters(),
+            lifecycle=(
+                ExecutionState.DISCOVERED,
+                ExecutionState.ENCODED,
+                ExecutionState.ROUNDTRIP_VERIFIED,
+                ExecutionState.BENCHMARKED,
+                ExecutionState.REPORTED,
+            ),
+            artifact_paths=artifact_paths,
+            workloads=load_workloads(dataset_manifest),
+            required_operations=load_workloads(dataset_manifest),
+            expected_adapter_count=len(adapters()),
+            expected_lanes={
+                adapter.describe().name: adapter.describe().lane for adapter in adapters()
+            },
+            path_root=args.run_dir,
+        )
+        payload = {
+            "schema_version": "1",
+            "dataset_id": args.dataset,
+            "audit": evidence.as_dict(),
+        }
+        output = args.output or (
+            args.run_dir / "implementation-audit.json"
+            if args.run_dir is not None
+            else Path("outputs") / f"implementation-audit-{args.dataset}.json"
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        path = output
     else:
         path = package_run(args.run_dir, args.output, args.platform)
     print(path)
