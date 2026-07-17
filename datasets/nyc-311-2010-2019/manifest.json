@@ -1,0 +1,36 @@
+{
+  "schema_version": "1",
+  "dataset_id": "nyc-311-2010-2019",
+  "title": "311 Service Requests from 2010 to 2019",
+  "scope": "fixture_contract",
+  "source_format": "socrata_csv_query",
+  "source": {
+    "dataset_id": "76ig-c548",
+    "url": "https://data.cityofnewyork.us/resource/76ig-c548.csv",
+    "metadata_url": "https://data.cityofnewyork.us/api/views/76ig-c548",
+    "query": "WHERE created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00' ORDER BY unique_key ASC",
+    "pagination": "explicit select, limit 50000, offset/keyset pages",
+    "license": "not machine-readable; retain NYC Open Data terms",
+    "terms_url": "https://opendata.cityofnewyork.us/overview/"
+  },
+  "source_sha256": "d3357ee066a82f1b1966b6924b3685315c82cbb6cad9f58ac027f10d71c49257",
+  "canonical_hash": "36d88cd1d6790a2ca1dba14e3564f74ff3c8ed0e3e4584068e8a4ce8a8a32941",
+  "rows": 4,
+  "columns": [
+    {"name": "unique_key", "arrow_type": "int64", "nullable": true},
+    {"name": "created_date", "arrow_type": "string", "nullable": true},
+    {"name": "complaint_type", "arrow_type": "string", "nullable": true},
+    {"name": "borough", "arrow_type": "string", "nullable": true},
+    {"name": "complaint_text", "arrow_type": "string", "nullable": true}
+  ],
+  "expected_counts": {"filter_manhattan": 1, "filter_noise": 1, "head_10": 4, "project_two": 4, "read_all": 4},
+  "workloads": {
+    "read_all": {"kind": "read_all"},
+    "project_two": {"kind": "projection", "columns": ["complaint_type", "borough"]},
+    "filter_manhattan": {"kind": "filter", "column": "borough", "operator": "eq", "value": "MANHATTAN"},
+    "filter_noise": {"kind": "filter", "column": "complaint_type", "operator": "eq", "value": "Noise - Residential"},
+    "head_10": {"kind": "head", "limit": 10}
+  },
+  "fixture": "fixture.csv",
+  "provenance": {"retrieved_at": "2026-07-17", "snapshot_rows_target": 1000000, "raw_pages_retained": false}
+}

@@ -8,15 +8,19 @@ Data Format Lab asks narrower questions than "which format is best?" It verifies
 
 The first case study is a frozen, 2,331-row snapshot of public GitHub Stars metadata. The lab is designed for additional datasets and workloads; it is not a Stars-specific converter.
 
-## Three lanes
+## Benchmark lanes
 
 | Lane | Question | Current examples |
 | --- | --- | --- |
 | `fair` | What happens when every format stores the same typed Arrow table and returns the same rows? | CSV, object JSONL, Arrow IPC, Parquet, Lance, Vortex, adapted TsFile |
 | `claims` | Does a format's stated strength appear under a workload suited to that claim? | Lance FTS, Vortex scans, adapted TsFile time ranges, experimental FastLanes evidence |
 | `prompt` | How many exact model tokens represent the same seven projected fields? | Compact TSV, object JSONL, array JSONL |
+| `equivalence` | Do formats that look equivalent in general remain equivalent for this data and workload? | CSV vs TSV, Arrow IPC vs Feather, Parquet vs ORC, JSONL vs row serializers |
+| `engine_container` | How do SQL engines compare while operating on their own database files? | SQLite, DuckDB |
 
 Results never rank across lanes or hardware runs. Only `FULL_COMPARABLE` evidence can enter an ordering inside its own lane. DuckDB is treated as a query engine, not as a file format.
+
+The equivalence lane compares only named pairs. It records native bytes, external zstd bytes, p50/p95 ratio intervals, IQR, and maximum RSS. A size interval inside +/-2%, p50 inside +/-5%, and p95 inside +/-10% is `PRACTICALLY_EQUIVALENT`; an interval crossing a boundary is `INCONCLUSIVE`. The pair is not a claim that all workloads or datasets behave the same way.
 
 Arrow IPC codec variants (`none`, `lz4`, and `zstd`) remain in the `fair` lane and share the same Arrow schema, round-trip gate, and query-result contract. They are codec variants, not separate formats or a cross-lane score.
 
@@ -47,6 +51,7 @@ Nix pins Python 3.12, Rust `nightly-2026-07-15` with `rust-src`, `cargo-fuzz`, a
 nix develop
 uv sync --frozen
 uv run --frozen format-bench run --profile prompt --dataset github-stars-2026-07-03 --fixture
+uv run --frozen format-bench run --profile equivalence --dataset github-stars-2026-07-03 --fixture --pair csv-tsv
 ```
 
 The fixture command is a non-rankable smoke test. For the full published dataset:
@@ -92,6 +97,7 @@ The Stars Data Card documents the Apple-heavy source bias, the fact that classif
 - `datasets/`: immutable dataset contracts and test fixtures.
 - `research/formats/`: reproducible negative evidence for unfinished formats.
 - `docs/adr/`: architectural decisions.
+- `docs/specs/`: executable benchmark and evidence contracts.
 - `docs/research-log.md`: reconstructed question and correction history.
 - `runs/`: ignored local evidence directories.
 

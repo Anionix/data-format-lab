@@ -1,0 +1,40 @@
+{
+  "schema_version": "1",
+  "dataset_id": "uci-online-retail-ii",
+  "title": "Online Retail II",
+  "scope": "fixture_contract",
+  "source_format": "xlsx_normalized_to_csv",
+  "source": {
+    "url": "https://archive.ics.uci.edu/static/public/502/online%2Bretail%2Bii.zip",
+    "uci_id": 502,
+    "doi": "10.24432/C5CG6D",
+    "archive_sha256_observed": "572e36277c2390fbfde10664750731e0a86f55e33470d91919085f0408e67bfb",
+    "member": "online_retail_II.xlsx",
+    "member_sha256_observed": "bcbe73b35f5b7babf197fb0cb983a11f5d9ff929078d4aa53d171b1f2df2e980",
+    "license": "CC BY 4.0",
+    "normalization": "concatenate both sheets, preserve typed values, normalize to UTF-8 CSV"
+  },
+  "source_sha256": "b12519dd5d60b34bcab599a905ab9c637517e5d3ee226e1b888bc09f6938443d",
+  "canonical_hash": "bdcb876d6426d71ed9cb0e052ebd2f5d6821a645565df06b4bf455e5a938cbe3",
+  "rows": 4,
+  "columns": [
+    {"name": "Invoice", "arrow_type": "string", "nullable": true},
+    {"name": "StockCode", "arrow_type": "string", "nullable": true},
+    {"name": "Description", "arrow_type": "string", "nullable": true},
+    {"name": "Quantity", "arrow_type": "int64", "nullable": true},
+    {"name": "InvoiceDate", "arrow_type": "string", "nullable": true},
+    {"name": "Price", "arrow_type": "float64", "nullable": true},
+    {"name": "Customer_ID", "arrow_type": "string", "nullable": true},
+    {"name": "Country", "arrow_type": "string", "nullable": true}
+  ],
+  "expected_counts": {"filter_country": 2, "filter_high_price": 1, "head_10": 4, "project_two": 4, "read_all": 4},
+  "workloads": {
+    "read_all": {"kind": "read_all"},
+    "project_two": {"kind": "projection", "columns": ["Description", "Price"]},
+    "filter_high_price": {"kind": "filter", "column": "Price", "operator": "gte", "value": 10.0},
+    "filter_country": {"kind": "filter", "column": "Country", "operator": "eq", "value": "United Kingdom"},
+    "head_10": {"kind": "head", "limit": 10}
+  },
+  "fixture": "fixture.csv",
+  "provenance": {"retrieved_at": "2026-07-17", "raw_api_response_retained": false}
+}
