@@ -11,6 +11,7 @@ import statistics
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -158,7 +159,19 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
 def run_jobs(jobs: list[Job], config: MeasurementConfig, cwd: Path) -> dict[str, dict]:
     ordered = list(jobs)
     random.Random(config.seed).shuffle(ordered)
-    return {job.job_id: run_job(job, config, cwd) for job in ordered}
+    if not ordered:
+        return {}
+    requested_workers = int(os.environ.get("FORMAT_BENCH_MAX_WORKERS", "8"))
+    if requested_workers <= 0:
+        raise ValueError("FORMAT_BENCH_MAX_WORKERS must be positive")
+    worker_count = min(len(ordered), requested_workers)
+    # Jobs use independent fresh processes and run-directory artifacts. Schedule them
+    # concurrently, but materialize results in the seeded job order for stable JSON.
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = {
+            job.job_id: executor.submit(run_job, job, config, cwd) for job in ordered
+        }
+        return {job.job_id: futures[job.job_id].result() for job in ordered}
 
 
 def _sha256(path: Path) -> str:
