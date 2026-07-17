@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
-from .datasets import load_manifest
+from .datasets import load_manifest, sha256_bytes
 
 
 _ARROW_TYPES = {
@@ -98,6 +98,12 @@ def verify_table(table: pa.Table, manifest: dict) -> dict:
 def load_dataset(root: Path, dataset_id: str, source: Path | None = None) -> tuple[dict, pa.Table]:
     manifest = load_manifest(root, dataset_id)
     source_path = source or root / ".data" / dataset_id / "source.csv"
+    actual_source_sha256 = sha256_bytes(source_path.read_bytes())
+    if actual_source_sha256 != manifest["source_sha256"]:
+        raise ValueError(
+            "source SHA-256 mismatch: "
+            f"expected {manifest['source_sha256']}, got {actual_source_sha256}"
+        )
     table = read_csv(source_path, manifest)
     verify_table(table, manifest)
     return manifest, table
