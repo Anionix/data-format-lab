@@ -97,7 +97,7 @@ class TsFileAdapter:
         return verify_table(self.read(path, manifest), manifest)
 
     def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
-        return apply_arrow(self.read(path, manifest), operation)
+        return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
 def _arrow_name(data_type: pa.DataType) -> str:

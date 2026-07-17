@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 
 import pyarrow as pa
@@ -21,37 +22,66 @@ class FairOperation(StrEnum):
 OPERATIONS = tuple(FairOperation)
 
 
-def columns_for(operation: FairOperation) -> list[str] | None:
-    spec = load_workloads({})[operation.value]
+def workload_for(
+    operation: FairOperation, manifest: Mapping[str, object] | None = None
+):
+    return load_workloads(manifest or {})[operation.value]
+
+
+def columns_for(
+    operation: FairOperation, manifest: Mapping[str, object] | None = None
+) -> list[str] | None:
+    spec = workload_for(operation, manifest)
     return list(spec.columns) if spec.columns else None
 
 
-def arrow_filter(operation: FairOperation):
-    if operation is FairOperation.FILTER_AI_LLM:
-        return ds.field("group") == "AI / LLM"
-    if operation is FairOperation.FILTER_POPULAR:
-        return ds.field("repo_stars") > 100000
-    if operation is FairOperation.EXACT_MATCH:
-        return ds.field("full_name") == "anomalyco/opencode"
-    return None
+def arrow_filter(
+    operation: FairOperation, manifest: Mapping[str, object] | None = None
+):
+    spec = workload_for(operation, manifest)
+    if spec.kind.value != "filter":
+        return None
+    field = ds.field(spec.column)
+    if spec.operator == "eq":
+        return field == spec.value
+    if spec.operator == "gt":
+        return field > spec.value
+    if spec.operator == "gte":
+        return field >= spec.value
+    if spec.operator == "lt":
+        return field < spec.value
+    return field <= spec.value
 
 
-def lance_filter(operation: FairOperation) -> str | None:
-    if operation is FairOperation.FILTER_AI_LLM:
-        return "group = 'AI / LLM'"
-    if operation is FairOperation.FILTER_POPULAR:
-        return "repo_stars > 100000"
-    if operation is FairOperation.EXACT_MATCH:
-        return "full_name = 'anomalyco/opencode'"
-    return None
+def lance_filter(
+    operation: FairOperation, manifest: Mapping[str, object] | None = None
+) -> str | None:
+    spec = workload_for(operation, manifest)
+    if spec.kind.value != "filter":
+        return None
+    if isinstance(spec.value, str):
+        value = "'" + spec.value.replace("'", "''") + "'"
+    else:
+        value = str(spec.value)
+    operator = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[spec.operator]
+    return f"{spec.column} {operator} {value}"
 
 
-def limit_for(operation: FairOperation, rows: int) -> int | None:
-    return min(10, rows) if operation is FairOperation.HEAD_10 else None
+def limit_for(
+    operation: FairOperation,
+    rows: int,
+    manifest: Mapping[str, object] | None = None,
+) -> int | None:
+    spec = workload_for(operation, manifest)
+    return min(spec.limit, rows) if spec.kind.value == "head" else None
 
 
-def apply_arrow(table: pa.Table, operation: FairOperation) -> pa.Table:
-    return apply_workload(table, load_workloads({})[operation.value])
+def apply_arrow(
+    table: pa.Table,
+    operation: FairOperation,
+    manifest: Mapping[str, object] | None = None,
+) -> pa.Table:
+    return apply_workload(table, workload_for(operation, manifest))
 
 
 def expected_rows(operation: FairOperation, manifest: dict) -> int:

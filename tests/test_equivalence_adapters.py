@@ -6,12 +6,15 @@ from pathlib import Path
 import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
+from format_bench.fair import OPERATIONS, apply_arrow, result_evidence
 from format_bench.formats import (
     AvroAdapter,
     CborAdapter,
+    DuckDbAdapter,
     FeatherV2Adapter,
     MessagePackAdapter,
     OrcAdapter,
+    SqliteAdapter,
     TsvAdapter,
 )
 
@@ -51,3 +54,17 @@ def test_text_arrow_equivalence_adapters_roundtrip(
 
     assert artifact.native_bytes == path.stat().st_size
     assert adapter.verify_roundtrip(path, manifest)["passed"] is True
+
+
+@pytest.mark.parametrize("adapter", [SqliteAdapter(), DuckDbAdapter()])
+def test_engine_adapters_execute_the_declared_operations(
+    fixture_contract, tmp_path: Path, adapter
+) -> None:
+    manifest, table = fixture_contract
+    path = tmp_path / f"database{adapter.describe().extension}"
+    adapter.encode(table, path)
+
+    for operation in OPERATIONS:
+        actual = result_evidence(adapter.scan(path, manifest, operation))
+        expected = result_evidence(apply_arrow(table, operation, manifest))
+        assert actual == expected

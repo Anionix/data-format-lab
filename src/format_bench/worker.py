@@ -37,7 +37,7 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: FairOperation) -
         int(os.environ.get("FORMAT_BENCH_ITERATIONS", "30")),
     )
     source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
-    expected = result_evidence(apply_arrow(source, operation))
+    expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
     actual = result_evidence(adapter.scan(artifact, dataset_manifest, operation))
     if actual != expected:
         raise ValueError(f"normalized operation result mismatch: {actual} != {expected}")

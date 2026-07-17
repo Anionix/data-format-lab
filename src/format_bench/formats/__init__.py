@@ -1,6 +1,7 @@
 from .base import Artifact, FormatAdapter, FormatDescription
 from .arrow_extra import FeatherV2Adapter, OrcAdapter
 from .arrow_ipc import ArrowIpcAdapter
+from .database import DuckDbAdapter, SqliteAdapter
 from .lance import LanceAdapter, build_fts, lance_components, query_fts
 from .parquet import ParquetAdapter
 from .row import AvroAdapter, CborAdapter, MessagePackAdapter
@@ -14,6 +15,7 @@ __all__ = [
     "AvroAdapter",
     "CborAdapter",
     "CsvAdapter",
+    "DuckDbAdapter",
     "FeatherV2Adapter",
     "FormatAdapter",
     "FormatDescription",
@@ -22,6 +24,7 @@ __all__ = [
     "ObjectJsonlAdapter",
     "OrcAdapter",
     "ParquetAdapter",
+    "SqliteAdapter",
     "build_fts",
     "lance_components",
     "query_fts",
