@@ -37,6 +37,42 @@ class CsvAdapter:
         return apply_arrow(self.read(path, manifest), operation)
 
 
+class TsvAdapter:
+    def describe(self) -> FormatDescription:
+        return FormatDescription(
+            name="tsv",
+            lane=Lane.EQUIVALENCE,
+            comparability=Comparability.FULL_COMPARABLE,
+            extension=".tsv",
+            settings={"encoding": "utf-8", "delimiter": "\\t", "typed": False},
+        )
+
+    def encode(self, table: pa.Table, path: Path) -> Artifact:
+        options = pacsv.WriteOptions(delimiter="\t")
+        return write_artifact(
+            path, lambda: pacsv.write_csv(table, path, write_options=options)
+        )
+
+    def read(self, path: Path, manifest: dict) -> pa.Table:
+        schema = arrow_schema(manifest)
+        options = pacsv.ConvertOptions(
+            column_types={field.name: field.type for field in schema},
+            null_values=[""],
+            strings_can_be_null=True,
+        )
+        return pacsv.read_csv(
+            path,
+            parse_options=pacsv.ParseOptions(delimiter="\t"),
+            convert_options=options,
+        ).select(schema.names)
+
+    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+        return verify_table(self.read(path, manifest), manifest)
+
+    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+        return apply_arrow(self.read(path, manifest), operation)
+
+
 class ObjectJsonlAdapter:
     def describe(self) -> FormatDescription:
         return FormatDescription(
