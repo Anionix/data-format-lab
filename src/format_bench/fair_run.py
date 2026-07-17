@@ -47,13 +47,19 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
         for operation in OPERATIONS
     ]
     measured = run_jobs(jobs, measurement, root)
+    failures = [
+        (job_id, result["reason"])
+        for job_id, result in measured.items()
+        if result["status"] == "FAILED"
+    ]
+    run_state = ExecutionState.FAILED if failures else ExecutionState.BENCHMARKED
 
     results = new_results(root, run_dir.name, measurement)
     results.update(
         {
             "profile": "fair",
             "dataset_id": run_manifest["dataset_id"],
-            "state": ExecutionState.BENCHMARKED,
+            "state": run_state,
             "results": measured,
         }
     )
@@ -73,7 +79,7 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
             entry["state"] = transition(
                 ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
             )
-    run_manifest["state"] = ExecutionState.BENCHMARKED
+    run_manifest["state"] = run_state
     run_manifest["profile"] = "fair"
     manifest_path.write_text(json.dumps(run_manifest, indent=2, sort_keys=True) + "\n")
     return results_path

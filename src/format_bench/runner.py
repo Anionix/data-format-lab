@@ -117,7 +117,15 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
                 "status": "FAILED",
                 "reason": f"worker exited {completed.returncode}: {completed.stderr[-2000:]}",
             }
-        result = json.loads(completed.stdout.strip().splitlines()[-1])
+        try:
+            result = json.loads(completed.stdout.strip().splitlines()[-1])
+            if not isinstance(result, dict):
+                raise ValueError("worker JSON must be an object")
+        except (json.JSONDecodeError, IndexError, ValueError) as error:
+            return {
+                "status": "FAILED",
+                "reason": f"worker returned invalid JSON: {error}",
+            }
         if result["result"] != job.expected_result:
             return {"status": "FAILED", "reason": "worker result count mismatch"}
         processes.append(result)
@@ -129,11 +137,19 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
     warm = [sample for process in processes for sample in process["samples_ms"]]
     first = [process["first_open_ms"] for process in processes]
     rss = [process["max_rss_bytes"] for process in processes]
+    warm_process_p50 = [statistics.median(process["samples_ms"]) for process in processes]
+    warm_process_p95 = [
+        percentile(process["samples_ms"], 0.95) for process in processes
+    ]
     return {
         "status": "MEASURED",
         "fresh_process": stats_ms(first),
         "warm": stats_ms(warm),
         "max_rss_bytes_p50": int(statistics.median(rss)),
+        "fresh_samples_ms": first,
+        "warm_samples_ms": warm,
+        "warm_process_p50_ms": warm_process_p50,
+        "warm_process_p95_ms": warm_process_p95,
         "result": processes[-1]["result"],
         "evidence": evidence,
     }
@@ -201,6 +217,10 @@ def environment_info(root: Path) -> dict:
     packages = {}
     for name in (
         "pandas",
+        "cbor2",
+        "duckdb",
+        "fastavro",
+        "msgpack",
         "pyarrow",
         "pyfastlanes",
         "pylance",

@@ -15,7 +15,17 @@ def _relative(run_dir: Path, value: str) -> Path:
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("run manifest paths must be relative")
-    return run_dir / path
+    if run_dir.is_symlink():
+        raise ValueError("run directory must not be a symlink")
+    candidate = run_dir / path
+    if candidate.is_symlink() or any(parent.is_symlink() for parent in candidate.parents):
+        raise ValueError("run manifest paths must not resolve through symlinks")
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(run_dir.resolve())
+    except ValueError as error:
+        raise ValueError("run manifest path escapes run directory") from error
+    return candidate
 
 
 def run_fair_worker(run_dir: Path, format_name: str, operation: FairOperation) -> dict:
@@ -26,9 +36,16 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: FairOperation) -
     entry = next(item for item in run_manifest["formats"] if item["format"] == format_name)
     adapter = adapter_map()[format_name]
     artifact = _relative(run_dir, entry["artifact"])
+    source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
+    expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
 
     def invoke() -> int:
-        return adapter.scan(artifact, dataset_manifest, operation).num_rows
+        actual = result_evidence(adapter.scan(artifact, dataset_manifest, operation))
+        if actual != expected:
+            raise ValueError(
+                f"normalized operation result mismatch: {actual} != {expected}"
+            )
+        return actual["rows"]
 
     measured = measure_callable(
         invoke,
@@ -36,12 +53,7 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: FairOperation) -
         int(os.environ.get("FORMAT_BENCH_WARMUPS", "5")),
         int(os.environ.get("FORMAT_BENCH_ITERATIONS", "30")),
     )
-    source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
-    expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
-    actual = result_evidence(adapter.scan(artifact, dataset_manifest, operation))
-    if actual != expected:
-        raise ValueError(f"normalized operation result mismatch: {actual} != {expected}")
-    return {**measured, "evidence": actual}
+    return {**measured, "evidence": expected}
 
 
 def main() -> None:
