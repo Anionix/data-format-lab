@@ -3,6 +3,7 @@ from .arrow_extra import FeatherV2Adapter, OrcAdapter
 from .arrow_ipc import ArrowIpcAdapter
 from .lance import LanceAdapter, build_fts, lance_components, query_fts
 from .parquet import ParquetAdapter
+from .row import AvroAdapter, CborAdapter, MessagePackAdapter
 from .text import CsvAdapter, ObjectJsonlAdapter, TsvAdapter
 from .tsfile import TsFileAdapter
 from .vortex import VortexAdapter
@@ -10,11 +11,14 @@ from .vortex import VortexAdapter
 __all__ = [
     "Artifact",
     "ArrowIpcAdapter",
+    "AvroAdapter",
+    "CborAdapter",
     "CsvAdapter",
     "FeatherV2Adapter",
     "FormatAdapter",
     "FormatDescription",
     "LanceAdapter",
+    "MessagePackAdapter",
     "ObjectJsonlAdapter",
     "OrcAdapter",
     "ParquetAdapter",

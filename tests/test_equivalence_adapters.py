@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
-from format_bench.formats import FeatherV2Adapter, OrcAdapter, TsvAdapter
+from format_bench.formats import (
+    AvroAdapter,
+    CborAdapter,
+    FeatherV2Adapter,
+    MessagePackAdapter,
+    OrcAdapter,
+    TsvAdapter,
+)
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -23,7 +30,16 @@ def fixture_contract() -> tuple[dict, object]:
 
 
 @pytest.mark.parametrize(
-    "adapter", [TsvAdapter(), FeatherV2Adapter(), OrcAdapter()], ids=lambda item: item.describe().name
+    "adapter",
+    [
+        TsvAdapter(),
+        FeatherV2Adapter(),
+        OrcAdapter(),
+        AvroAdapter(),
+        MessagePackAdapter(),
+        CborAdapter(),
+    ],
+    ids=lambda item: item.describe().name,
 )
 def test_text_arrow_equivalence_adapters_roundtrip(
     fixture_contract, tmp_path: Path, adapter
