@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 
@@ -87,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     interop = subcommands.add_parser("interop")
     interop.add_argument("--dataset", required=True)
-    interop.add_argument("--output", type=Path, default=Path("outputs/interop"))
+    interop.add_argument("--output", type=Path)
     interop.add_argument("--fixture", action="store_true")
 
     package = subcommands.add_parser("package")
@@ -200,6 +201,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "report":
         path = render_report(args.run_dir)
     elif args.command == "interop":
+        output = args.output or Path("outputs") / (
+            "interop-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        )
         source = (
             root / "datasets" / args.dataset / "fixture.csv"
             if args.fixture
@@ -212,7 +216,7 @@ def main(argv: list[str] | None = None) -> None:
         else:
             manifest, table = load_dataset(root, args.dataset, source=source)
         path = run_arrow_ipc_interoperability(
-            table, manifest, args.output, environment=environment_info(root)
+            table, manifest, output, environment=environment_info(root)
         )
     else:
         path = package_run(args.run_dir, args.output, args.platform)
