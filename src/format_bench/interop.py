@@ -129,7 +129,7 @@ def run_arrow_ipc_interoperability(
             "pyarrow": pa.__version__,
         },
         "environment": environment
-        or environment_info(Path(__file__).resolve().parents[2]),
+        or environment_info(Path.cwd()),
         "canonical_hash": manifest["canonical_hash"],
         "expected_counts": manifest["expected_counts"],
         "variants": variants,
