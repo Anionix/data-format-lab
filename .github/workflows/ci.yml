@@ -108,7 +108,7 @@ jobs:
                 fi
                 if test "$profile" = equivalence; then
                   .venv/bin/python -c \
-                    "import json,sys; r=json.load(open(sys.argv[1])); assert r['profile']=='equivalence' and 'csv-tsv' in r['equivalence']['pairs']" \
+                    "import json,sys; r=json.load(open(sys.argv[1])); assert r[\"profile\"]==\"equivalence\" and \"csv-tsv\" in r[\"equivalence\"][\"pairs\"]" \
                     "$run_dir/results.json"
                 fi
               } >"$log" 2>&1
