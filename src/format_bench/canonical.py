@@ -9,6 +9,7 @@ import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
 from .datasets import load_manifest, sha256_bytes
+from .workloads import apply_workload, load_workloads
 
 
 _ARROW_TYPES = {
@@ -67,7 +68,12 @@ def canonical_hash(table: pa.Table) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def query_counts(table: pa.Table) -> dict[str, int]:
+def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int]:
+    if manifest is not None and "workloads" in manifest:
+        return {
+            operation: apply_workload(table, workload).num_rows
+            for operation, workload in load_workloads(manifest).items()
+        }
     return {
         "rows": table.num_rows,
         "group_ai_llm": table.filter(pc.equal(table["group"], "AI / LLM")).num_rows,
@@ -89,7 +95,7 @@ def verify_table(table: pa.Table, manifest: dict) -> dict:
     actual_hash = canonical_hash(table)
     if actual_hash != manifest["canonical_hash"]:
         raise ValueError("canonical hash mismatch")
-    counts = query_counts(table)
+    counts = query_counts(table, manifest)
     if counts != manifest["expected_counts"]:
         raise ValueError(f"query count mismatch: expected {manifest['expected_counts']}, got {counts}")
     return {"canonical_hash": actual_hash, "counts": counts, "passed": True}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "dataset_id": "owid-energy",
+  "title": "Our World in Data Energy Data",
+  "scope": "fixture_contract",
+  "source_format": "csv",
+  "source": {
+    "url": "https://owid-public.owid.io/data/energy/owid-energy-data.csv",
+    "codebook_url": "https://github.com/owid/energy-data/blob/master/owid-energy-codebook.csv",
+    "observed_sha256": "77b3db513f02f5fffb69fe02832907ce70b01d3906fc2c5dd40fa47e3ee7d0f3",
+    "observed_rows": 23377,
+    "observed_columns": 130,
+    "last_modified": "2026-04-27T14:38:33Z",
+    "license": "OWID-produced data CC BY; underlying sources retain their licenses",
+    "normalization": "preserve country/year rows and codebook names"
+  },
+  "source_sha256": "1807fa5e4ab0b696da85c31e699aed25fdb99c6d18692a9ff9e18063fc5dd093",
+  "canonical_hash": "ec5a74bb42ca6b041cd1b93699cd5f104c535f96046deb4bd28abe5a4bb8c737",
+  "rows": 4,
+  "columns": [
+    {"name": "country", "arrow_type": "string", "nullable": true},
+    {"name": "year", "arrow_type": "int64", "nullable": true},
+    {"name": "population", "arrow_type": "int64", "nullable": true},
+    {"name": "renewable_share", "arrow_type": "float64", "nullable": true},
+    {"name": "energy_per_capita", "arrow_type": "float64", "nullable": true}
+  ],
+  "expected_counts": {"filter_high_energy": 2, "filter_japan": 2, "head_10": 4, "project_two": 4, "read_all": 4},
+  "workloads": {
+    "read_all": {"kind": "read_all"},
+    "project_two": {"kind": "projection", "columns": ["country", "renewable_share"]},
+    "filter_high_energy": {"kind": "filter", "column": "energy_per_capita", "operator": "gte", "value": 40000.0},
+    "filter_japan": {"kind": "filter", "column": "country", "operator": "eq", "value": "Japan"},
+    "head_10": {"kind": "head", "limit": 10}
+  },
+  "fixture": "fixture.csv",
+  "provenance": {"retrieved_at": "2026-07-17", "source_commit": "e7897aed55b514b8d16e0a3d8f1518789ac3de31", "raw_response_retained": false}
+}

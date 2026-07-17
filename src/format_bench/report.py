@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .model import Comparability, ExecutionState, RobustnessVerdict, transition
+from .model import Comparability, ExecutionState, Lane, RobustnessVerdict, transition
 from .robustness.summary import summarize_cases
 
 
@@ -211,7 +211,11 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
 
 
 def _fair(manifest: dict, results: dict) -> list[str]:
-    formats = manifest["formats"]
+    formats = [
+        item
+        for item in manifest["formats"]
+        if item.get("lane", Lane.FAIR) == Lane.FAIR
+    ]
     rows = [
         [
             item["format"],
@@ -399,6 +403,7 @@ def _robustness(results: dict) -> list[str]:
         ["Case timeout seconds", config["case_timeout_seconds"]],
         ["Artifact budget MiB", config["artifact_budget_mib"]],
     ]
+
     summary_rows = [
         [verdict, evidence["summary"].get(verdict.value, 0)]
         for verdict in RobustnessVerdict
@@ -499,6 +504,68 @@ def _robustness(results: dict) -> list[str]:
     ]
 
 
+def _equivalence(results: dict) -> list[str]:
+    evidence = results.get("equivalence", {})
+    pairs = evidence.get("pairs", {})
+    rows: list[list[object]] = []
+    for pair, item in sorted(pairs.items()):
+        rows.append(
+            [
+                pair,
+                item.get("lane", "N/A"),
+                item.get("reference", "N/A"),
+                ", ".join(item.get("candidates", ())) or "N/A",
+                item.get("verdict", "N/A"),
+                item.get("failure_reason") or "",
+            ]
+        )
+    metric_rows: list[list[object]] = []
+    for pair, item in sorted(pairs.items()):
+        for format_name, comparison in sorted(item.get("formats", {}).items()):
+            scopes = [("storage", comparison.get("storage", {}))]
+            scopes.extend(
+                (operation, operation_evidence)
+                for operation, operation_evidence in sorted(
+                    comparison.get("operations", {}).items()
+                )
+            )
+            for scope, scope_evidence in scopes:
+                for metric in scope_evidence.get("metrics", ()):
+                    metric_rows.append(
+                        [
+                            pair,
+                            format_name,
+                            scope,
+                            metric.get("metric"),
+                            metric.get("ratio"),
+                            metric.get("lower"),
+                            metric.get("upper"),
+                            scope_evidence.get("verdict"),
+                        ]
+                    )
+    return [
+        "## Equivalence Evidence",
+        "",
+        "Equivalence is decided only within the declared pair and lane; it is not a universal ranking.",
+        "",
+        "### Pair Verdicts",
+        "",
+        *_table(
+            ["Pair", "Lane", "Reference", "Candidates", "Verdict", "Failure"],
+            rows,
+        ),
+        "",
+        "### Ratio Intervals",
+        "",
+        *_table(
+            ["Pair", "Candidate", "Scope", "Metric", "Ratio", "Lower", "Upper", "Verdict"],
+            metric_rows,
+        ),
+        "",
+        "Bounds: size +/-2%; p50 +/-5%; p95 +/-10%. Intervals crossing a bound are inconclusive.",
+    ]
+
+
 def _report_observations(manifest: dict, results: dict) -> None:
     for entry in manifest.get("formats", []):
         if entry.get("state") == ExecutionState.BENCHMARKED:
@@ -531,6 +598,7 @@ def render_report(run_dir: Path) -> Path:
         "claims": lambda: _claims(results),
         "prompt": lambda: _prompt(results),
         "robustness": lambda: _robustness(results),
+        "equivalence": lambda: _equivalence(results),
     }
     section = sections[profile]()
     for payload in (manifest, results):

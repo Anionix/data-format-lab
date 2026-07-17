@@ -1,0 +1,5 @@
+country,year,population,renewable_share,energy_per_capita
+World,2000,6153490000,12.4,21000.0
+World,2001,6210000000,12.8,21200.0
+Japan,2000,126800000,4.2,42000.0
+Japan,2001,127000000,4.4,42100.0

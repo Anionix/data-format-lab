@@ -71,7 +71,7 @@ jobs:
             tmp_dir=$(mktemp -d)
             trap "rm -rf \"$tmp_dir\"" EXIT
 
-            profiles=(fair claims prompt)
+            profiles=(fair claims prompt equivalence)
             pids=()
 
             .venv/bin/pytest >"$tmp_dir/tests.log" 2>&1 &
@@ -82,12 +82,16 @@ jobs:
               local profile="$1"
               local log="$2"
               local run_dir="runs/ci-smoke-$profile-$BASHPID"
+              local pair_args=()
+              if test "$profile" = equivalence; then
+                pair_args=(--pair csv-tsv)
+              fi
               {
                 result=$(.venv/bin/format-bench run \
                   --profile "$profile" \
                   --dataset github-stars-2026-07-03 \
                   --run-dir "$run_dir" \
-                  --fixture)
+                  --fixture "${pair_args[@]}")
                 run_dir=$(dirname "$result")
                 report=$(.venv/bin/format-bench report --run-dir "$run_dir")
                 before=$(sha256sum "$report")
@@ -100,6 +104,11 @@ jobs:
                 if test "$profile" = claims; then
                   .venv/bin/python -c \
                     "import json,sys; r=json.load(open(sys.argv[1]))[\"results\"]; assert all(r[name][\"target_tier\"] == \"EXPERIMENTAL\" for name in (\"tsfile_time_series\", \"fastlanes_official\"))" \
+                    "$run_dir/results.json"
+                fi
+                if test "$profile" = equivalence; then
+                  .venv/bin/python -c \
+                    "import json,sys; r=json.load(open(sys.argv[1])); assert r[\"profile\"]==\"equivalence\" and \"csv-tsv\" in r[\"equivalence\"][\"pairs\"]" \
                     "$run_dir/results.json"
                 fi
               } >"$log" 2>&1
@@ -163,6 +172,17 @@ jobs:
               "import json,sys; m=json.load(open(sys.argv[1])); assert m.get(\"fixture\") and not m.get(\"rankable\")" \
               "$run_dir/manifest.json"
             .venv/bin/python -m format_bench.robustness.gate "$run_dir/results.json"
+          '
+
+      - name: Gate implementation audit
+        run: |
+          # Keep the audit inside the pinned shell so PyArrow sees the same C++ runtime as every other gate.
+          nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
+            .venv/bin/format-bench audit \
+              --dataset github-stars-2026-07-03 \
+              --output /tmp/implementation-audit.json
+            .venv/bin/python -c \
+              "import json; assert json.load(open(\"/tmp/implementation-audit.json\"))[\"audit\"][\"status\"]==\"PASS\""
           '
 
       - name: Observe ty diagnostics

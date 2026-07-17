@@ -1,0 +1,38 @@
+{
+  "schema_version": "1",
+  "dataset_id": "geonames-cities500",
+  "title": "GeoNames cities500",
+  "scope": "fixture_contract",
+  "source_format": "headerless_tab_csv",
+  "source": {
+    "url": "https://download.geonames.org/export/dump/cities500.zip",
+    "member": "cities500.txt",
+    "archive_sha256_observed": "d8a1857eafd1b7a3bb4dae2804a634090e1e0b13c3eb3b18fd946f22e21e99c4",
+    "member_sha256_observed": "dc6e58377d20ad87a2c54cfafdd5a6b0f4d56e20cb4b84d89b4a2d16c376df78",
+    "license": "CC BY 4.0",
+    "attribution": "GeoNames",
+    "normalization": "strict 19-field UTF-8 tab rows, blanks to NULL, sort by geonameid and full row"
+  },
+  "source_sha256": "18b4473ba711b6100b96bb93927d9d6dc506be76bf977326ddfa6bee008bac5b",
+  "canonical_hash": "8c9cc9d4e1499f05f0270f2b1833929e13f53bb7718c1c93cbe6e58d040e09ca",
+  "rows": 4,
+  "columns": [
+    {"name": "geonameid", "arrow_type": "int64", "nullable": true},
+    {"name": "name", "arrow_type": "string", "nullable": true},
+    {"name": "latitude", "arrow_type": "float64", "nullable": true},
+    {"name": "longitude", "arrow_type": "float64", "nullable": true},
+    {"name": "country_code", "arrow_type": "string", "nullable": true},
+    {"name": "population", "arrow_type": "int64", "nullable": true},
+    {"name": "timezone", "arrow_type": "string", "nullable": true}
+  ],
+  "expected_counts": {"filter_gb": 1, "filter_large": 3, "head_10": 4, "project_two": 4, "read_all": 4},
+  "workloads": {
+    "read_all": {"kind": "read_all"},
+    "project_two": {"kind": "projection", "columns": ["name", "population"]},
+    "filter_large": {"kind": "filter", "column": "population", "operator": "gte", "value": 5000000},
+    "filter_gb": {"kind": "filter", "column": "country_code", "operator": "eq", "value": "GB"},
+    "head_10": {"kind": "head", "limit": 10}
+  },
+  "fixture": "fixture.csv",
+  "provenance": {"retrieved_at": "2026-07-17", "daily_export": true, "raw_response_retained": false}
+}

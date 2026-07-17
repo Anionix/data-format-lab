@@ -69,8 +69,8 @@ class ParquetAdapter:
     def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
         table = pq.read_table(
             path,
-            columns=columns_for(operation),
-            filters=arrow_filter(operation),
+            columns=columns_for(operation, manifest),
+            filters=arrow_filter(operation, manifest),
         )
-        limit = limit_for(operation, manifest["rows"])
+        limit = limit_for(operation, manifest["rows"], manifest)
         return table.slice(0, limit) if limit is not None else table

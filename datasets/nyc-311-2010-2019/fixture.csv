@@ -1,0 +1,5 @@
+unique_key,created_date,complaint_type,borough,complaint_text
+1,2010-01-01T00:00:00,Noise - Residential,MANHATTAN, loud music
+2,2010-01-02T12:00:00,Heat/Hాట్ and Hot Water,QUEENS,No heat
+3,2015-05-10T08:30:00,Street Condition,BROOKLYN,Pothole
+4,2019-12-31T23:59:59,Water System,BRONX,

@@ -83,9 +83,9 @@ class LanceAdapter:
 
     def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
         return lance.dataset(path).to_table(
-            columns=columns_for(operation),
-            filter=lance_filter(operation),
-            limit=limit_for(operation, manifest["rows"]),
+            columns=columns_for(operation, manifest),
+            filter=lance_filter(operation, manifest),
+            limit=limit_for(operation, manifest["rows"], manifest),
         )
 
 

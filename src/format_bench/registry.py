@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from .formats.base import FormatAdapter
+from .formats.arrow_extra import FeatherV2Adapter, OrcAdapter
 from .formats.arrow_ipc import ArrowIpcAdapter
+from .formats.database import DuckDbAdapter, SqliteAdapter
 from .formats.lance import LanceAdapter
 from .formats.parquet import ParquetAdapter
-from .formats.text import CsvAdapter, ObjectJsonlAdapter
+from .formats.row import AvroAdapter, CborAdapter, MessagePackAdapter
+from .formats.text import CsvAdapter, ObjectJsonlAdapter, TsvAdapter
 from .formats.tsfile import TsFileAdapter
 from .formats.vortex import VortexAdapter
 
@@ -12,10 +15,13 @@ from .formats.vortex import VortexAdapter
 def adapters() -> tuple[FormatAdapter, ...]:
     return (
         CsvAdapter(),
+        TsvAdapter(),
         ObjectJsonlAdapter(),
         ArrowIpcAdapter(),
         ArrowIpcAdapter("lz4"),
         ArrowIpcAdapter("zstd"),
+        FeatherV2Adapter(),
+        OrcAdapter(),
         ParquetAdapter(),
         ParquetAdapter(compression_level=19),
         ParquetAdapter(compression="snappy"),
@@ -24,6 +30,11 @@ def adapters() -> tuple[FormatAdapter, ...]:
         VortexAdapter(),
         VortexAdapter(compact=True),
         TsFileAdapter(),
+        AvroAdapter(),
+        MessagePackAdapter(),
+        CborAdapter(),
+        SqliteAdapter(),
+        DuckDbAdapter(),
     )
 
 

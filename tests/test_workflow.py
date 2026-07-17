@@ -125,3 +125,35 @@ def test_cli_validates_robustness_profile_options() -> None:
                     "--dataset", DATASET, option, value,
                 ]
             )
+
+
+def test_cli_accepts_equivalence_pairs_and_rejects_robustness_options() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "equivalence",
+            "--dataset",
+            DATASET,
+            "--pair",
+            "csv-tsv",
+            "--pair",
+            "arrow-feather",
+        ]
+    )
+    assert args.pair == ["csv-tsv", "arrow-feather"]
+    cli._validate_run_options(args)
+
+    invalid = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "equivalence",
+            "--dataset",
+            DATASET,
+            "--suite",
+            "bounded",
+        ]
+    )
+    with pytest.raises(ValueError, match="robustness options"):
+        cli._validate_run_options(invalid)

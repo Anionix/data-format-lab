@@ -49,9 +49,9 @@ class VortexAdapter:
 
     def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
         dataset = vortex.open(str(path)).to_dataset()
-        limit = limit_for(operation, manifest["rows"])
-        columns = columns_for(operation)
-        kwargs = {"columns": columns, "filter": arrow_filter(operation)}
+        limit = limit_for(operation, manifest["rows"], manifest)
+        columns = columns_for(operation, manifest)
+        kwargs = {"columns": columns, "filter": arrow_filter(operation, manifest)}
         table = dataset.head(limit, **kwargs) if limit is not None else dataset.to_table(**kwargs)
         schema = arrow_schema(manifest)
         if columns:

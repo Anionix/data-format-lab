@@ -9,7 +9,10 @@ from typing import TypeVar
 
 from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
+from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
+from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
+from .model import ExecutionState
 from .profile_run import run_claims, run_prompt
 from .release import package_run
 from .report import render_report
@@ -18,6 +21,8 @@ from .robustness.native import NATIVE_TARGETS, run_native
 from .interop import run_arrow_ipc_interoperability
 from .runner import environment_info
 from .workflow import _fixture_manifest, prepare_run, verify_run
+from .workloads import load_workloads
+from .registry import adapters
 
 
 _T = TypeVar("_T")
@@ -69,7 +74,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = subcommands.add_parser("run")
     run.add_argument(
-        "--profile", choices=["fair", "claims", "prompt", "robustness"], required=True
+        "--profile",
+        choices=["fair", "claims", "prompt", "robustness", "equivalence"],
+        required=True,
     )
     run.add_argument("--dataset", required=True)
     run.add_argument("--run-dir", type=Path)
@@ -82,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--mutations-per-target", type=_non_negative_int)
     run.add_argument("--case-timeout-seconds", type=_positive_float)
     run.add_argument("--artifact-budget-mib", type=_positive_int)
+    run.add_argument("--pair", action="append", choices=sorted(PAIR_SPECS))
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
@@ -95,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--run-dir", type=Path, required=True)
     package.add_argument("--output", type=Path, default=Path("outputs/release"))
     package.add_argument("--platform", required=True)
+
+    audit = subcommands.add_parser("audit")
+    audit.add_argument("--dataset", required=True)
+    audit.add_argument("--run-dir", type=Path)
+    audit.add_argument("--output", type=Path)
     return parser
 
 
@@ -108,15 +121,34 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.artifact_budget_mib,
         args.target,
         args.duration_seconds,
+        args.pair,
     )
-    if args.profile != "robustness":
+    if args.profile not in {"robustness", "equivalence"}:
         if any(value is not None for value in robustness_options):
             raise ValueError(
-                "robustness options only apply with --profile robustness"
+                "robustness and equivalence options only apply to their matching profile"
             )
+        return
+    if args.profile == "equivalence":
+        if any(
+            value is not None
+            for value in (
+                args.suite,
+                args.seed,
+                args.generated_cases,
+                args.mutations_per_target,
+                args.case_timeout_seconds,
+                args.artifact_budget_mib,
+                args.target,
+                args.duration_seconds,
+            )
+        ):
+            raise ValueError("robustness options require --profile robustness")
         return
     if args.suite not in {"bounded", "native"}:
         raise ValueError("--profile robustness requires --suite bounded or native")
+    if args.pair:
+        raise ValueError("--pair requires --profile equivalence")
     if args.suite == "bounded" and (args.target or args.duration_seconds is not None):
         raise ValueError("--target and --duration-seconds require --suite native")
     if args.suite == "native" and any(
@@ -196,8 +228,11 @@ def main(argv: list[str] | None = None) -> None:
                     artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
                 )
         else:
-            runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
-            path = runners[args.profile](root, run_dir)
+            if args.profile == "equivalence":
+                path = run_equivalence(root, run_dir, pairs=tuple(args.pair) if args.pair else None)
+            else:
+                runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
+                path = runners[args.profile](root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
     elif args.command == "interop":
@@ -218,6 +253,50 @@ def main(argv: list[str] | None = None) -> None:
         path = run_arrow_ipc_interoperability(
             table, manifest, output, environment=environment_info(root)
         )
+    elif args.command == "audit":
+        dataset_manifest = load_manifest(root, args.dataset)
+        run_manifest = (
+            json.loads((args.run_dir / "manifest.json").read_text(encoding="utf-8"))
+            if args.run_dir is not None
+            else None
+        )
+        artifact_paths = (
+            [entry["artifact"] for entry in run_manifest["formats"]]
+            if run_manifest is not None
+            else [
+                "artifacts/" + adapter.describe().name + adapter.describe().extension
+                for adapter in adapters()
+            ]
+        )
+        evidence = audit_implementation(
+            adapters(),
+            lifecycle=(
+                ExecutionState.DISCOVERED,
+                ExecutionState.ENCODED,
+                ExecutionState.ROUNDTRIP_VERIFIED,
+                ExecutionState.BENCHMARKED,
+                ExecutionState.REPORTED,
+            ),
+            artifact_paths=artifact_paths,
+            workloads=load_workloads(dataset_manifest),
+            required_operations=load_workloads(dataset_manifest),
+            expected_adapter_count=len(EXPECTED_ADAPTER_LANES),
+            expected_lanes=EXPECTED_ADAPTER_LANES,
+            path_root=args.run_dir,
+        )
+        payload = {
+            "schema_version": "1",
+            "dataset_id": args.dataset,
+            "audit": evidence.as_dict(),
+        }
+        output = args.output or (
+            args.run_dir / "implementation-audit.json"
+            if args.run_dir is not None
+            else Path("outputs") / f"implementation-audit-{args.dataset}.json"
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        path = output
     else:
         path = package_run(args.run_dir, args.output, args.platform)
     print(path)

@@ -11,10 +11,14 @@ import statistics
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TypeVar
+
+
+_Measured = TypeVar("_Measured")
 
 
 @dataclass(frozen=True)
@@ -59,10 +63,18 @@ def stats_ms(values: list[float]) -> dict[str, float | int]:
 
 
 def measure_callable(
-    invoke: Callable[[], int], expected: int, warmups: int, iterations: int
+    invoke: Callable[[], _Measured],
+    expected: int,
+    warmups: int,
+    iterations: int,
+    *,
+    result_count: Callable[[_Measured], int] | None = None,
+    validate: Callable[[_Measured], None] | None = None,
 ) -> dict:
-    def checked_invoke() -> int:
-        result = invoke()
+    count = result_count or (lambda value: value)  # type: ignore[return-value]
+
+    def check_result(value: _Measured) -> int:
+        result = count(value)
         if result != expected:
             raise ValueError(
                 f"unexpected operation result: expected {expected}, got {result}"
@@ -70,16 +82,26 @@ def measure_callable(
         return result
 
     started = time.perf_counter_ns()
-    first_result = checked_invoke()
+    first_value = invoke()
     first_open_ms = (time.perf_counter_ns() - started) / 1_000_000
+    first_result = check_result(first_value)
+    if validate is not None:
+        validate(first_value)
     for _ in range(warmups):
-        checked_invoke()
+        warmup_value = invoke()
+        check_result(warmup_value)
+        if validate is not None:
+            validate(warmup_value)
     samples: list[float] = []
     result = first_result
     for _ in range(iterations):
         started = time.perf_counter_ns()
-        result = checked_invoke()
-        samples.append((time.perf_counter_ns() - started) / 1_000_000)
+        value = invoke()
+        elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000
+        result = check_result(value)
+        if validate is not None:
+            validate(value)
+        samples.append(elapsed_ms)
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if sys.platform != "darwin":
         rss *= 1024
@@ -117,7 +139,34 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
                 "status": "FAILED",
                 "reason": f"worker exited {completed.returncode}: {completed.stderr[-2000:]}",
             }
-        result = json.loads(completed.stdout.strip().splitlines()[-1])
+        try:
+            result = json.loads(completed.stdout.strip().splitlines()[-1])
+            if not isinstance(result, dict):
+                raise ValueError("worker JSON must be an object")
+        except (json.JSONDecodeError, IndexError, ValueError) as error:
+            return {
+                "status": "FAILED",
+                "reason": f"worker returned invalid JSON: {error}",
+            }
+        missing = sorted(
+            field
+            for field in ("first_open_ms", "samples_ms", "result", "max_rss_bytes")
+            if field not in result
+        )
+        if missing:
+            return {
+                "status": "FAILED",
+                "reason": f"worker response missing required fields: {', '.join(missing)}",
+            }
+        if (
+            isinstance(result["result"], bool)
+            or not isinstance(result["result"], int)
+            or not isinstance(result["first_open_ms"], (int, float))
+            or not isinstance(result["samples_ms"], list)
+            or not all(isinstance(sample, (int, float)) for sample in result["samples_ms"])
+            or not isinstance(result["max_rss_bytes"], int)
+        ):
+            return {"status": "FAILED", "reason": "worker response has invalid field types"}
         if result["result"] != job.expected_result:
             return {"status": "FAILED", "reason": "worker result count mismatch"}
         processes.append(result)
@@ -129,20 +178,48 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
     warm = [sample for process in processes for sample in process["samples_ms"]]
     first = [process["first_open_ms"] for process in processes]
     rss = [process["max_rss_bytes"] for process in processes]
+    warm_process_p50 = [statistics.median(process["samples_ms"]) for process in processes]
+    warm_process_p95 = [
+        percentile(process["samples_ms"], 0.95) for process in processes
+    ]
     return {
         "status": "MEASURED",
         "fresh_process": stats_ms(first),
         "warm": stats_ms(warm),
         "max_rss_bytes_p50": int(statistics.median(rss)),
+        "fresh_samples_ms": first,
+        "warm_samples_ms": warm,
+        "warm_process_p50_ms": warm_process_p50,
+        "warm_process_p95_ms": warm_process_p95,
         "result": processes[-1]["result"],
         "evidence": evidence,
     }
 
 
-def run_jobs(jobs: list[Job], config: MeasurementConfig, cwd: Path) -> dict[str, dict]:
+def run_jobs(
+    jobs: list[Job],
+    config: MeasurementConfig,
+    cwd: Path,
+    *,
+    parallel: bool = False,
+) -> dict[str, dict]:
     ordered = list(jobs)
     random.Random(config.seed).shuffle(ordered)
-    return {job.job_id: run_job(job, config, cwd) for job in ordered}
+    if not ordered:
+        return {}
+    if not parallel:
+        return {job.job_id: run_job(job, config, cwd) for job in ordered}
+    requested_workers = int(os.environ.get("FORMAT_BENCH_MAX_WORKERS", "8"))
+    if requested_workers <= 0:
+        raise ValueError("FORMAT_BENCH_MAX_WORKERS must be positive")
+    worker_count = min(len(ordered), requested_workers)
+    # Parallel mode is reserved for explicitly independent workloads; benchmark
+    # lanes stay serial so measured formats do not contend for shared resources.
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = {
+            job.job_id: executor.submit(run_job, job, config, cwd) for job in ordered
+        }
+        return {job.job_id: futures[job.job_id].result() for job in ordered}
 
 
 def _sha256(path: Path) -> str:
@@ -201,6 +278,10 @@ def environment_info(root: Path) -> dict:
     packages = {}
     for name in (
         "pandas",
+        "cbor2",
+        "duckdb",
+        "fastavro",
+        "msgpack",
         "pyarrow",
         "pyfastlanes",
         "pylance",
