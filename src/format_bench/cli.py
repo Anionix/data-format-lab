@@ -9,6 +9,7 @@ from typing import TypeVar
 
 from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
+from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
 from .profile_run import run_claims, run_prompt
 from .release import package_run
@@ -69,7 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = subcommands.add_parser("run")
     run.add_argument(
-        "--profile", choices=["fair", "claims", "prompt", "robustness"], required=True
+        "--profile",
+        choices=["fair", "claims", "prompt", "robustness", "equivalence"],
+        required=True,
     )
     run.add_argument("--dataset", required=True)
     run.add_argument("--run-dir", type=Path)
@@ -82,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--mutations-per-target", type=_non_negative_int)
     run.add_argument("--case-timeout-seconds", type=_positive_float)
     run.add_argument("--artifact-budget-mib", type=_positive_int)
+    run.add_argument("--pair", action="append", choices=sorted(PAIR_SPECS))
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
@@ -108,15 +112,34 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.artifact_budget_mib,
         args.target,
         args.duration_seconds,
+        args.pair,
     )
-    if args.profile != "robustness":
+    if args.profile not in {"robustness", "equivalence"}:
         if any(value is not None for value in robustness_options):
             raise ValueError(
-                "robustness options only apply with --profile robustness"
+                "robustness and equivalence options only apply to their matching profile"
             )
+        return
+    if args.profile == "equivalence":
+        if any(
+            value is not None
+            for value in (
+                args.suite,
+                args.seed,
+                args.generated_cases,
+                args.mutations_per_target,
+                args.case_timeout_seconds,
+                args.artifact_budget_mib,
+                args.target,
+                args.duration_seconds,
+            )
+        ):
+            raise ValueError("robustness options require --profile robustness")
         return
     if args.suite not in {"bounded", "native"}:
         raise ValueError("--profile robustness requires --suite bounded or native")
+    if args.pair:
+        raise ValueError("--pair requires --profile equivalence")
     if args.suite == "bounded" and (args.target or args.duration_seconds is not None):
         raise ValueError("--target and --duration-seconds require --suite native")
     if args.suite == "native" and any(
@@ -196,8 +219,11 @@ def main(argv: list[str] | None = None) -> None:
                     artifact_budget_mib=_default(args.artifact_budget_mib, 1024),
                 )
         else:
-            runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
-            path = runners[args.profile](root, run_dir)
+            if args.profile == "equivalence":
+                path = run_equivalence(root, run_dir, pairs=tuple(args.pair) if args.pair else None)
+            else:
+                runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
+                path = runners[args.profile](root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
     elif args.command == "interop":
