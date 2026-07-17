@@ -38,7 +38,11 @@ def read_csv(path: Path, manifest: dict) -> pa.Table:
         null_values=[""],
         strings_can_be_null=True,
     )
-    return pacsv.read_csv(path, convert_options=options).select(schema.names)
+    table = pacsv.read_csv(path, convert_options=options).select(schema.names)
+    for field in schema:
+        if not field.nullable and table[field.name].null_count:
+            raise ValueError(f"non-nullable column contains NULL: {field.name}")
+    return table.cast(schema)
 
 
 def _normalize_row(row: dict, column_names: list[str]) -> dict:
