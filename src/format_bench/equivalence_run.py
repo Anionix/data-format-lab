@@ -22,6 +22,7 @@ def run_equivalence(
     *,
     pairs: tuple[str, ...] | None = None,
     config: MeasurementConfig | None = None,
+    parallel: bool = False,
 ) -> Path:
     manifest_path = run_dir / "manifest.json"
     run_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -82,7 +83,7 @@ def run_equivalence(
         for name in sorted(measured_names)
         for operation in operations
     ]
-    measured = run_jobs(jobs, measurement, root)
+    measured = run_jobs(jobs, measurement, root, parallel=parallel)
     failed = {
         job_id for job_id, result in measured.items() if result["status"] != "MEASURED"
     }
@@ -143,6 +144,7 @@ def run_equivalence(
     run_manifest["equivalence"] = {
         "contract_version": "1",
         "bounds": asdict(bounds),
+        "parallel_jobs": parallel,
         "pairs": pairs_evidence,
     }
     _write_json(manifest_path, run_manifest)
@@ -151,6 +153,7 @@ def run_equivalence(
     results["dataset_id"] = run_manifest["dataset_id"]
     results["state"] = result_state
     results["equivalence"] = run_manifest["equivalence"]
+    results["parallel_jobs"] = parallel
     results["results"] = measured
     results["status"] = (
         "MEASURED"
