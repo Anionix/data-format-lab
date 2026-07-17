@@ -43,12 +43,19 @@ def _rows_payload(table: pa.Table) -> dict[str, Any]:
     }
 
 
+def _manifest_columns(manifest: dict) -> list[dict[str, object]]:
+    return [
+        {**column, "nullable": column.get("nullable", True)}
+        for column in manifest["columns"]
+    ]
+
+
 def _table_from_payload(payload: Any, manifest: dict) -> pa.Table:
     if not isinstance(payload, dict) or payload.get("schema_version") != "1":
         raise ValueError("serialized row payload has an unsupported schema")
     rows = payload.get("rows")
     columns = payload.get("columns")
-    if not isinstance(rows, list) or columns != manifest["columns"]:
+    if not isinstance(rows, list) or columns != _manifest_columns(manifest):
         raise ValueError("serialized row payload schema mismatch")
     schema = arrow_schema(manifest)
     expected_names = {field.name for field in schema}
@@ -100,7 +107,7 @@ class AvroAdapter:
 
         with path.open("rb") as handle:
             rows = list(reader(handle))
-        payload = {"schema_version": "1", "columns": manifest["columns"], "rows": rows}
+        payload = {"schema_version": "1", "columns": _manifest_columns(manifest), "rows": rows}
         return _table_from_payload(payload, manifest)
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:

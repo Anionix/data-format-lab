@@ -58,3 +58,18 @@ def test_verify_table_checks_hash_schema_rows_and_queries() -> None:
     wrong_rows = {**manifest, "rows": 5}
     with pytest.raises(ValueError, match="row count mismatch"):
         verify_table(table, wrong_rows)
+
+
+def test_read_csv_preserves_non_nullable_schema_and_rejects_nulls(tmp_path: Path) -> None:
+    manifest = {
+        "columns": [{"name": "value", "arrow_type": "int64", "nullable": False}],
+    }
+    source = tmp_path / "source.csv"
+    source.write_text("value\n1\n")
+
+    table = read_csv(source, manifest)
+
+    assert table.schema == arrow_schema(manifest)
+    source.write_text('value\n""\n')
+    with pytest.raises(ValueError, match="non-nullable column contains NULL"):
+        read_csv(source, manifest)
