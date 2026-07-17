@@ -120,6 +120,8 @@ def run_arrow_ipc_interoperability(
         for compression in ("none", "lz4", "zstd"):
             adapter = ArrowIpcAdapter(compression)
             artifact = stage / f"{adapter.name}.arrow"
+            # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+            # This lane verifies conformance before collecting decode timings.
             try:
                 adapter.encode(table, artifact)
                 result = _consume(artifact, manifest, expected_null_positions)
