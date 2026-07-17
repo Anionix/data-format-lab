@@ -22,7 +22,7 @@ def test_arrow_ipc_independent_consumer_records_contract_and_controls(tmp_path: 
         expected_counts=query_counts(table),
     )
 
-    evidence_path = run_arrow_ipc_interoperability(table, manifest, tmp_path)
+    evidence_path = run_arrow_ipc_interoperability(table, manifest, tmp_path / "evidence")
     evidence = json.loads(evidence_path.read_text())
 
     assert evidence["contract_version"] == "1"
@@ -32,7 +32,7 @@ def test_arrow_ipc_independent_consumer_records_contract_and_controls(tmp_path: 
     assert all(item["canonical_hash"] == manifest["canonical_hash"] for item in evidence["variants"])
     assert all(item["expected_counts"] == manifest["expected_counts"] for item in evidence["variants"])
     assert [item["status"] for item in evidence["negative_cases"]] == ["FAILED", "FAILED"]
-    report = (tmp_path / "arrow-ipc-interoperability.md").read_text()
+    report = (tmp_path / "evidence" / "arrow-ipc-interoperability.md").read_text()
     assert "independent-consumer" in report
     assert "cross-language matrix" in report
 
@@ -51,9 +51,27 @@ def test_interoperability_evidence_has_exact_null_positions(tmp_path: Path) -> N
         expected_counts=query_counts(table),
     )
 
-    evidence = json.loads(run_arrow_ipc_interoperability(table, manifest, tmp_path).read_text())
+    evidence = json.loads(
+        run_arrow_ipc_interoperability(table, manifest, tmp_path / "evidence").read_text()
+    )
 
     assert evidence["variants"][0]["null_positions"]["group"] == [0]
+
+
+def test_interoperability_output_cannot_be_reused(tmp_path: Path) -> None:
+    manifest = json.loads((DATASET / "manifest.json").read_text())
+    table = read_csv(DATASET / "fixture.csv", manifest)
+    manifest.update(
+        rows=table.num_rows,
+        canonical_hash=canonical_hash(table),
+        expected_counts=query_counts(table),
+    )
+    output = tmp_path / "evidence"
+
+    run_arrow_ipc_interoperability(table, manifest, output)
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        run_arrow_ipc_interoperability(table, manifest, output)
 
 
 def test_load_dataset_rejects_modified_production_source(tmp_path: Path) -> None:

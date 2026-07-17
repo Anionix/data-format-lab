@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pyarrow as pa
@@ -20,7 +23,18 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _consume(path: Path, manifest: dict) -> dict:
+def _null_positions(table: pa.Table) -> dict[str, list[int]]:
+    return {
+        name: [index for index, value in enumerate(table[name].to_pylist()) if value is None]
+        for name in table.column_names
+    }
+
+
+def _consume(
+    path: Path,
+    manifest: dict,
+    expected_null_positions: dict[str, list[int]],
+) -> dict:
     manifest_path = path.parent / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
     process = subprocess.run(
@@ -57,6 +71,7 @@ def _consume(path: Path, manifest: dict) -> dict:
     if result.get("status") == "PASS" and (
         result.get("canonical_hash") != manifest["canonical_hash"]
         or result.get("expected_counts") != manifest["expected_counts"]
+        or result.get("null_positions") != expected_null_positions
     ):
         result = {
             "status": "FAILED",
@@ -95,49 +110,92 @@ def run_arrow_ipc_interoperability(
     *,
     environment: dict | None = None,
 ) -> Path:
-    output.mkdir(parents=True, exist_ok=True)
-    variants = []
-    for compression in ("none", "lz4", "zstd"):
-        adapter = ArrowIpcAdapter(compression)
-        artifact = output / f"{adapter.name}.arrow"
-        adapter.encode(table, artifact)
-        result = _consume(artifact, manifest)
-        result.update(
-            {
-                "format": adapter.name,
-                "compression": compression,
-                "artifact_sha256": _sha256(artifact),
-            }
+    if output.exists():
+        raise FileExistsError(f"interoperability output already exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix=f".{output.name}-", dir=output.parent))
+    expected_null_positions = _null_positions(table)
+    try:
+        variants = []
+        for compression in ("none", "lz4", "zstd"):
+            adapter = ArrowIpcAdapter(compression)
+            artifact = stage / f"{adapter.name}.arrow"
+            try:
+                adapter.encode(table, artifact)
+                result = _consume(artifact, manifest, expected_null_positions)
+            except (ImportError, ModuleNotFoundError) as error:
+                result = {
+                    "status": "UNSUPPORTED",
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                }
+            except Exception as error:
+                result = {
+                    "status": "FAILED",
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                }
+            result.update(
+                {
+                    "format": adapter.name,
+                    "compression": compression,
+                    "artifact_sha256": _sha256(artifact) if artifact.is_file() else None,
+                }
+            )
+            variants.append(result)
+
+        source_path = stage / "arrow_ipc.arrow"
+        negative_cases = []
+        if source_path.is_file():
+            source = source_path.read_bytes()
+            negative_inputs = (
+                ("truncated", source[: len(source) // 2]),
+                ("invalid", b"not-arrow-ipc\n"),
+            )
+            for case, data in negative_inputs:
+                artifact = stage / f"{case}.arrow"
+                artifact.write_bytes(data)
+                result = _consume(artifact, manifest, expected_null_positions)
+                result.update({"case": case, "artifact_sha256": _sha256(artifact)})
+                negative_cases.append(result)
+        else:
+            negative_cases = [
+                {
+                    "case": case,
+                    "status": "FAILED",
+                    "error_type": "BaseArtifactUnavailable",
+                    "error": "arrow_ipc artifact was not produced",
+                    "artifact_sha256": None,
+                }
+                for case in ("truncated", "invalid")
+            ]
+
+        evidence = {
+            "schema_version": "1",
+            "contract_version": "1",
+            "consumer": {
+                "entrypoint": "format_bench.interop_worker",
+                "python": sys.version.split()[0],
+                "pyarrow": pa.__version__,
+            },
+            "environment": environment or environment_info(Path.cwd()),
+            "canonical_hash": manifest["canonical_hash"],
+            "expected_counts": manifest["expected_counts"],
+            "expected_null_positions": expected_null_positions,
+            "variants": variants,
+            "negative_cases": negative_cases,
+        }
+        evidence_path = stage / "arrow-ipc-interoperability.json"
+        evidence_path.write_text(
+            json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
-        variants.append(result)
-
-    source = (output / "arrow_ipc.arrow").read_bytes()
-    negative_cases = []
-    for case, data in (("truncated", source[: len(source) // 2]), ("invalid", b"not-arrow-ipc\n")):
-        artifact = output / f"{case}.arrow"
-        artifact.write_bytes(data)
-        result = _consume(artifact, manifest)
-        result.update({"case": case, "artifact_sha256": _sha256(artifact)})
-        negative_cases.append(result)
-
-    evidence = {
-        "schema_version": "1",
-        "contract_version": "1",
-        "consumer": {
-            "entrypoint": "format_bench.interop_worker",
-            "python": sys.version.split()[0],
-            "pyarrow": pa.__version__,
-        },
-        "environment": environment
-        or environment_info(Path.cwd()),
-        "canonical_hash": manifest["canonical_hash"],
-        "expected_counts": manifest["expected_counts"],
-        "variants": variants,
-        "negative_cases": negative_cases,
-    }
-    evidence_path = output / "arrow-ipc-interoperability.json"
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    (output / "arrow-ipc-interoperability.md").write_text(
-        _markdown(evidence), encoding="utf-8"
-    )
-    return evidence_path
+        (stage / "arrow-ipc-interoperability.md").write_text(
+            _markdown(evidence), encoding="utf-8"
+        )
+        if output.exists():
+            raise FileExistsError(f"interoperability output already exists: {output}")
+        os.replace(stage, output)
+    except Exception:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+    return output / "arrow-ipc-interoperability.json"

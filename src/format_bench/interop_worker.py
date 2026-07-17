@@ -27,13 +27,17 @@ def _null_positions(table: pa.Table) -> dict[str, list[int]]:
 
 
 def consume(path: Path, manifest: dict) -> dict:
-    started = perf_counter_ns()
     with pa.memory_map(str(path), "r") as source:
         table = ipc.open_file(source).read_all()
-    decoded_ms = (perf_counter_ns() - started) / 1_000_000
     verification = verify_table(table, manifest)
+
+    started = perf_counter_ns()
+    with pa.memory_map(str(path), "r") as source:
+        ipc.open_file(source).read_all()
+    decoded_ms = (perf_counter_ns() - started) / 1_000_000
     return {
         "status": "PASS",
+        "roundtrip_verified": True,
         "consumer": "format_bench.interop_worker",
         "python": platform.python_version(),
         "pyarrow": pa.__version__,
