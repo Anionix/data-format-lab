@@ -70,6 +70,13 @@ def test_run_job_classifies_invalid_worker_output_as_failure(tmp_path: Path) -> 
     assert "invalid JSON" in result["reason"]
 
 
+def test_run_job_classifies_incomplete_worker_output_as_failure(tmp_path: Path) -> None:
+    job = Job("fixture/read", (sys.executable, "-c", "print('{}')"), 7)
+    result = run_job(job, MeasurementConfig(fresh_processes=1), tmp_path)
+    assert result["status"] == "FAILED"
+    assert "missing required fields" in result["reason"]
+
+
 def test_environment_records_isolated_claim_dependencies() -> None:
     packages = environment_info(Path(__file__).parents[1])["packages"]
     assert {"pandas", "pytz", "tsfile", "tzdata"} <= packages.keys()

@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 
+import pyarrow as pa
+
 from .canonical import read_csv
 from .fair import Operation, apply_arrow, expected_rows, result_evidence
 from .registry import adapter_map
@@ -39,19 +41,23 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> di
     source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
     expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
 
-    def invoke() -> int:
-        actual = result_evidence(adapter.scan(artifact, dataset_manifest, operation))
-        if actual != expected:
+    def invoke() -> pa.Table:
+        return adapter.scan(artifact, dataset_manifest, operation)
+
+    def validate(actual: pa.Table) -> None:
+        actual_evidence = result_evidence(actual)
+        if actual_evidence != expected:
             raise ValueError(
-                f"normalized operation result mismatch: {actual} != {expected}"
+                f"normalized operation result mismatch: {actual_evidence} != {expected}"
             )
-        return actual["rows"]
 
     measured = measure_callable(
         invoke,
         expected_rows(operation, dataset_manifest),
         int(os.environ.get("FORMAT_BENCH_WARMUPS", "5")),
         int(os.environ.get("FORMAT_BENCH_ITERATIONS", "30")),
+        result_count=lambda table: table.num_rows,
+        validate=validate,
     )
     return {**measured, "evidence": expected}
 

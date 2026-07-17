@@ -83,7 +83,9 @@ def run_equivalence(
         for operation in operations
     ]
     measured = run_jobs(jobs, measurement, root)
-    failed = [job_id for job_id, result in measured.items() if result["status"] != "MEASURED"]
+    failed = {
+        job_id for job_id, result in measured.items() if result["status"] != "MEASURED"
+    }
     bounds = EquivalenceBounds()
     pairs_evidence = {}
     for pair in selected_pairs:
@@ -94,17 +96,43 @@ def run_equivalence(
                 "failure_reason": missing_by_pair[pair],
             }
             continue
-        if failed:
+        required_names = {
+            PAIR_SPECS[pair]["reference"],
+            *PAIR_SPECS[pair]["candidates"],
+        }
+        pair_failed = sorted(
+            job_id
+            for job_id in failed
+            if job_id.split("/", 1)[0] in required_names
+        )
+        if pair_failed:
             pairs_evidence[pair] = {
                 "lane": PAIR_SPECS[pair]["lane"],
                 "verdict": EquivalenceVerdict.NOT_APPLICABLE,
-                "failure_reason": f"benchmark jobs failed: {', '.join(failed)}",
+                "failure_reason": f"benchmark jobs failed: {', '.join(pair_failed)}",
             }
             continue
         pairs_evidence[pair] = pair_evidence(
             PAIR_SPECS[pair], measured, entries, bounds, measurement.seed, operations
         )
-    result_state = ExecutionState.FAILED if failed else ExecutionState.BENCHMARKED
+    successful_names = set(measured_names)
+    for job_id in failed:
+        successful_names.discard(job_id.split("/", 1)[0])
+    for name in measured_names:
+        entry = entries[name]
+        name_failed = sorted(
+            job_id for job_id in failed if job_id.split("/", 1)[0] == name
+        )
+        if name_failed:
+            entry["state"] = ExecutionState.FAILED
+            entry["failure_reason"] = f"benchmark jobs failed: {', '.join(name_failed)}"
+        else:
+            entry["state"] = transition(
+                ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
+            )
+    result_state = (
+        ExecutionState.BENCHMARKED if successful_names else ExecutionState.FAILED
+    )
     run_manifest["state"] = transition(
         ExecutionState.ROUNDTRIP_VERIFIED, result_state
     )
@@ -120,6 +148,12 @@ def run_equivalence(
     results["state"] = result_state
     results["equivalence"] = run_manifest["equivalence"]
     results["results"] = measured
-    results["status"] = "FAILED" if failed else "MEASURED"
+    results["status"] = (
+        "MEASURED"
+        if not failed
+        else "PARTIAL"
+        if successful_names
+        else "FAILED"
+    )
     _write_json(run_dir / "results.json", results)
     return run_dir / "results.json"

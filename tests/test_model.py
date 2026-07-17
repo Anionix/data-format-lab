@@ -120,3 +120,11 @@ def test_workload_spec_rejects_incomplete_predicates() -> None:
         WorkloadSpec.from_mapping(
             "filter", {"kind": WorkloadKind.FILTER, "column": "value"}
         )
+
+
+@pytest.mark.parametrize("value", [1.5, "1.5"])
+def test_workload_spec_rejects_fractional_integer_fields(value: object) -> None:
+    with pytest.raises(ValueError, match="must be an integer"):
+        WorkloadSpec.from_mapping(
+            "head", {"kind": WorkloadKind.HEAD, "limit": value}
+        )

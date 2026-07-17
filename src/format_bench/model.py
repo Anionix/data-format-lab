@@ -178,6 +178,8 @@ class WorkloadSpec:
                 return None
             if isinstance(value, bool) or not isinstance(value, (int, float, str)):
                 raise ValueError(f"workload {field} must be an integer")
+            if isinstance(value, float) and not value.is_integer():
+                raise ValueError(f"workload {field} must be an integer")
             try:
                 return int(value)
             except (TypeError, ValueError) as error:

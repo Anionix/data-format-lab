@@ -29,6 +29,15 @@ def test_adapter_audit_reports_count_and_lane_failures() -> None:
     assert "missing adapter: missing" in result.observed["lane_mismatches"]
 
 
+def test_adapter_audit_reports_unexpected_adapter_without_crashing() -> None:
+    result = audit_adapters(
+        (CsvAdapter(), TsvAdapter()),
+        expected_lanes={"csv": Lane.FAIR},
+    )
+    assert result.status is AuditStatus.FAIL
+    assert result.observed["lane_mismatches"] == ("unexpected adapter: tsv",)
+
+
 def test_lifecycle_audit_accepts_public_contract_and_rejects_skips() -> None:
     assert audit_lifecycle(
         [

@@ -20,6 +20,33 @@ class AuditStatus(StrEnum):
     FAIL = "FAIL"
 
 
+# Independent contract inventory: changing the live registry must make the
+# audit fail until this declared public surface is reviewed deliberately.
+EXPECTED_ADAPTER_LANES: dict[str, Lane] = {
+    "csv": Lane.FAIR,
+    "tsv": Lane.EQUIVALENCE,
+    "object_jsonl": Lane.FAIR,
+    "arrow_ipc": Lane.FAIR,
+    "arrow_ipc_lz4": Lane.FAIR,
+    "arrow_ipc_zstd": Lane.FAIR,
+    "feather_v2": Lane.EQUIVALENCE,
+    "orc_zlib": Lane.EQUIVALENCE,
+    "parquet_default": Lane.FAIR,
+    "parquet_zstd19": Lane.FAIR,
+    "parquet_snappy": Lane.FAIR,
+    "parquet_gzip": Lane.FAIR,
+    "lance_base": Lane.FAIR,
+    "vortex_default": Lane.FAIR,
+    "vortex_compact": Lane.FAIR,
+    "tsfile": Lane.FAIR,
+    "avro_ocf": Lane.EQUIVALENCE,
+    "msgpack_rows": Lane.EQUIVALENCE,
+    "cbor_rows": Lane.EQUIVALENCE,
+    "sqlite_db": Lane.ENGINE_CONTAINER,
+    "duckdb_db": Lane.ENGINE_CONTAINER,
+}
+
+
 @dataclass(frozen=True)
 class AuditEvidence:
     """One deterministic check result, suitable for JSON serialization."""
@@ -98,15 +125,17 @@ def audit_adapters(
     )
     lane_mismatches: tuple[str, ...] = ()
     if expected_lanes is not None:
-        lane_mismatches = tuple(
-            sorted(
-                f"{name}: expected {Lane(expected_lanes[name]).value}, got {lane.value}"
-                for name, lane in (
-                    (description.name, description.lane) for description in descriptions
+        mismatch_items = []
+        for description in descriptions:
+            expected = expected_lanes.get(description.name)
+            if expected is None:
+                mismatch_items.append(f"unexpected adapter: {description.name}")
+            elif Lane(expected) != description.lane:
+                mismatch_items.append(
+                    f"{description.name}: expected {Lane(expected).value}, "
+                    f"got {description.lane.value}"
                 )
-                if name not in expected_lanes or Lane(expected_lanes[name]) != lane
-            )
-        )
+        lane_mismatches = tuple(sorted(mismatch_items))
         missing_lanes = tuple(sorted(set(expected_lanes) - set(names)))
         lane_mismatches += tuple(f"missing adapter: {name}" for name in missing_lanes)
     count_ok = expected_count is None or len(descriptions) == expected_count
@@ -236,6 +265,7 @@ def audit_implementation(
 __all__ = [
     "AuditEvidence",
     "AuditStatus",
+    "EXPECTED_ADAPTER_LANES",
     "ImplementationAudit",
     "audit_adapters",
     "audit_implementation",

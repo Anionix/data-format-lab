@@ -11,7 +11,7 @@ from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, fetch_dataset, load_manifest
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
-from .implementation_audit import audit_implementation
+from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
 from .model import ExecutionState
 from .profile_run import run_claims, run_prompt
 from .release import package_run
@@ -280,10 +280,8 @@ def main(argv: list[str] | None = None) -> None:
             artifact_paths=artifact_paths,
             workloads=load_workloads(dataset_manifest),
             required_operations=load_workloads(dataset_manifest),
-            expected_adapter_count=len(adapters()),
-            expected_lanes={
-                adapter.describe().name: adapter.describe().lane for adapter in adapters()
-            },
+            expected_adapter_count=len(EXPECTED_ADAPTER_LANES),
+            expected_lanes=EXPECTED_ADAPTER_LANES,
             path_root=args.run_dir,
         )
         payload = {

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from format_bench.formats.text import CsvAdapter
+from format_bench.formats.text import CsvAdapter, TsvAdapter
 from format_bench.fair_run import run_fair
 from format_bench.runner import MeasurementConfig
 import format_bench.fair_run as fair_run_module
@@ -58,3 +58,25 @@ def test_fair_run_does_not_report_failed_worker_as_benchmarked(
 
     assert results["state"] == "FAILED"
     assert manifest["state"] == "FAILED"
+
+
+def test_fair_run_excludes_equivalence_lane_adapters(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "fixture-run"
+    adapters = [CsvAdapter(), TsvAdapter()]
+    prepare_run(
+        root,
+        "github-stars-2026-07-03",
+        run_dir,
+        fixture=True,
+        selected=adapters,
+    )
+    verify_run(run_dir, {adapter.describe().name: adapter for adapter in adapters})
+
+    result_path = run_fair(
+        root,
+        run_dir,
+        MeasurementConfig(fresh_processes=1, warmups=0, iterations=1),
+    )
+    results = json.loads(result_path.read_text())
+    assert all(job_id.startswith("csv/") for job_id in results["results"])

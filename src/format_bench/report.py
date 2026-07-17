@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .model import Comparability, ExecutionState, RobustnessVerdict, transition
+from .model import Comparability, ExecutionState, Lane, RobustnessVerdict, transition
 from .robustness.summary import summarize_cases
 
 
@@ -211,7 +211,11 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
 
 
 def _fair(manifest: dict, results: dict) -> list[str]:
-    formats = manifest["formats"]
+    formats = [
+        item
+        for item in manifest["formats"]
+        if item.get("lane", Lane.FAIR) == Lane.FAIR
+    ]
     rows = [
         [
             item["format"],
