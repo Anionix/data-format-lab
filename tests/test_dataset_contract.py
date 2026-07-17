@@ -41,6 +41,11 @@ def test_validate_manifest_accepts_generic_contract() -> None:
     assert validate_manifest(manifest) == manifest
 
 
+def test_validate_manifest_rejects_empty_workload_contract() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        validate_manifest(_manifest(workloads={}))
+
+
 def test_validate_manifest_keeps_legacy_release_manifest_compatible() -> None:
     root = Path(__file__).parents[1]
 

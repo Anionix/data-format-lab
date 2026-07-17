@@ -130,8 +130,12 @@ def run_equivalence(
             entry["state"] = transition(
                 ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
             )
+    # A missing pair is still reportable terminal evidence; only an execution
+    # failure without any other evidence makes the run itself non-reportable.
     result_state = (
-        ExecutionState.BENCHMARKED if successful_names else ExecutionState.FAILED
+        ExecutionState.BENCHMARKED
+        if successful_names or missing_by_pair
+        else ExecutionState.FAILED
     )
     run_manifest["state"] = transition(
         ExecutionState.ROUNDTRIP_VERIFIED, result_state
@@ -150,9 +154,11 @@ def run_equivalence(
     results["results"] = measured
     results["status"] = (
         "MEASURED"
-        if not failed
+        if not failed and successful_names
         else "PARTIAL"
-        if successful_names
+        if failed and (successful_names or missing_by_pair)
+        else "UNSUPPORTED"
+        if missing_by_pair
         else "FAILED"
     )
     _write_json(run_dir / "results.json", results)

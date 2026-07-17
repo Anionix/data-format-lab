@@ -80,6 +80,8 @@ def _validate_columns(value: object) -> set[str]:
 def _validate_workloads(value: object, columns: set[str]) -> None:
     if not isinstance(value, Mapping):
         raise ValueError("manifest workloads must be an object")
+    if not value:
+        raise ValueError("manifest workloads must not be empty")
     for operation, payload in value.items():
         if not isinstance(operation, str) or not operation.strip():
             raise ValueError("workload names must be non-empty strings")
