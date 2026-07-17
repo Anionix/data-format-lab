@@ -144,6 +144,19 @@ def test_cli_accepts_equivalence_pairs_and_rejects_robustness_options() -> None:
     assert args.pair == ["csv-tsv", "arrow-feather"]
     cli._validate_run_options(args)
 
+    parallel = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "equivalence",
+            "--dataset",
+            DATASET,
+            "--parallel-jobs",
+        ]
+    )
+    cli._validate_run_options(parallel)
+    assert parallel.parallel_jobs is True
+
     invalid = cli.build_parser().parse_args(
         [
             "run",

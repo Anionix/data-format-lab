@@ -93,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fresh-processes", type=_positive_int)
     run.add_argument("--warmups", type=_non_negative_int)
     run.add_argument("--iterations", type=_positive_int)
+    run.add_argument("--parallel-jobs", action="store_true")
 
     report = subcommands.add_parser("report")
     report.add_argument("--run-dir", type=Path, required=True)
@@ -126,7 +127,12 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.duration_seconds,
         args.pair,
     )
-    measurement_options = (args.fresh_processes, args.warmups, args.iterations)
+    measurement_options = (
+        args.fresh_processes,
+        args.warmups,
+        args.iterations,
+        True if args.parallel_jobs else None,
+    )
     if args.profile not in {"fair", "equivalence"} and any(
         value is not None for value in measurement_options
     ):
@@ -262,6 +268,7 @@ def main(argv: list[str] | None = None) -> None:
                     run_dir,
                     pairs=tuple(args.pair) if args.pair else None,
                     config=measurement,
+                    parallel=args.parallel_jobs,
                 )
             else:
                 runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
