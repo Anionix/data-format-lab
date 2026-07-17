@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .equivalence import EquivalenceBounds, EquivalenceVerdict
 from .equivalence_compare import PAIR_SPECS, pair_evidence
-from .fair import OPERATIONS, expected_rows
+from .fair import expected_rows, operations_for
 from .model import Comparability, ExecutionState, transition
 from .runner import Job, MeasurementConfig, new_results, run_jobs
 
@@ -30,6 +30,7 @@ def run_equivalence(
     input_manifest = json.loads(
         (run_dir / run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
     )
+    operations = operations_for(input_manifest)
     selected_pairs = pairs or tuple(PAIR_SPECS)
     unknown = sorted(set(selected_pairs) - PAIR_SPECS.keys())
     if unknown:
@@ -64,7 +65,7 @@ def run_equivalence(
     )
     jobs = [
         Job(
-            f"{name}/{operation.value}",
+            f"{name}/{operation}",
             (
                 sys.executable,
                 "-m",
@@ -74,12 +75,12 @@ def run_equivalence(
                 "--format",
                 name,
                 "--operation",
-                operation.value,
+                operation,
             ),
             expected_rows(operation, input_manifest),
         )
         for name in sorted(measured_names)
-        for operation in OPERATIONS
+        for operation in operations
     ]
     measured = run_jobs(jobs, measurement, root)
     failed = [job_id for job_id, result in measured.items() if result["status"] != "MEASURED"]
@@ -101,7 +102,7 @@ def run_equivalence(
             }
             continue
         pairs_evidence[pair] = pair_evidence(
-            PAIR_SPECS[pair], measured, entries, bounds, measurement.seed
+            PAIR_SPECS[pair], measured, entries, bounds, measurement.seed, operations
         )
     result_state = ExecutionState.FAILED if failed else ExecutionState.BENCHMARKED
     run_manifest["state"] = transition(

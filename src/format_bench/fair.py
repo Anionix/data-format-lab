@@ -20,23 +20,35 @@ class FairOperation(StrEnum):
 
 
 OPERATIONS = tuple(FairOperation)
+Operation = FairOperation | str
+
+
+def operations_for(manifest: Mapping[str, object] | None = None) -> tuple[str, ...]:
+    if manifest is not None and "workloads" in manifest:
+        workloads = load_workloads(manifest)
+        return tuple(workloads)
+    return tuple(operation.value for operation in OPERATIONS)
+
+
+def _operation_name(operation: Operation) -> str:
+    return operation.value if isinstance(operation, FairOperation) else operation
 
 
 def workload_for(
-    operation: FairOperation, manifest: Mapping[str, object] | None = None
+    operation: Operation, manifest: Mapping[str, object] | None = None
 ):
-    return load_workloads(manifest or {})[operation.value]
+    return load_workloads(manifest or {})[_operation_name(operation)]
 
 
 def columns_for(
-    operation: FairOperation, manifest: Mapping[str, object] | None = None
+    operation: Operation, manifest: Mapping[str, object] | None = None
 ) -> list[str] | None:
     spec = workload_for(operation, manifest)
     return list(spec.columns) if spec.columns else None
 
 
 def arrow_filter(
-    operation: FairOperation, manifest: Mapping[str, object] | None = None
+    operation: Operation, manifest: Mapping[str, object] | None = None
 ):
     spec = workload_for(operation, manifest)
     if spec.kind.value != "filter":
@@ -54,7 +66,7 @@ def arrow_filter(
 
 
 def lance_filter(
-    operation: FairOperation, manifest: Mapping[str, object] | None = None
+    operation: Operation, manifest: Mapping[str, object] | None = None
 ) -> str | None:
     spec = workload_for(operation, manifest)
     if spec.kind.value != "filter":
@@ -68,7 +80,7 @@ def lance_filter(
 
 
 def limit_for(
-    operation: FairOperation,
+    operation: Operation,
     rows: int,
     manifest: Mapping[str, object] | None = None,
 ) -> int | None:
@@ -78,16 +90,17 @@ def limit_for(
 
 def apply_arrow(
     table: pa.Table,
-    operation: FairOperation,
+    operation: Operation,
     manifest: Mapping[str, object] | None = None,
 ) -> pa.Table:
     return apply_workload(table, workload_for(operation, manifest))
 
 
-def expected_rows(operation: FairOperation, manifest: dict) -> int:
+def expected_rows(operation: Operation, manifest: dict) -> int:
     workloads = load_workloads(manifest)
-    spec = workloads[operation.value]
-    return expected_workload_rows(operation.value, manifest, spec)
+    name = _operation_name(operation)
+    spec = workloads[name]
+    return expected_workload_rows(name, manifest, spec)
 
 
 def result_evidence(table: pa.Table) -> dict:

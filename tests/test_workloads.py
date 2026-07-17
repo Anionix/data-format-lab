@@ -3,7 +3,7 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
-from format_bench.fair import FairOperation
+from format_bench.fair import FairOperation, operations_for
 from format_bench.workloads import apply_workload, expected_workload_rows, load_workloads
 
 
@@ -49,3 +49,19 @@ def test_manifest_workload_is_not_tied_to_stars_columns() -> None:
 def test_manifest_rejects_non_object_workloads() -> None:
     with pytest.raises(ValueError, match="must be an object"):
         load_workloads({"workloads": []})
+
+
+def test_operations_for_uses_dataset_declared_names() -> None:
+    manifest = {
+        "workloads": {
+            "read_all": {"kind": "read_all"},
+            "filter_custom": {
+                "kind": "filter",
+                "column": "name",
+                "operator": "eq",
+                "value": "a",
+            },
+        }
+    }
+    assert operations_for(manifest) == ("read_all", "filter_custom")
+    assert operations_for({}) == tuple(operation.value for operation in FairOperation)

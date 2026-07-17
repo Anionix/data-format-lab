@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from .fair import OPERATIONS, expected_rows
+from .fair import expected_rows, operations_for
 from .model import ExecutionState, transition
 from .runner import Job, MeasurementConfig, new_results, run_jobs
 
@@ -44,7 +44,7 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
             expected_rows(operation, dataset_manifest),
         )
         for name in entries
-        for operation in OPERATIONS
+        for operation in operations_for(dataset_manifest)
     ]
     measured = run_jobs(jobs, measurement, root)
     failures = [

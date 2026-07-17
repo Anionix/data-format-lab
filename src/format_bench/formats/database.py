@@ -69,7 +69,7 @@ def _query_parts(
     spec = workload_for(operation, manifest)
     columns = columns_for(operation, manifest) or list(arrow_schema(manifest).names)
     if any(name not in schema_names for name in columns):
-        raise ValueError(f"workload {operation.value} projects an unknown column")
+        raise ValueError(f"workload {operation} projects an unknown column")
     projection = ", ".join(_quote(name) for name in columns)
     query = f"SELECT {projection} FROM data"
     parameters: list[Any] = []
@@ -77,7 +77,7 @@ def _query_parts(
         assert spec.column is not None
         assert spec.operator is not None
         if spec.column not in schema_names:
-            raise ValueError(f"workload {operation.value} filters an unknown column")
+            raise ValueError(f"workload {operation} filters an unknown column")
         operator = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[spec.operator]
         query += f" WHERE {_quote(spec.column)} {operator} ?"
         parameters.append(spec.value)

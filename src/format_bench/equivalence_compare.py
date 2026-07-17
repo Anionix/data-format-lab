@@ -91,15 +91,17 @@ def compare_candidate(
     *,
     bounds: EquivalenceBounds,
     seed: int,
+    operations: tuple[str, ...] | None = None,
 ) -> dict:
+    operation_names = operations or tuple(operation.value for operation in OPERATIONS)
     if reference.get("status") != "MEASURED" or candidate.get("status") != "MEASURED":
         return _not_applicable("one or more benchmark jobs failed")
     reference_operations = reference["operations"]
     candidate_operations = candidate["operations"]
     if any(
-        len(reference_operations[operation.value].get("warm_process_p50_ms", ())) < 2
-        or len(candidate_operations[operation.value].get("warm_process_p50_ms", ())) < 2
-        for operation in OPERATIONS
+        len(reference_operations[operation].get("warm_process_p50_ms", ())) < 2
+        or len(candidate_operations[operation].get("warm_process_p50_ms", ())) < 2
+        for operation in operation_names
     ):
         return {
             "verdict": EquivalenceVerdict.INCONCLUSIVE,
@@ -118,9 +120,9 @@ def compare_candidate(
     ]
     operations: dict[str, dict] = {}
     all_intervals = list(storage_intervals)
-    for offset, operation in enumerate(OPERATIONS):
-        reference_evidence = reference_operations[operation.value]
-        candidate_evidence = candidate_operations[operation.value]
+    for offset, operation in enumerate(operation_names):
+        reference_evidence = reference_operations[operation]
+        candidate_evidence = candidate_operations[operation]
         intervals = [
             bootstrap_ratio_interval(
                 reference_evidence["warm_process_p50_ms"],
@@ -136,7 +138,7 @@ def compare_candidate(
             ),
         ]
         all_intervals.extend(intervals)
-        operations[operation.value] = {
+        operations[operation] = {
             "verdict": classify_metrics(intervals, bounds),
             "metrics": [_interval_json(item) for item in intervals],
         }
@@ -157,7 +159,9 @@ def pair_evidence(
     entries: dict[str, dict],
     bounds: EquivalenceBounds,
     seed: int,
+    operations: tuple[str, ...] | None = None,
 ) -> dict:
+    operation_names = operations or tuple(operation.value for operation in OPERATIONS)
     reference_name = spec["reference"]
     names = (reference_name, *spec["candidates"])
     formats: dict[str, dict] = {}
@@ -166,20 +170,20 @@ def pair_evidence(
             **entries[reference_name],
             "status": "MEASURED",
             "operations": {
-                operation.value: measured[f"{reference_name}/{operation.value}"]
-                for operation in OPERATIONS
+                operation: measured[f"{reference_name}/{operation}"]
+                for operation in operation_names
             },
         }
         candidate = {
             **entries[candidate_name],
             "status": "MEASURED",
             "operations": {
-                operation.value: measured[f"{candidate_name}/{operation.value}"]
-                for operation in OPERATIONS
+                operation: measured[f"{candidate_name}/{operation}"]
+                for operation in operation_names
             },
         }
         formats[candidate_name] = compare_candidate(
-            reference, candidate, bounds=bounds, seed=seed
+            reference, candidate, bounds=bounds, seed=seed, operations=operation_names
         )
     verdicts = [item["verdict"] for item in formats.values()]
     if any(item == EquivalenceVerdict.MEANINGFUL_DIFFERENCE for item in verdicts):

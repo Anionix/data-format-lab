@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from .canonical import read_csv
-from .fair import FairOperation, apply_arrow, expected_rows, result_evidence
+from .fair import Operation, apply_arrow, expected_rows, result_evidence
 from .registry import adapter_map
 from .runner import measure_callable
 
@@ -28,7 +28,7 @@ def _relative(run_dir: Path, value: str) -> Path:
     return candidate
 
 
-def run_fair_worker(run_dir: Path, format_name: str, operation: FairOperation) -> dict:
+def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> dict:
     run_manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     dataset_manifest = json.loads(
         _relative(run_dir, run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
@@ -60,7 +60,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--format", required=True)
-    parser.add_argument("--operation", type=FairOperation, required=True)
+    parser.add_argument("--operation", required=True)
     args = parser.parse_args()
     print(json.dumps(run_fair_worker(args.run_dir, args.format, args.operation)))
 
