@@ -8,6 +8,8 @@ Data Format Lab asks narrower questions than "which format is best?" It verifies
 
 The first case study is a frozen, 2,331-row snapshot of public GitHub Stars metadata. The lab is designed for additional datasets and workloads; it is not a Stars-specific converter.
 
+The equivalence expansion also carries small, non-rankable contract fixtures for UCI Online Retail II, UCI Bank Marketing, NYC 311, OWID Energy, and GeoNames cities500. Their manifests record official acquisition URLs, observed source hashes, schema/null rules, and normalization decisions; mutable full snapshots remain Release assets rather than Git files.
+
 ## Benchmark lanes
 
 | Lane | Question | Current examples |
