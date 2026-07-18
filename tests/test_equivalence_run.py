@@ -29,7 +29,9 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
         root,
         run_dir,
         pairs=("csv-tsv",),
-        config=MeasurementConfig(fresh_processes=1, warmups=0, iterations=1),
+        config=MeasurementConfig(
+            fresh_processes=1, warmups=0, iterations=1, timeout_seconds=7.5
+        ),
         parallel=True,
     )
 
@@ -38,3 +40,5 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
     expected = {"requested_workers": 2, "effective_workers": 2}
     assert {key: manifest["equivalence"][key] for key in expected} == expected
     assert {key: results["equivalence"][key] for key in expected} == expected
+    assert manifest["measurement"]["worker_timeout_seconds"] == 7.5
+    assert results["measurement"]["worker_timeout_seconds"] == 7.5

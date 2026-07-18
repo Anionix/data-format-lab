@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .fair import expected_rows, operations_for
 from .model import ExecutionState, Lane, transition
-from .runner import Job, MeasurementConfig, new_results, run_jobs
+from .runner import Job, MeasurementConfig, measurement_metadata, new_results, run_jobs
 
 
 def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None) -> Path:
@@ -71,6 +71,8 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
         if successful_entries
         else ExecutionState.FAILED
     )
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    run_manifest["measurement"] = measurement_metadata(measurement)
     results = new_results(root, run_dir.name, measurement)
     results.update(
         {

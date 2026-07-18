@@ -157,6 +157,20 @@ def test_cli_accepts_equivalence_pairs_and_rejects_robustness_options() -> None:
     cli._validate_run_options(parallel)
     assert parallel.parallel_jobs is True
 
+    timeout = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "fair",
+            "--dataset",
+            DATASET,
+            "--worker-timeout-seconds",
+            "37.5",
+        ]
+    )
+    cli._validate_run_options(timeout)
+    assert timeout.worker_timeout_seconds == 37.5
+
     fair_parallel = cli.build_parser().parse_args(
         [
             "run",
@@ -183,3 +197,19 @@ def test_cli_accepts_equivalence_pairs_and_rejects_robustness_options() -> None:
     )
     with pytest.raises(ValueError, match="robustness options"):
         cli._validate_run_options(invalid)
+
+
+@pytest.mark.parametrize("value", ["0", "nan", "inf", "-1"])
+def test_cli_rejects_invalid_worker_timeout(value: str) -> None:
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(
+            [
+                "run",
+                "--profile",
+                "equivalence",
+                "--dataset",
+                DATASET,
+                "--worker-timeout-seconds",
+                value,
+            ]
+        )
