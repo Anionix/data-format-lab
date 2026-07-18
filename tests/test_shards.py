@@ -15,10 +15,27 @@ def _manifest() -> dict:
     return {
         "dataset_id": "fixture",
         "state": "ROUNDTRIP_VERIFIED",
-        "input": {"manifest": "input/manifest.json"},
+        "input": {
+            "manifest": "input/manifest.json",
+            "source": "input/source.csv",
+        },
         "formats": [
-            {"format": "arrow_ipc", "state": "ROUNDTRIP_VERIFIED"},
-            {"format": "feather_v2", "state": "ROUNDTRIP_VERIFIED"},
+            {
+                "format": "arrow_ipc",
+                "artifact": "artifacts/arrow.arrow",
+                "lane": "fair",
+                "comparability": "FULL_COMPARABLE",
+                "settings": {},
+                "state": "ROUNDTRIP_VERIFIED",
+            },
+            {
+                "format": "feather_v2",
+                "artifact": "artifacts/feather.feather",
+                "lane": "equivalence",
+                "comparability": "FULL_COMPARABLE",
+                "settings": {},
+                "state": "ROUNDTRIP_VERIFIED",
+            },
         ],
     }
 
@@ -43,13 +60,21 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
 ) -> None:
     base = tmp_path / "base"
     _write(base / "input" / "manifest.json", {"rows": 4})
+    (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
     _write(base / "artifacts" / "arrow.arrow", {"format": "arrow"})
+    _write(base / "artifacts" / "feather.feather", {"format": "feather"})
     _write(base / "manifest.json", _manifest())
 
     shard_root = tmp_path / "shards"
     for pair, name in (("arrow-feather", "arrow_ipc"), ("csv-tsv", "feather_v2")):
         shard = shard_root / pair
-        _write(shard / "manifest.json", {"dataset_id": "fixture", "state": "BENCHMARKED"})
+        shard_manifest = _manifest()
+        shard_manifest["state"] = "BENCHMARKED"
+        _write(shard / "input" / "manifest.json", {"rows": 4})
+        (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+        _write(shard / "artifacts" / "arrow.arrow", {"format": "arrow"})
+        _write(shard / "artifacts" / "feather.feather", {"format": "feather"})
+        _write(shard / "manifest.json", shard_manifest)
         _write(shard / "results.json", _shard_results(pair, name))
 
     output = tmp_path / "merged"

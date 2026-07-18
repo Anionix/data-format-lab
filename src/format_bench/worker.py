@@ -39,7 +39,8 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> di
     adapter = adapter_map()[format_name]
     artifact = _relative(run_dir, entry["artifact"])
     source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
-    expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
+    expected_table = apply_arrow(source, operation, dataset_manifest)
+    expected = result_evidence(expected_table)
     full_evidence_checked = False
 
     def invoke() -> pa.Table:
@@ -55,16 +56,8 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> di
                 )
             full_evidence_checked = True
             return
-        actual_schema = [
-            {"name": field.name, "type": str(field.type), "nullable": field.nullable}
-            for field in actual.schema
-        ]
-        if {
-            "rows": actual.num_rows,
-            "columns": actual.column_names,
-            "schema": actual_schema,
-        } != {key: expected[key] for key in ("rows", "columns", "schema")}:
-            raise ValueError("normalized operation result shape changed")
+        if not actual.equals(expected_table, check_metadata=False):
+            raise ValueError("normalized operation result values changed")
 
     measured = measure_callable(
         invoke,

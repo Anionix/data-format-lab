@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -55,6 +56,53 @@ def _write_json(path: Path, value: JSONObject) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _safe_run_path(run: Path, value: JSONValue, label: str) -> Path:
+    if not isinstance(value, str):
+        raise ValueError(f"expected relative path: {label}")
+    relative = Path(value)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"run path must be relative: {label}")
+    candidate = run / relative
+    if candidate.is_symlink() or any(parent.is_symlink() for parent in candidate.parents):
+        raise ValueError(f"run path must not resolve through a symlink: {label}")
+    try:
+        candidate.resolve(strict=True).relative_to(run.resolve())
+    except (FileNotFoundError, ValueError) as error:
+        raise ValueError(f"run path is missing or escapes run directory: {label}") from error
+    return candidate
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]:
+    formats = manifest.get("formats")
+    if not isinstance(formats, list):
+        raise ValueError("manifest formats must be a list")
+    identities: dict[str, JSONObject] = {}
+    for raw_entry in formats:
+        entry = _object(raw_entry, "manifest.formats entry")
+        name = entry.get("format")
+        if not isinstance(name, str) or name in identities:
+            raise ValueError("manifest format names must be unique strings")
+        artifact = _safe_run_path(run, entry.get("artifact"), f"{name}.artifact")
+        identities[name] = {
+            "artifact": entry["artifact"],
+            "lane": entry.get("lane"),
+            "comparability": entry.get("comparability"),
+            "settings": entry.get("settings"),
+            "native_bytes": entry.get("native_bytes"),
+            "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
+            "artifact_sha256": _sha256(artifact),
+        }
+    return identities
+
+
 def _hardlink_tree(source: Path, destination: Path) -> None:
     if source.is_symlink():
         raise ValueError(f"symlink is not allowed in shard input: {source}")
@@ -89,15 +137,36 @@ def merge_equivalence_shards(
     shard_paths = sorted(path for path in shard_root.iterdir() if path.is_dir())
     if not shard_paths:
         raise ValueError("no shard directories found")
+    base_input_spec = _object(base_manifest.get("input"), "input")
+    base_input_manifest_path = _safe_run_path(
+        base_run, base_input_spec.get("manifest"), "input.manifest"
+    )
+    base_source = _safe_run_path(base_run, "input/source.csv", "input/source.csv")
+    base_input_manifest = _read_json(base_input_manifest_path)
+    base_formats = _format_identities(base_run, base_manifest)
+    base_source_sha256 = _sha256(base_source)
     merged_results: JSONObject = {}
     merged_pairs: JSONObject = {}
+    shared_job_ids: list[JSONValue] = []
     shard_records: list[JSONValue] = []
     environments: list[JSONObject] = []
+    measurements: list[JSONObject] = []
     for shard in shard_paths:
         manifest = _read_json(shard / "manifest.json")
         results = _read_json(shard / "results.json")
         if manifest.get("dataset_id") != base_manifest.get("dataset_id"):
             raise ValueError(f"dataset mismatch in shard: {shard}")
+        shard_input_spec = _object(manifest.get("input"), "input")
+        shard_input_manifest_path = _safe_run_path(
+            shard, shard_input_spec.get("manifest"), "input.manifest"
+        )
+        if _read_json(shard_input_manifest_path) != base_input_manifest:
+            raise ValueError(f"input manifest mismatch in shard: {shard}")
+        shard_source = _safe_run_path(shard, "input/source.csv", "input/source.csv")
+        if _sha256(shard_source) != base_source_sha256:
+            raise ValueError(f"input source mismatch in shard: {shard}")
+        if _format_identities(shard, manifest) != base_formats:
+            raise ValueError(f"format artifact identity mismatch in shard: {shard}")
         if manifest.get("state") not in {
             ExecutionState.BENCHMARKED,
             ExecutionState.REPORTED,
@@ -112,7 +181,15 @@ def merge_equivalence_shards(
             results.get("results", {}), f"{shard}/results"
         ).items():
             if job_id in merged_results:
-                raise ValueError(f"duplicate benchmark job: {job_id}")
+                previous = merged_results[job_id]
+                if {
+                    key: previous.get(key) for key in ("status", "result", "evidence")
+                } != {
+                    key: evidence.get(key) for key in ("status", "result", "evidence")
+                }:
+                    raise ValueError(f"conflicting shared benchmark job: {job_id}")
+                shared_job_ids.append(job_id)
+                continue
             merged_results[job_id] = evidence
         equivalence = _object(results.get("equivalence", {}), f"{shard}/equivalence")
         pairs = _object_map(
@@ -123,6 +200,7 @@ def merge_equivalence_shards(
                 raise ValueError(f"duplicate equivalence pair: {pair}")
             merged_pairs[pair] = evidence
         environments.append(_object(results["environment"], f"{shard}/environment"))
+        measurements.append(_object(results["measurement"], f"{shard}/measurement"))
         shard_records.append(
             {
                 "path": str(shard.relative_to(shard_root)),
@@ -132,6 +210,8 @@ def merge_equivalence_shards(
 
     if len({json.dumps(value, sort_keys=True) for value in environments}) != 1:
         raise ValueError("shard environments do not match")
+    if len({json.dumps(value, sort_keys=True) for value in measurements}) != 1:
+        raise ValueError("shard measurement protocols do not match")
     _copy_run_files(base_run, output_run)
 
     manifest = dict(base_manifest)
@@ -145,6 +225,7 @@ def merge_equivalence_shards(
         "bounds": _object(first_equivalence.get("bounds", {}), "equivalence.bounds"),
         "parallel_jobs": True,
         "shard_count": len(shard_paths),
+        "shared_job_ids": shared_job_ids,
         "pairs": merged_pairs,
     }
     manifest["equivalence"] = equivalence_value
@@ -171,6 +252,7 @@ def merge_equivalence_shards(
     combined["status"] = "MEASURED"
     combined["results"] = merged_results
     combined["equivalence"] = manifest["equivalence"]
+    combined["shared_job_ids"] = shared_job_ids
     combined["shards"] = shard_records
     _write_json(output_run / "results.json", combined)
     return output_run / "results.json"
