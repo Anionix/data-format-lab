@@ -85,3 +85,17 @@ def test_binary_row_adapters_accept_default_nullable_manifest_fields(
         path = tmp_path / f"artifact{adapter.describe().extension}"
         adapter.encode(table, path)
         assert adapter.verify_roundtrip(path, manifest)["passed"] is True
+
+
+def test_avro_adapter_executes_the_declared_operations(
+    fixture_contract, tmp_path: Path
+) -> None:
+    manifest, table = fixture_contract
+    adapter = AvroAdapter()
+    path = tmp_path / "artifact.avro"
+    adapter.encode(table, path)
+
+    for operation in OPERATIONS:
+        actual = result_evidence(adapter.scan(path, manifest, operation))
+        expected = result_evidence(apply_arrow(table, operation, manifest))
+        assert actual == expected

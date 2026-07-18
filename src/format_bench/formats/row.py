@@ -140,8 +140,9 @@ class AvroAdapter:
                 if spec.kind is WorkloadKind.HEAD and len(rows) >= spec.limit:
                     break
         if spec.kind is WorkloadKind.PROJECTION:
+            schema = arrow_schema(manifest)
             return pa.Table.from_pylist(
-                rows, schema=arrow_schema(manifest).select(columns)
+                rows, schema=pa.schema([schema.field(column) for column in columns])
             )
         payload = {
             "schema_version": "1",

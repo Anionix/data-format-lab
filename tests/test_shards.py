@@ -36,6 +36,15 @@ def _manifest() -> dict:
                 "settings": {},
                 "state": "ROUNDTRIP_VERIFIED",
             },
+            {
+                "format": "tsfile",
+                "artifact": "artifacts/tsfile.tsfile",
+                "lane": "claims",
+                "comparability": "ADAPTED",
+                "settings": {},
+                "state": "UNSUPPORTED",
+                "failure_reason": "optional dependency unavailable",
+            },
         ],
     }
 
