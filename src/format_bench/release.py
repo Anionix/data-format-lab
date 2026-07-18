@@ -11,6 +11,8 @@ import zstandard as zstd
 
 from .model import ExecutionState
 
+RELEASE_ZSTD_LEVEL = 3
+
 
 EVIDENCE_FILES = (
     "manifest.json",
@@ -147,7 +149,7 @@ def _write_archive(
             delete=False,
         ) as destination:
             temporary = Path(destination.name)
-            with zstd.ZstdCompressor(level=19).stream_writer(
+            with zstd.ZstdCompressor(level=RELEASE_ZSTD_LEVEL).stream_writer(
                 destination, closefd=False
             ) as compressor:
                 with tarfile.open(
