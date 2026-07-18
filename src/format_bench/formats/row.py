@@ -6,8 +6,8 @@ from typing import Any
 import pyarrow as pa
 
 from format_bench.canonical import arrow_schema, verify_table
-from format_bench.fair import FairOperation, apply_arrow
-from format_bench.model import Comparability, Lane
+from format_bench.fair import FairOperation, apply_arrow, workload_for
+from format_bench.model import Comparability, Lane, WorkloadKind
 
 from .base import Artifact, FormatDescription, write_artifact
 
@@ -114,7 +114,41 @@ class AvroAdapter:
         return verify_table(self.read(path, manifest), manifest)
 
     def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
-        return apply_arrow(self.read(path, manifest), operation, manifest)
+        spec = workload_for(operation, manifest)
+        columns = list(spec.columns) if spec.kind is WorkloadKind.PROJECTION else [
+            column["name"] for column in manifest["columns"]
+        ]
+        rows: list[dict[str, Any]] = []
+        with path.open("rb") as handle:
+            from fastavro import reader
+
+            for row in reader(handle):
+                if spec.kind is WorkloadKind.FILTER:
+                    value = row.get(spec.column or "")
+                    if value is None:
+                        continue
+                    matches = {
+                        "eq": value == spec.value,
+                        "gt": value > spec.value,
+                        "gte": value >= spec.value,
+                        "lt": value < spec.value,
+                        "lte": value <= spec.value,
+                    }[spec.operator or "eq"]
+                    if not matches:
+                        continue
+                rows.append({column: row[column] for column in columns})
+                if spec.kind is WorkloadKind.HEAD and len(rows) >= spec.limit:
+                    break
+        if spec.kind is WorkloadKind.PROJECTION:
+            return pa.Table.from_pylist(
+                rows, schema=arrow_schema(manifest).select(columns)
+            )
+        payload = {
+            "schema_version": "1",
+            "columns": _manifest_columns(manifest),
+            "rows": rows,
+        }
+        return _table_from_payload(payload, manifest)
 
 
 class BinaryRowAdapter:
