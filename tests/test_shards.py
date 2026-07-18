@@ -87,3 +87,64 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     assert set(merged["equivalence"]["pairs"]) == {"arrow-feather", "csv-tsv"}
     assert manifest["state"] == "BENCHMARKED"
     assert not any(path.is_symlink() for path in output.rglob("*"))
+
+
+def test_merge_equivalence_shards_hashes_directory_artifacts(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    _write(base / "input" / "manifest.json", {"rows": 4})
+    (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    (base / "artifacts" / "lance.lance" / "_versions").mkdir(parents=True)
+    (base / "artifacts" / "lance.lance" / "data.bin").write_bytes(b"data")
+    (base / "artifacts" / "lance.lance" / "_versions" / "v1").write_text(
+        "version", encoding="utf-8"
+    )
+    manifest = _manifest()
+    manifest["formats"][0]["format"] = "lance_base"
+    manifest["formats"][0]["artifact"] = "artifacts/lance.lance"
+    manifest["formats"] = [manifest["formats"][0]]
+    _write(base / "manifest.json", manifest)
+
+    shard = tmp_path / "shards" / "lance"
+    shard_manifest = dict(manifest)
+    shard_manifest["state"] = "BENCHMARKED"
+    _write(shard / "input" / "manifest.json", {"rows": 4})
+    (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    (shard / "artifacts" / "lance.lance" / "_versions").mkdir(parents=True)
+    (shard / "artifacts" / "lance.lance" / "data.bin").write_bytes(b"data")
+    (shard / "artifacts" / "lance.lance" / "_versions" / "v1").write_text(
+        "version", encoding="utf-8"
+    )
+    _write(shard / "manifest.json", shard_manifest)
+    _write(shard / "results.json", _shard_results("lance", "lance_base"))
+
+    merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
+
+
+def test_merge_equivalence_shards_rejects_artifact_kind_mismatch(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    _write(base / "input" / "manifest.json", {"rows": 4})
+    (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    (base / "artifacts" / "lance.lance").mkdir(parents=True)
+    (base / "artifacts" / "lance.lance" / "data.bin").write_bytes(b"x")
+    manifest = _manifest()
+    manifest["formats"] = [manifest["formats"][0]]
+    manifest["formats"][0]["format"] = "lance_base"
+    manifest["formats"][0]["artifact"] = "artifacts/lance.lance"
+    _write(base / "manifest.json", manifest)
+
+    shard = tmp_path / "shards" / "lance"
+    shard_manifest = dict(manifest)
+    shard_manifest["state"] = "BENCHMARKED"
+    _write(shard / "input" / "manifest.json", {"rows": 4})
+    (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    (shard / "artifacts").mkdir(parents=True)
+    (shard / "artifacts" / "lance.lance").write_bytes(b"x")
+    _write(shard / "manifest.json", shard_manifest)
+    _write(shard / "results.json", _shard_results("lance", "lance_base"))
+
+    try:
+        merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
+    except ValueError as error:
+        assert "artifact identity mismatch" in str(error)
+    else:
+        raise AssertionError("artifact kind mismatch was accepted")
