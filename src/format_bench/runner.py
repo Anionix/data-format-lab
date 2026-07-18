@@ -24,6 +24,7 @@ _Measured = TypeVar("_Measured")
 @dataclass(frozen=True)
 class MeasurementConfig:
     fresh_processes: int = 10
+    fresh_workers: int = 1
     warmups: int = 5
     iterations: int = 30
     timeout_seconds: int = 120
@@ -113,63 +114,81 @@ def measure_callable(
     }
 
 
-def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
-    processes: list[dict] = []
+def _run_fresh_process(
+    job: Job, config: MeasurementConfig, cwd: Path
+) -> dict:
     env = {
         **os.environ,
         "FORMAT_BENCH_WARMUPS": str(config.warmups),
         "FORMAT_BENCH_ITERATIONS": str(config.iterations),
         "PYTHONHASHSEED": str(config.seed),
     }
-    for _ in range(config.fresh_processes):
-        try:
-            completed = subprocess.run(
-                job.command,
-                cwd=cwd,
-                env=env,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=config.timeout_seconds,
-            )
-        except subprocess.TimeoutExpired:
-            return {"status": "FAILED", "reason": "fresh worker timed out"}
-        if completed.returncode != 0:
-            return {
-                "status": "FAILED",
-                "reason": f"worker exited {completed.returncode}: {completed.stderr[-2000:]}",
-            }
-        try:
-            result = json.loads(completed.stdout.strip().splitlines()[-1])
-            if not isinstance(result, dict):
-                raise ValueError("worker JSON must be an object")
-        except (json.JSONDecodeError, IndexError, ValueError) as error:
-            return {
-                "status": "FAILED",
-                "reason": f"worker returned invalid JSON: {error}",
-            }
-        missing = sorted(
-            field
-            for field in ("first_open_ms", "samples_ms", "result", "max_rss_bytes")
-            if field not in result
+    try:
+        completed = subprocess.run(
+            job.command,
+            cwd=cwd,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=config.timeout_seconds,
         )
-        if missing:
-            return {
-                "status": "FAILED",
-                "reason": f"worker response missing required fields: {', '.join(missing)}",
-            }
-        if (
-            isinstance(result["result"], bool)
-            or not isinstance(result["result"], int)
-            or not isinstance(result["first_open_ms"], (int, float))
-            or not isinstance(result["samples_ms"], list)
-            or not all(isinstance(sample, (int, float)) for sample in result["samples_ms"])
-            or not isinstance(result["max_rss_bytes"], int)
-        ):
-            return {"status": "FAILED", "reason": "worker response has invalid field types"}
-        if result["result"] != job.expected_result:
-            return {"status": "FAILED", "reason": "worker result count mismatch"}
-        processes.append(result)
+    except subprocess.TimeoutExpired:
+        return {"status": "FAILED", "reason": "fresh worker timed out"}
+    if completed.returncode != 0:
+        return {
+            "status": "FAILED",
+            "reason": f"worker exited {completed.returncode}: {completed.stderr[-2000:]}",
+        }
+    try:
+        result = json.loads(completed.stdout.strip().splitlines()[-1])
+        if not isinstance(result, dict):
+            raise ValueError("worker JSON must be an object")
+    except (json.JSONDecodeError, IndexError, ValueError) as error:
+        return {
+            "status": "FAILED",
+            "reason": f"worker returned invalid JSON: {error}",
+        }
+    missing = sorted(
+        field
+        for field in ("first_open_ms", "samples_ms", "result", "max_rss_bytes")
+        if field not in result
+    )
+    if missing:
+        return {
+            "status": "FAILED",
+            "reason": f"worker response missing required fields: {', '.join(missing)}",
+        }
+    if (
+        isinstance(result["result"], bool)
+        or not isinstance(result["result"], int)
+        or not isinstance(result["first_open_ms"], (int, float))
+        or not isinstance(result["samples_ms"], list)
+        or not all(isinstance(sample, (int, float)) for sample in result["samples_ms"])
+        or not isinstance(result["max_rss_bytes"], int)
+    ):
+        return {"status": "FAILED", "reason": "worker response has invalid field types"}
+    if result["result"] != job.expected_result:
+        return {"status": "FAILED", "reason": "worker result count mismatch"}
+    return result
+
+
+def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
+    if config.fresh_workers <= 0:
+        raise ValueError("fresh_workers must be positive")
+    with ThreadPoolExecutor(
+        max_workers=min(config.fresh_workers, config.fresh_processes)
+    ) as executor:
+        futures = [
+            executor.submit(_run_fresh_process, job, config, cwd)
+            for _ in range(config.fresh_processes)
+        ]
+        processes = [future.result() for future in futures]
+    failed = next(
+        (process for process in processes if process.get("status") == "FAILED"), None
+    )
+    if failed is not None:
+        return failed
 
     evidence = processes[-1].get("evidence")
     if any(process.get("evidence") != evidence for process in processes):

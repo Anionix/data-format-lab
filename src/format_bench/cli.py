@@ -20,6 +20,7 @@ from .robustness.profile import run_bounded
 from .robustness.native import NATIVE_TARGETS, run_native
 from .interop import run_arrow_ipc_interoperability
 from .runner import MeasurementConfig, environment_info
+from .shards import merge_equivalence_shards
 from .workflow import _fixture_manifest, prepare_run, verify_run
 from .workloads import load_workloads
 from .registry import adapter_map, adapters
@@ -91,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--artifact-budget-mib", type=_positive_int)
     run.add_argument("--pair", action="append", choices=sorted(PAIR_SPECS))
     run.add_argument("--fresh-processes", type=_positive_int)
+    run.add_argument("--fresh-workers", type=_positive_int)
     run.add_argument("--warmups", type=_non_negative_int)
     run.add_argument("--iterations", type=_positive_int)
     run.add_argument("--worker-timeout-seconds", type=_positive_float)
@@ -108,6 +110,11 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--run-dir", type=Path, required=True)
     package.add_argument("--output", type=Path, default=Path("outputs/release"))
     package.add_argument("--platform", required=True)
+
+    merge = subcommands.add_parser("merge-equivalence-shards")
+    merge.add_argument("--base-run-dir", type=Path, required=True)
+    merge.add_argument("--shard-dir", type=Path, required=True)
+    merge.add_argument("--output-run-dir", type=Path, required=True)
 
     audit = subcommands.add_parser("audit")
     audit.add_argument("--dataset", required=True)
@@ -130,6 +137,7 @@ def _validate_run_options(args: argparse.Namespace) -> None:
     )
     measurement_options = (
         args.fresh_processes,
+        args.fresh_workers,
         args.warmups,
         args.iterations,
         args.worker_timeout_seconds,
@@ -237,6 +245,7 @@ def main(argv: list[str] | None = None) -> None:
             value is not None
             for value in (
                 args.fresh_processes,
+                args.fresh_workers,
                 args.warmups,
                 args.iterations,
                 args.worker_timeout_seconds,
@@ -244,6 +253,7 @@ def main(argv: list[str] | None = None) -> None:
         ):
             measurement = MeasurementConfig(
                 fresh_processes=_default(args.fresh_processes, 10),
+                fresh_workers=_default(args.fresh_workers, 1),
                 warmups=_default(args.warmups, 5),
                 iterations=_default(args.iterations, 30),
                 timeout_seconds=_default(args.worker_timeout_seconds, 120),
@@ -350,6 +360,10 @@ def main(argv: list[str] | None = None) -> None:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         path = output
+    elif args.command == "merge-equivalence-shards":
+        path = merge_equivalence_shards(
+            args.base_run_dir, args.shard_dir, args.output_run_dir
+        )
     else:
         path = package_run(args.run_dir, args.output, args.platform)
     print(path)

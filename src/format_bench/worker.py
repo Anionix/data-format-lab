@@ -39,17 +39,25 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> di
     adapter = adapter_map()[format_name]
     artifact = _relative(run_dir, entry["artifact"])
     source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
-    expected = result_evidence(apply_arrow(source, operation, dataset_manifest))
+    expected_table = apply_arrow(source, operation, dataset_manifest)
+    expected = result_evidence(expected_table)
+    full_evidence_checked = False
 
     def invoke() -> pa.Table:
         return adapter.scan(artifact, dataset_manifest, operation)
 
     def validate(actual: pa.Table) -> None:
-        actual_evidence = result_evidence(actual)
-        if actual_evidence != expected:
-            raise ValueError(
-                f"normalized operation result mismatch: {actual_evidence} != {expected}"
-            )
+        nonlocal full_evidence_checked
+        if not full_evidence_checked:
+            actual_evidence = result_evidence(actual)
+            if actual_evidence != expected:
+                raise ValueError(
+                    f"normalized operation result mismatch: {actual_evidence} != {expected}"
+                )
+            full_evidence_checked = True
+            return
+        if not actual.equals(expected_table, check_metadata=False):
+            raise ValueError("normalized operation result values changed")
 
     measured = measure_callable(
         invoke,
