@@ -93,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--fresh-processes", type=_positive_int)
     run.add_argument("--warmups", type=_non_negative_int)
     run.add_argument("--iterations", type=_positive_int)
+    run.add_argument("--worker-timeout-seconds", type=_positive_float)
     run.add_argument("--parallel-jobs", action="store_true")
 
     report = subcommands.add_parser("report")
@@ -131,6 +132,7 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         args.fresh_processes,
         args.warmups,
         args.iterations,
+        args.worker_timeout_seconds,
         True if args.parallel_jobs else None,
     )
     if args.profile not in {"fair", "equivalence"} and any(
@@ -231,11 +233,20 @@ def main(argv: list[str] | None = None) -> None:
         _validate_run_options(args)
         run_dir = _run_directory(root, args)
         measurement = None
-        if any(value is not None for value in (args.fresh_processes, args.warmups, args.iterations)):
+        if any(
+            value is not None
+            for value in (
+                args.fresh_processes,
+                args.warmups,
+                args.iterations,
+                args.worker_timeout_seconds,
+            )
+        ):
             measurement = MeasurementConfig(
                 fresh_processes=_default(args.fresh_processes, 10),
                 warmups=_default(args.warmups, 5),
                 iterations=_default(args.iterations, 30),
+                timeout_seconds=_default(args.worker_timeout_seconds, 120),
             )
         if args.profile == "robustness":
             if args.suite == "native":

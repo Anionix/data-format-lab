@@ -12,6 +12,7 @@ from .model import Comparability, ExecutionState, transition
 from .runner import (
     Job,
     MeasurementConfig,
+    measurement_metadata,
     new_results,
     parallel_worker_counts,
     run_jobs,
@@ -156,6 +157,7 @@ def run_equivalence(
         **worker_counts,
         "pairs": pairs_evidence,
     }
+    run_manifest["measurement"] = measurement_metadata(measurement)
     _write_json(manifest_path, run_manifest)
     results = new_results(root, run_dir.name, measurement)
     results["profile"] = "equivalence"

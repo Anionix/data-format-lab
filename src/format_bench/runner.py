@@ -330,6 +330,14 @@ def new_results(root: Path, run_id: str, config: MeasurementConfig) -> dict:
         "schema_version": "1",
         "run_id": run_id,
         "environment": environment_info(root),
-        "measurement": {**asdict(config), "os_cache_purged": False},
+        "measurement": measurement_metadata(config),
         "results": {},
+    }
+
+
+def measurement_metadata(config: MeasurementConfig) -> dict:
+    return {
+        **asdict(config),
+        "worker_timeout_seconds": config.timeout_seconds,
+        "os_cache_purged": False,
     }
