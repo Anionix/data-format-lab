@@ -56,7 +56,9 @@ def _write_json(path: Path, value: JSONObject) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _safe_run_path(run: Path, value: JSONValue, label: str) -> Path:
+def _safe_run_path(
+    run: Path, value: JSONValue, label: str, *, allow_missing: bool = False
+) -> Path:
     if not isinstance(value, str):
         raise ValueError(f"expected relative path: {label}")
     relative = Path(value)
@@ -66,7 +68,7 @@ def _safe_run_path(run: Path, value: JSONValue, label: str) -> Path:
     if candidate.is_symlink() or any(parent.is_symlink() for parent in candidate.parents):
         raise ValueError(f"run path must not resolve through a symlink: {label}")
     try:
-        candidate.resolve(strict=True).relative_to(run.resolve())
+        candidate.resolve(strict=not allow_missing).relative_to(run.resolve())
     except (FileNotFoundError, ValueError) as error:
         raise ValueError(f"run path is missing or escapes run directory: {label}") from error
     return candidate
@@ -117,7 +119,13 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
         name = entry.get("format")
         if not isinstance(name, str) or name in identities:
             raise ValueError("manifest format names must be unique strings")
-        artifact = _safe_run_path(run, entry.get("artifact"), f"{name}.artifact")
+        unsupported = entry.get("state") == ExecutionState.UNSUPPORTED
+        artifact = _safe_run_path(
+            run,
+            entry.get("artifact"),
+            f"{name}.artifact",
+            allow_missing=unsupported,
+        )
         identities[name] = {
             "artifact": entry["artifact"],
             "lane": entry.get("lane"),
@@ -125,7 +133,7 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
             "settings": entry.get("settings"),
             "native_bytes": entry.get("native_bytes"),
             "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
-            "artifact_sha256": _sha256(artifact),
+            "artifact_sha256": _sha256(artifact) if artifact.exists() else None,
         }
     return identities
 
