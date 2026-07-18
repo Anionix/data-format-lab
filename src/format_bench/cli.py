@@ -137,6 +137,8 @@ def _validate_run_options(args: argparse.Namespace) -> None:
         value is not None for value in measurement_options
     ):
         raise ValueError("measurement options require --profile fair or equivalence")
+    if args.profile == "fair" and args.parallel_jobs:
+        raise ValueError("--parallel-jobs requires --profile equivalence")
     if args.profile not in {"robustness", "equivalence"}:
         if any(value is not None for value in robustness_options):
             raise ValueError(

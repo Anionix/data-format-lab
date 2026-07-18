@@ -157,6 +157,19 @@ def test_cli_accepts_equivalence_pairs_and_rejects_robustness_options() -> None:
     cli._validate_run_options(parallel)
     assert parallel.parallel_jobs is True
 
+    fair_parallel = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "fair",
+            "--dataset",
+            DATASET,
+            "--parallel-jobs",
+        ]
+    )
+    with pytest.raises(ValueError, match="requires --profile equivalence"):
+        cli._validate_run_options(fair_parallel)
+
     invalid = cli.build_parser().parse_args(
         [
             "run",

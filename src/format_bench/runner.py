@@ -196,6 +196,21 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
     }
 
 
+def parallel_worker_counts(job_count: int, *, parallel: bool) -> dict[str, int]:
+    """Return the configured and effective worker counts for a job batch."""
+    if job_count < 0:
+        raise ValueError("job_count must be non-negative")
+    if not parallel:
+        return {"requested_workers": 1, "effective_workers": 1}
+    requested_workers = int(os.environ.get("FORMAT_BENCH_MAX_WORKERS", "8"))
+    if requested_workers <= 0:
+        raise ValueError("FORMAT_BENCH_MAX_WORKERS must be positive")
+    return {
+        "requested_workers": requested_workers,
+        "effective_workers": min(job_count, requested_workers),
+    }
+
+
 def run_jobs(
     jobs: list[Job],
     config: MeasurementConfig,
@@ -209,10 +224,9 @@ def run_jobs(
         return {}
     if not parallel:
         return {job.job_id: run_job(job, config, cwd) for job in ordered}
-    requested_workers = int(os.environ.get("FORMAT_BENCH_MAX_WORKERS", "8"))
-    if requested_workers <= 0:
-        raise ValueError("FORMAT_BENCH_MAX_WORKERS must be positive")
-    worker_count = min(len(ordered), requested_workers)
+    worker_count = parallel_worker_counts(len(ordered), parallel=True)[
+        "effective_workers"
+    ]
     # Parallel mode is reserved for explicitly independent workloads; benchmark
     # lanes stay serial so measured formats do not contend for shared resources.
     with ThreadPoolExecutor(max_workers=worker_count) as executor:

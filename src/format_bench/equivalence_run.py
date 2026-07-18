@@ -9,7 +9,13 @@ from .equivalence import EquivalenceBounds, EquivalenceVerdict
 from .equivalence_compare import PAIR_SPECS, pair_evidence
 from .fair import expected_rows, operations_for
 from .model import Comparability, ExecutionState, transition
-from .runner import Job, MeasurementConfig, new_results, run_jobs
+from .runner import (
+    Job,
+    MeasurementConfig,
+    new_results,
+    parallel_worker_counts,
+    run_jobs,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -83,6 +89,7 @@ def run_equivalence(
         for name in sorted(measured_names)
         for operation in operations
     ]
+    worker_counts = parallel_worker_counts(len(jobs), parallel=parallel)
     measured = run_jobs(jobs, measurement, root, parallel=parallel)
     failed = {
         job_id for job_id, result in measured.items() if result["status"] != "MEASURED"
@@ -119,6 +126,7 @@ def run_equivalence(
     successful_names = set(measured_names)
     for job_id in failed:
         successful_names.discard(job_id.split("/", 1)[0])
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     for name in measured_names:
         entry = entries[name]
         name_failed = sorted(
@@ -145,6 +153,7 @@ def run_equivalence(
         "contract_version": "1",
         "bounds": asdict(bounds),
         "parallel_jobs": parallel,
+        **worker_counts,
         "pairs": pairs_evidence,
     }
     _write_json(manifest_path, run_manifest)
