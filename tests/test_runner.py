@@ -10,6 +10,7 @@ from format_bench.runner import (
     MeasurementConfig,
     environment_info,
     measure_callable,
+    parallel_worker_counts,
     run_job,
     stats_ms,
 )
@@ -28,6 +29,15 @@ def test_measure_callable_validates_result_count() -> None:
     assert len(measured["samples_ms"]) == 2
     with pytest.raises(ValueError, match="unexpected operation result"):
         measure_callable(lambda: 2, expected=3, warmups=0, iterations=1)
+
+
+def test_parallel_worker_counts_include_environment_cap(monkeypatch) -> None:
+    monkeypatch.setenv("FORMAT_BENCH_MAX_WORKERS", "8")
+
+    assert parallel_worker_counts(3, parallel=True) == {
+        "requested_workers": 8,
+        "effective_workers": 3,
+    }
 
 
 @pytest.mark.parametrize(
