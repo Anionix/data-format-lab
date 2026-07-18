@@ -64,7 +64,9 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     job = Job("fixture/read", (sys.executable, "-c", f"print({payload!r})"), 7)
     result = run_job(
         job,
-        MeasurementConfig(fresh_processes=2, warmups=0, iterations=2),
+        MeasurementConfig(
+            fresh_processes=2, fresh_workers=2, warmups=0, iterations=2
+        ),
         tmp_path,
     )
     assert result["status"] == "MEASURED"
