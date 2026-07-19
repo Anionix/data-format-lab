@@ -51,6 +51,7 @@ include = [
   "src/format_bench/robustness/runner.py",
   "tools/audit_tracker.py",
   "tools/audit_github.py",
+  "tools/audit_project.py",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"

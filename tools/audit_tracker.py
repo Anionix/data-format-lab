@@ -488,6 +488,9 @@ def main(argv: list[str] | None = None) -> int:
                 write_registry(args.registry, updated)
                 print(f"next sync state: {next_state}")
             else:
+                import audit_project
+
+                audit_project.read_project(registry, items, live)
                 next_state = audit_github.verify(registry, items, live, sync_state)
                 updated = audit_github.synchronized_registry(
                     registry, items, live, next_state
