@@ -10,12 +10,13 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
+GITHUB_PLAN_DIGEST = "1e1f07cfd0deb5117bdcb1db845f9d2d96994fcf59ac42e51d03ac6cf1cf9ba6"
 AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
 AUDIT_DATE = "2026-07-19"
 REPOSITORY = "Anionix/data-format-lab"
@@ -42,17 +43,23 @@ class AuditError(RuntimeError):
     """The registry violates its public contract."""
 
 
+Severity = Literal["HIGH", "MEDIUM", "LOW", "INFORMATIONAL"]
+Disposition = Literal["ISSUE", "MONITOR", "REGRESSION_GUARD"]
+Priority = Literal["P0", "P1", "P2", "P3"]
+Owner = Literal["Agent", "Human", "Mixed"]
+
+
 @dataclass(frozen=True)
 class AuditItem:
     id: str
     criterion: str
     score: int
-    severity: str
+    severity: Severity
     evidence: str
-    disposition: str
+    disposition: Disposition
     workstream: str
-    priority: str | None
-    owner: str
+    priority: Priority | None
+    owner: Owner
     milestone: str | None
     dependencies: tuple[str, ...]
     labels: tuple[str, ...]
@@ -103,18 +110,30 @@ def _item(value: object) -> AuditItem:
     if not all(isinstance(label, str) and label for label in labels):
         raise AuditError("item.labels must contain non-empty strings")
     issue_number = data.get("issue_number")
-    if issue_number is not None and type(issue_number) is not int:
-        raise AuditError("item.issue_number must be an integer or null")
+    if issue_number is not None and (type(issue_number) is not int or issue_number <= 0):
+        raise AuditError("item.issue_number must be a positive integer or null")
+    severity = _text(data, "severity", "item")
+    disposition = _text(data, "disposition", "item")
+    priority = _optional_text(data, "priority", "item")
+    owner = _text(data, "owner", "item")
+    if severity not in {"HIGH", "MEDIUM", "LOW", "INFORMATIONAL"}:
+        raise AuditError("item.severity is invalid")
+    if disposition not in {"ISSUE", "MONITOR", "REGRESSION_GUARD"}:
+        raise AuditError("item.disposition is invalid")
+    if priority is not None and priority not in {"P0", "P1", "P2", "P3"}:
+        raise AuditError("item.priority is invalid")
+    if owner not in {"Agent", "Human", "Mixed"}:
+        raise AuditError("item.owner is invalid")
     return AuditItem(
         id=_text(data, "id", "item"),
         criterion=_text(data, "criterion", "item"),
         score=score,
-        severity=_text(data, "severity", "item"),
+        severity=cast(Severity, severity),
         evidence=_text(data, "evidence", "item"),
-        disposition=_text(data, "disposition", "item"),
+        disposition=cast(Disposition, disposition),
         workstream=_text(data, "workstream", "item"),
-        priority=_optional_text(data, "priority", "item"),
-        owner=_text(data, "owner", "item"),
+        priority=cast(Priority | None, priority),
+        owner=cast(Owner, owner),
         milestone=_optional_text(data, "milestone", "item"),
         dependencies=tuple(str(dependency) for dependency in dependencies),
         labels=tuple(str(label) for label in labels),
@@ -139,20 +158,19 @@ def _band_counts(scores: list[int]) -> dict[str, int]:
     }
 
 
-def _assert_acyclic(items: list[AuditItem]) -> None:
-    graph = {item.id: item.dependencies for item in items}
+def _assert_graph_acyclic(graph: dict[str, tuple[str, ...]], context: str) -> None:
     active: set[str] = set()
     complete: set[str] = set()
 
     def visit(node: str) -> None:
         if node in active:
-            raise AuditError(f"dependency cycle at {node}")
+            raise AuditError(f"{context} dependency cycle at {node}")
         if node in complete:
             return
+        if node not in graph:
+            raise AuditError(f"unknown {context} dependency {node}")
         active.add(node)
         for dependency in graph[node]:
-            if dependency not in graph:
-                raise AuditError(f"unknown dependency {dependency}")
             visit(dependency)
         active.remove(node)
         complete.add(node)
@@ -176,6 +194,24 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     sync_state = _text(github, "sync_state", "github")
     if sync_state not in {"PLANNED", "APPLIED", "VERIFIED"}:
         raise AuditError("github.sync_state is invalid")
+    project = _mapping(github.get("project"), "github.project")
+    if type(project.get("views_verified")) is not bool:
+        raise AuditError("github.project.views_verified must be a boolean")
+    if type(github.get("saved_views_verified")) is not bool:
+        raise AuditError("github.saved_views_verified must be a boolean")
+    canonical_github = dict(github)
+    canonical_project = dict(project)
+    canonical_github["sync_state"] = "PLANNED"
+    canonical_github["saved_views_verified"] = False
+    canonical_project["views_verified"] = False
+    canonical_github["project"] = canonical_project
+    github_digest = hashlib.sha256(
+        json.dumps(
+            canonical_github, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    if github_digest != GITHUB_PLAN_DIGEST:
+        raise AuditError("GitHub plan differs from the canonical audit plan")
     items = [_item(value) for value in _sequence(registry.get("items"), "items")]
     if [item.id for item in items] != [f"DFL-AUDIT-{number:03d}" for number in range(1, 175)]:
         raise AuditError("audit IDs must be contiguous from 001 to 174")
@@ -218,12 +254,8 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
             raise AuditError(f"{item.id}: invalid disposition or workstream")
         if item.severity != expected_severity:
             raise AuditError(f"{item.id}: severity does not match original_score")
-        if item.owner not in {"Agent", "Human", "Mixed"}:
-            raise AuditError(f"{item.id}: owner is invalid")
         if expected == "ISSUE" and None in (item.priority, item.milestone):
             raise AuditError(f"{item.id}: actionable fields are incomplete")
-        if expected == "ISSUE" and item.priority not in {"P0", "P1", "P2", "P3"}:
-            raise AuditError(f"{item.id}: priority is invalid")
         canonical_priority = (
             "P0" if number in P0_IDS else "P1" if number in P1_IDS
             else "P3" if item.score == 5 else "P2"
@@ -249,29 +281,11 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
             raise AuditError(f"{item.id}: non-actionable item has issue-only metadata")
     if sum(item.disposition == "ISSUE" for item in items) != 85:
         raise AuditError("exactly 85 actionable findings are required")
-    _assert_acyclic(items)
+    synced_numbers = [item.issue_number for item in items if item.issue_number is not None]
+    if sync_state != "PLANNED" and len(set(synced_numbers)) != 85:
+        raise AuditError("synced issue numbers must be present and unique")
+    _assert_graph_acyclic({item.id: item.dependencies for item in items}, "item")
     return items
-
-
-def _assert_graph_acyclic(graph: dict[str, tuple[str, ...]], context: str) -> None:
-    active: set[str] = set()
-    complete: set[str] = set()
-
-    def visit(node: str) -> None:
-        if node in active:
-            raise AuditError(f"{context} dependency cycle at {node}")
-        if node in complete:
-            return
-        if node not in graph:
-            raise AuditError(f"unknown {context} dependency {node}")
-        active.add(node)
-        for dependency in graph[node]:
-            visit(dependency)
-        active.remove(node)
-        complete.add(node)
-
-    for node in graph:
-        visit(node)
 
 
 def render_report(registry: dict[str, object], items: list[AuditItem]) -> str:

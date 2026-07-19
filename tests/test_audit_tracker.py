@@ -132,6 +132,23 @@ def test_registry_pins_audit_identity_and_triage_assignments() -> None:
         tracker.validate_registry(registry)
 
 
+def test_registry_pins_github_plan_and_synced_issue_numbers() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["github"]["labels"][0]["color"] = "ffffff"
+    with pytest.raises(tracker.AuditError, match="GitHub plan"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    issues = [item for item in registry["items"] if item["disposition"] == "ISSUE"]
+    for number, issue in enumerate(issues, start=300):
+        issue["issue_number"] = number
+    registry["github"]["sync_state"] = "APPLIED"
+    issues[-1]["issue_number"] = issues[0]["issue_number"]
+    with pytest.raises(tracker.AuditError, match="present and unique"):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
     tracker = _tracker()
     registry = _registry()
