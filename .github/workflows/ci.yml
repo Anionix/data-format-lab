@@ -60,8 +60,9 @@ jobs:
           nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             ruff --version
             pyright --version
-            ruff check src tests
+            ruff check src tests tools
             pyright
+            python tools/audit_tracker.py validate
           '
 
       - name: Run tests and smoke lanes concurrently

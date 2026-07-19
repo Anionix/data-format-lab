@@ -28,6 +28,7 @@
               ruff
               pyright
               ty
+              gh
               rustToolchain
               cargo-fuzz
               duckdb
