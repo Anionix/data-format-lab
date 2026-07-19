@@ -2,14 +2,50 @@ import json
 import shutil
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
 
 from format_bench import cli
+from format_bench.fair import FairOperation
+from format_bench.formats.base import Artifact, FormatDescription
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
+from format_bench.model import Comparability, Lane
 from format_bench.workflow import prepare_run, verify_run
 
 
 DATASET = "github-stars-2026-07-03"
+
+
+class FailingAdapter:
+    def __init__(self, name: str, error: Exception) -> None:
+        self.name = name
+        self.error = error
+
+    def describe(self) -> FormatDescription:
+        return FormatDescription(
+            name=self.name,
+            lane=Lane.FAIR,
+            comparability=Comparability.FULL_COMPARABLE,
+            extension=".failure",
+            settings={},
+        )
+
+    def encode(self, table: pa.Table, path: Path) -> Artifact:
+        raise self.error
+
+    def read(self, path: Path, manifest: dict) -> pa.Table:
+        raise NotImplementedError
+
+    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+        raise NotImplementedError
+
+    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+        raise NotImplementedError
+
+
+class FalseVerificationAdapter(CsvAdapter):
+    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+        return {"passed": False}
 
 
 def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> None:
@@ -32,6 +68,83 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
         "ROUNDTRIP_VERIFIED"
     }
     assert all(entry["verification"]["passed"] for entry in verified["formats"])
+
+
+@pytest.mark.parametrize(
+    ("errors", "expected_state"),
+    [
+        ((ImportError("missing dependency"),), "UNSUPPORTED"),
+        ((RuntimeError("adapter failed"),), "FAILED"),
+        (
+            (RuntimeError("adapter failed"), ImportError("missing dependency")),
+            "FAILED",
+        ),
+    ],
+)
+def test_verify_run_does_not_pass_without_a_verified_adapter(
+    tmp_path: Path, errors: tuple[Exception, ...], expected_state: str
+) -> None:
+    root = Path(__file__).parents[1]
+    adapters = tuple(
+        FailingAdapter(f"failure_{index}", error)
+        for index, error in enumerate(errors)
+    )
+    run_dir = tmp_path / "run"
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=adapters)
+
+    verify_run(run_dir, {adapter.name: adapter for adapter in adapters})
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+
+    assert manifest["state"] == expected_state
+    assert {entry["state"] for entry in manifest["formats"]} <= {
+        "FAILED",
+        "UNSUPPORTED",
+    }
+
+
+def test_verify_run_allows_partial_adapter_failure_with_verified_evidence(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[1]
+    working = CsvAdapter()
+    failed = FailingAdapter("failure", RuntimeError("adapter failed"))
+    run_dir = tmp_path / "run"
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(working, failed))
+
+    verify_run(run_dir, {"csv": working, failed.name: failed})
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+
+    assert manifest["state"] == "ROUNDTRIP_VERIFIED"
+    assert {entry["state"] for entry in manifest["formats"]} == {
+        "ROUNDTRIP_VERIFIED",
+        "FAILED",
+    }
+
+
+def test_verify_run_rejects_empty_adapter_selection(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=())
+
+    verify_run(run_dir, {})
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+
+    assert manifest["state"] == "FAILED"
+    assert manifest["failure_reason"] == "no adapters selected for verification"
+
+
+def test_verify_run_rejects_false_verification_result(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    adapter = FalseVerificationAdapter()
+    run_dir = tmp_path / "run"
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(adapter,))
+
+    verify_run(run_dir, {"csv": adapter})
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+
+    assert manifest["state"] == "FAILED"
+    assert manifest["formats"][0]["state"] == "FAILED"
+    assert "did not pass" in manifest["formats"][0]["failure_reason"]
 
 
 def test_prepare_validates_dataset_before_creating_destination(tmp_path: Path) -> None:

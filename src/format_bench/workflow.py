@@ -129,6 +129,13 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
         (run_dir / run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
     )
     registered = selected or adapter_map()
+    if not run_manifest["formats"]:
+        run_manifest["state"] = transition(
+            ExecutionState.ENCODED, ExecutionState.FAILED
+        )
+        run_manifest["failure_reason"] = "no adapters selected for verification"
+        _write_json(manifest_path, run_manifest)
+        return manifest_path
     # LLM contract: only ENCODED evidence can advance to ROUNDTRIP_VERIFIED here.
     for entry in run_manifest["formats"]:
         if entry["state"] != ExecutionState.ENCODED:
@@ -138,6 +145,8 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
                 run_dir / entry["artifact"], dataset_manifest
             )
             entry["verification"] = verification
+            if verification.get("passed") is not True:
+                raise ValueError("round-trip verification did not pass")
             entry["state"] = transition(
                 ExecutionState.ENCODED, ExecutionState.ROUNDTRIP_VERIFIED
             )
@@ -150,7 +159,23 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
         ExecutionState.UNSUPPORTED,
         ExecutionState.FAILED,
     }
-    if all(entry["state"] in terminal for entry in run_manifest["formats"]):
-        run_manifest["state"] = ExecutionState.ROUNDTRIP_VERIFIED
+    if run_manifest["formats"] and all(
+        entry["state"] in terminal for entry in run_manifest["formats"]
+    ):
+        # LLM contract: ENCODED -> ROUNDTRIP_VERIFIED requires every adapter to
+        # be terminal and at least one adapter to complete round-trip verification;
+        # an all-failure run remains terminal failure evidence.
+        if any(
+            entry["state"] == ExecutionState.ROUNDTRIP_VERIFIED
+            for entry in run_manifest["formats"]
+        ):
+            run_manifest["state"] = ExecutionState.ROUNDTRIP_VERIFIED
+        elif any(
+            entry["state"] == ExecutionState.FAILED
+            for entry in run_manifest["formats"]
+        ):
+            run_manifest["state"] = ExecutionState.FAILED
+        else:
+            run_manifest["state"] = ExecutionState.UNSUPPORTED
     _write_json(manifest_path, run_manifest)
     return manifest_path
