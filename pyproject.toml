@@ -49,6 +49,7 @@ include = [
   "src/format_bench/robustness/mutations.py",
   "src/format_bench/robustness/paths.py",
   "src/format_bench/robustness/runner.py",
+  "tools/audit_tracker.py",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"

@@ -1,0 +1,3403 @@
+{
+  "schema_version": "audit_registry/v1",
+  "audit_date": "2026-07-19",
+  "repository": "Anionix/data-format-lab",
+  "audited_commit": "52748f552bf2f5e7922725ea2e8f85bea291bce0",
+  "source_digest": "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0",
+  "method": "Six-role strict audit consolidated from 156 raw judgments into 174 non-duplicate criteria.",
+  "score_bands": {
+    "1-3": 43,
+    "4-5": 42,
+    "6-7": 36,
+    "8-10": 53
+  },
+  "workstreams": [
+    {
+      "key": "correctness",
+      "title": "Correctness and canonicalization",
+      "blocked_by": [],
+      "milestone": "Audit M1 - Evidence Integrity"
+    },
+    {
+      "key": "measurement",
+      "title": "Measurement execution and isolation",
+      "blocked_by": [
+        "correctness"
+      ],
+      "milestone": "Audit M2 - Methodology v2"
+    },
+    {
+      "key": "causal-validity",
+      "title": "Workload and reader causal validity",
+      "blocked_by": [
+        "measurement"
+      ],
+      "milestone": "Audit M2 - Methodology v2"
+    },
+    {
+      "key": "statistics",
+      "title": "Statistical inference",
+      "blocked_by": [
+        "measurement"
+      ],
+      "milestone": "Audit M2 - Methodology v2"
+    },
+    {
+      "key": "format-coverage",
+      "title": "Format, tokenizer, and native coverage",
+      "blocked_by": [
+        "correctness"
+      ],
+      "milestone": "Audit M2 - Methodology v2"
+    },
+    {
+      "key": "provenance",
+      "title": "Dataset provenance and licensing",
+      "blocked_by": [],
+      "milestone": "Audit M1 - Evidence Integrity"
+    },
+    {
+      "key": "external-validity",
+      "title": "Dataset and workload external validity",
+      "blocked_by": [
+        "provenance"
+      ],
+      "milestone": "Audit M2 - Methodology v2"
+    },
+    {
+      "key": "typing",
+      "title": "API typing, testing, and maintainability",
+      "blocked_by": [],
+      "milestone": "Audit M3 - Publication Grade"
+    },
+    {
+      "key": "robustness",
+      "title": "Robustness and sandboxing",
+      "blocked_by": [
+        "typing"
+      ],
+      "milestone": "Audit M1 - Evidence Integrity"
+    },
+    {
+      "key": "release",
+      "title": "Release and public evidence",
+      "blocked_by": [
+        "correctness",
+        "provenance",
+        "robustness",
+        "security"
+      ],
+      "milestone": "Audit M1 - Evidence Integrity"
+    },
+    {
+      "key": "security",
+      "title": "Security and repository governance",
+      "blocked_by": [],
+      "milestone": "Audit M1 - Evidence Integrity"
+    },
+    {
+      "key": "documentation",
+      "title": "Documentation, localization, and installation",
+      "blocked_by": [
+        "release"
+      ],
+      "milestone": "Audit M3 - Publication Grade"
+    },
+    {
+      "key": "product-ux",
+      "title": "Product, UX, and impact",
+      "blocked_by": [
+        "documentation",
+        "release"
+      ],
+      "milestone": "Audit M0 - Submission Ready"
+    },
+    {
+      "key": "codex-narrative",
+      "title": "Codex and GPT-5.6 narrative",
+      "blocked_by": [
+        "product-ux"
+      ],
+      "milestone": "Audit M0 - Submission Ready"
+    },
+    {
+      "key": "submission",
+      "title": "Human submission actions",
+      "blocked_by": [
+        "product-ux",
+        "codex-narrative"
+      ],
+      "milestone": "Audit M0 - Submission Ready"
+    }
+  ],
+  "github": {
+    "audit_label": "audit:2026-07-19",
+    "labels": [
+      {
+        "name": "audit:2026-07-19",
+        "color": "5319e7",
+        "description": "Strict audit finding from 2026-07-19"
+      },
+      {
+        "name": "priority:p0",
+        "color": "b60205",
+        "description": "Immediate submission or eligibility blocker"
+      },
+      {
+        "name": "priority:p1",
+        "color": "d93f0b",
+        "description": "Critical evidence integrity follow-up"
+      },
+      {
+        "name": "priority:p2",
+        "color": "fbca04",
+        "description": "Important audit follow-up"
+      },
+      {
+        "name": "priority:p3",
+        "color": "0e8a16",
+        "description": "Planned audit improvement"
+      },
+      {
+        "name": "security",
+        "color": "8b0000",
+        "description": "Security or repository governance concern"
+      }
+    ],
+    "milestones": [
+      {
+        "title": "Audit M0 - Submission Ready",
+        "description": "Submission eligibility and judge-facing readiness",
+        "due_on": "2026-07-22T00:00:00Z"
+      },
+      {
+        "title": "Audit M1 - Evidence Integrity",
+        "description": "Correctness, provenance, robustness, release, and security integrity"
+      },
+      {
+        "title": "Audit M2 - Methodology v2",
+        "description": "Measurement, inference, format, and external-validity improvements"
+      },
+      {
+        "title": "Audit M3 - Publication Grade",
+        "description": "Typing, maintainability, documentation, and publication polish"
+      }
+    ],
+    "project_owner": "Anionix",
+    "project": {
+      "title": "Data Format Lab - Strict Audit Closure",
+      "description": "Issue-backed closure board for the 2026-07-19 strict audit.",
+      "visibility": "PUBLIC",
+      "views": [
+        "Now",
+        "Roadmap",
+        "Workstreams",
+        "Human actions",
+        "Blocked",
+        "Closure"
+      ],
+      "views_verified": false,
+      "fields": [
+        {
+          "name": "Status",
+          "type": "SINGLE_SELECT",
+          "options": [
+            "Needs decision",
+            "Ready",
+            "Blocked",
+            "In progress",
+            "In review",
+            "Done",
+            "Accepted risk"
+          ]
+        },
+        {
+          "name": "Priority",
+          "type": "SINGLE_SELECT",
+          "options": [
+            "P0",
+            "P1",
+            "P2",
+            "P3"
+          ]
+        },
+        {
+          "name": "Workstream",
+          "type": "SINGLE_SELECT",
+          "options": [
+            "correctness",
+            "measurement",
+            "causal-validity",
+            "statistics",
+            "format-coverage",
+            "provenance",
+            "external-validity",
+            "typing",
+            "robustness",
+            "release",
+            "security",
+            "documentation",
+            "product-ux",
+            "codex-narrative",
+            "submission"
+          ]
+        },
+        {
+          "name": "Audit Score",
+          "type": "NUMBER"
+        },
+        {
+          "name": "Audit ID",
+          "type": "TEXT"
+        },
+        {
+          "name": "Owner",
+          "type": "SINGLE_SELECT",
+          "options": [
+            "Agent",
+            "Human",
+            "Mixed"
+          ]
+        },
+        {
+          "name": "Level",
+          "type": "SINGLE_SELECT",
+          "options": [
+            "Roadmap",
+            "Workstream",
+            "Item",
+            "Existing"
+          ]
+        }
+      ]
+    },
+    "saved_views": [
+      {
+        "name": "Data Format Lab - Audit P0",
+        "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:priority:p0"
+      },
+      {
+        "name": "Data Format Lab - Audit P1",
+        "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:priority:p1"
+      },
+      {
+        "name": "Data Format Lab - Ready for agent",
+        "query": "repo:Anionix/data-format-lab is:issue is:open label:ready-for-agent"
+      },
+      {
+        "name": "Data Format Lab - Ready for human",
+        "query": "repo:Anionix/data-format-lab is:issue is:open label:ready-for-human"
+      },
+      {
+        "name": "Data Format Lab - Audit bugs",
+        "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:bug"
+      }
+    ],
+    "saved_views_verified": false,
+    "existing_issues": [
+      {
+        "number": 236,
+        "workstream": "robustness",
+        "priority": "P1",
+        "milestone": "Audit M1 - Evidence Integrity",
+        "level": "Existing"
+      }
+    ],
+    "sync_state": "PLANNED"
+  },
+  "items": [
+    {
+      "id": "DFL-AUDIT-001",
+      "criterion": "File/table/engine/codec/index taxonomy",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Explicit glossary in `CONTEXT.md:9-22`; not fully enforced by separate adapter types.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-002",
+      "criterion": "Fair/claims/prompt separation",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Separate lanes and no cross-lane ranking in `CONTEXT.md:29-38`.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-003",
+      "criterion": "Equivalence lane isolation",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Pair-local registry and lane checks in `equivalence_compare.py:23-59`.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-004",
+      "criterion": "Engine-container separation",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "SQLite/DuckDB are not file-format ranking rows.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-005",
+      "criterion": "Robustness/performance separation",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Robustness cannot change performance ranking.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-006",
+      "criterion": "Comparability eligibility",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Only `FULL_COMPARABLE` entries rank; aggregate publication sometimes omits this clearly.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-007",
+      "criterion": "Fixture non-rankability",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Fixture runs are explicitly marked non-rankable.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-008",
+      "criterion": "Lifecycle model",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Executable transitions are strong; global verification aggregation has a defect.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-009",
+      "criterion": "Failure as publishable evidence",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "`FAILED`/`UNSUPPORTED` are retained and non-rankable.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-010",
+      "criterion": "No universal winner",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Consistent doctrine in context, ADR, report and selection guide.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-011",
+      "criterion": "Manifest-driven Arrow schema",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Exact schema exists, but only four Arrow types are supported.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-012",
+      "criterion": "Primitive type breadth",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Only string, float64, int64 and bool in `canonical.py:15-20`.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-013",
+      "criterion": "Exact schema equality",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "`verify_table()` rejects schema mismatch.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-014",
+      "criterion": "NULL rule enforcement",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Nullable fields are checked; empty string is globally collapsed into NULL.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-015",
+      "criterion": "Canonical hash determinism",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Stable JSON/SHA-256 process; limited to Python/JSON semantics.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-016",
+      "criterion": "Canonical hash genericity",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Dataset-specific normalization for Stars fields remains in generic core.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-017",
+      "criterion": "Row-order preservation",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "`canonical_hash()` sorts rows, so permutations can pass conformance.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-018",
+      "criterion": "NaN/infinity handling",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Standard JSON canonicality is not enforced; `allow_nan` remains default.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-019",
+      "criterion": "Full round-trip gate",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Schema, rows, hash and expected counts required before timing.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-020",
+      "criterion": "Query count equality",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Exact result counts are checked.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-021",
+      "criterion": "Query content equality",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Normalized result hashes exist, but ordering differences can be masked.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-022",
+      "criterion": "HEAD operation semantics",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Head is order-sensitive, while canonical result evidence is order-insensitive.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-017"
+      ],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-023",
+      "criterion": "Adapter verification consistency",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Most adapters converge on `verify_table`; casting/read semantics vary.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-024",
+      "criterion": "Corruption versus mismatch semantics",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Robustness avoids falsely calling arbitrary mutation acceptance silent corruption.",
+      "disposition": "MONITOR",
+      "workstream": "correctness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-025",
+      "criterion": "Monotonic timing clock",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "`perf_counter_ns` surrounds target invocation.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-026",
+      "criterion": "Fresh process isolation",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Each replicate is a subprocess.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-027",
+      "criterion": "Repetition hierarchy",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "10 processes, 5 warmups, 30 iterations; per-process summaries retained.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-028",
+      "criterion": "Warmup rationale",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Implemented but no stabilization diagnostic justifies five warmups.",
+      "disposition": "MONITOR",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-029",
+      "criterion": "Fresh-open naming",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Fresh artifact invocation, not end-to-end cold application startup.",
+      "disposition": "MONITOR",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-030",
+      "criterion": "True cold-cache measurement",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "OS cache is not purged; correctly disclosed, but cold-read claims are unavailable.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-031",
+      "criterion": "Job order randomization",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "One seeded job shuffle; replicate blocks are not interleaved.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-032",
+      "criterion": "Temporal/thermal drift control",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "No paired blocks, CPU governor, temperature or power-state control.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-033",
+      "criterion": "Serial default",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Fair jobs default to serial execution.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-034",
+      "criterion": "Parallel-run interference",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Worker count is recorded, but contention is not removed or modeled.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-035",
+      "criterion": "CPU affinity/resource isolation",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "No affinity, cgroup, quota or bandwidth controls.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-036",
+      "criterion": "Write-time measurement",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Artifact write is generally one preparation observation, not repeated inference.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-037",
+      "criterion": "Scan operation breadth",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Read, projection, simple filter and head only.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-038",
+      "criterion": "Pushdown comparability",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Same logical result, but pushdown and Arrow conversion differ by reader.",
+      "disposition": "MONITOR",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-039",
+      "criterion": "Reader/format causal separation",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Measures format plus library plus reader implementation, not format alone.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-040",
+      "criterion": "RSS measurement",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Process-wide max RSS includes interpreter/source/expected tables; no baseline subtraction.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-041",
+      "criterion": "Result validation outside timer",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Validation does not contaminate measured invocation.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-042",
+      "criterion": "Hardware separation",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "macOS ARM and Linux x86_64 are separate result sets.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "measurement",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-043",
+      "criterion": "Estimand definition",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Metrics exist, but target population and warm/fresh estimands are not formally stated.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-044",
+      "criterion": "p50 calculation",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Deterministic and tested.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "statistics",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-045",
+      "criterion": "p95 calculation",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Deterministic; only 30 within-process samples per process.",
+      "disposition": "MONITOR",
+      "workstream": "statistics",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-046",
+      "criterion": "IQR/min/max reporting",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Useful descriptive spread is retained.",
+      "disposition": "MONITOR",
+      "workstream": "statistics",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-047",
+      "criterion": "Fair-lane uncertainty",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Rankings use point summaries without confidence intervals/effect thresholds.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-048",
+      "criterion": "Process as inferential unit",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Process p50/p95 samples are retained, though headline warm tables pool iterations.",
+      "disposition": "MONITOR",
+      "workstream": "statistics",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-049",
+      "criterion": "Bootstrap implementation",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Basic 2,000-sample percentile bootstrap over ten processes.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-050",
+      "criterion": "Bootstrap validation",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "No coverage simulation, BCa, studentization or Monte Carlo error analysis.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-049"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-051",
+      "criterion": "Paired inference",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Independent resampling misses a possible temporal-block pairing design.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-052",
+      "criterion": "Equivalence margin justification",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "+/-2/5/10% thresholds are explicit but not tied to user impact or noise.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-053",
+      "criterion": "Size uncertainty",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Storage uses degenerate exact intervals despite documented writer nondeterminism.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-049"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-054",
+      "criterion": "Multiple-comparison control",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "No FWER/FDR/simultaneous intervals across metrics, operations and pairs.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-055"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-055",
+      "criterion": "Primary endpoint declaration",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "No preregistered primary metric; any meaningful difference dominates pair verdict.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-056",
+      "criterion": "Power/sample-size analysis",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "No power or precision analysis supports ten fresh processes.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043",
+        "DFL-AUDIT-055"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-057",
+      "criterion": "Sensitivity analysis",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "No log-ratio, alternative robust summary or margin sensitivity output.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-049",
+        "DFL-AUDIT-052"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-058",
+      "criterion": "Two-run reproducibility",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Claimed and summarized, but second-run raw evidence is not tracked for recalculation.",
+      "disposition": "ISSUE",
+      "workstream": "statistics",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-043"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-059",
+      "criterion": "Native byte accounting",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Exact artifact/logical bytes are separate from transport compression.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-060",
+      "criterion": "External zstd accounting",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Consistent level-3 transport size; compression/decompression time absent.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-061",
+      "criterion": "Directory-format accounting",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Deterministic recursive logical size and tar transport calculation.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-062",
+      "criterion": "Lance data/index/metadata split",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Strong component-level accounting in `formats/lance.py:43-52`.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-063",
+      "criterion": "Writer settings provenance",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Settings recorded; important physical defaults remain implicit.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-064",
+      "criterion": "Row-group/page/chunk normalization",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Key physical controls are not systematically fixed across formats.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-065",
+      "criterion": "CSV/TSV comparison",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Same typed source and workload; useful equivalence pair.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-066",
+      "criterion": "Arrow IPC/Feather comparison",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Correctly treated as related variants.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-067",
+      "criterion": "Parquet/ORC comparison",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Useful system comparison; defaults and reader behavior remain confounders.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-068",
+      "criterion": "JSONL/Avro/MessagePack/CBOR",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Good row-serialization breadth and round-trip gate.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-069",
+      "criterion": "SQLite/DuckDB comparison",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Correct lane, but engine/container/database design differences remain large.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-070",
+      "criterion": "Prompt content equivalence",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Shared projection; taxonomy and schema overhead included.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-071",
+      "criterion": "Tokenizer accuracy",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Exact `o200k_base` and `cl100k_base` counts, not estimates.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-072",
+      "criterion": "Tokenizer/model breadth",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Only two OpenAI encodings; no chat/tool framing or non-OpenAI tokenizer.",
+      "disposition": "ISSUE",
+      "workstream": "format-coverage",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-073",
+      "criterion": "Retrieval prompt comparison",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Common Compact TSV output for 5/10/20 results.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-074",
+      "criterion": "Lance FTS evidence",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Index size and query metrics exist; substring truth is a limited relevance target.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-075",
+      "criterion": "Vortex claim evidence",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Claim-specific work exists; broader scan superiority is not established.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-076",
+      "criterion": "TsFile evidence",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Correctly `ADAPTED`; optional wheel still skipped in ordinary CI.",
+      "disposition": "MONITOR",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-077",
+      "criterion": "FastLanes/Nimble/AnyBlox negative evidence",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Failure conditions are retained without overclaiming upstream defects.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "format-coverage",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-078",
+      "criterion": "Native fuzz depth",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Pinned targets and artifacts are good; 900 seconds is validation-scale, not maturity evidence.",
+      "disposition": "ISSUE",
+      "workstream": "format-coverage",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-079",
+      "criterion": "Dataset identity/hashes",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Immutable IDs, source SHA and canonical hash are consistently recorded.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "provenance",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-080",
+      "criterion": "Data Card quality",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Stars is strong; five newer cards are brief source notes.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-081",
+      "criterion": "Raw-source retention",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Essential raw responses/pages/transformation provenance are missing for several datasets.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-082",
+      "criterion": "Regeneration reproducibility",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Frozen bytes reproduce; several derivations cannot be reconstructed from official source.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-081"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-083",
+      "criterion": "Licensing precision",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "UCI/GeoNames are clear; NYC/OWID/Stars obligations remain qualified.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-081"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-084",
+      "criterion": "Snapshot immutability",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Release assets have compressed/decompressed hashes.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "provenance",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-085",
+      "criterion": "Domain diversity",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Six domains and varied row counts improve on Stars alone.",
+      "disposition": "MONITOR",
+      "workstream": "external-validity",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-086",
+      "criterion": "Workload-regime diversity",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Five datasets repeat essentially the same five-operation template.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-087",
+      "criterion": "Schema width",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Maximum tested width is 13; rich sources are projected to 5-8 columns.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-088",
+      "criterion": "Primitive type diversity",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Four primitive types only.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-089",
+      "criterion": "Temporal semantics",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Dates are mostly strings; no real temporal range/partition workload.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-090",
+      "criterion": "Nested/binary/decimal data",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "Absent.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-091",
+      "criterion": "NULL semantics realism",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Missing values are exercised, but empty string is not preserved distinctly.",
+      "disposition": "MONITOR",
+      "workstream": "external-validity",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-092",
+      "criterion": "Cardinality/skew statistics",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Distinct counts, entropy, quantiles and text-length distributions are not published.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-093",
+      "criterion": "Predicate selectivity spread",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Expected counts span broad to selective predicates.",
+      "disposition": "MONITOR",
+      "workstream": "external-validity",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-094",
+      "criterion": "Predicate-selection methodology",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Thresholds are not preregistered or justified.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-095",
+      "criterion": "NYC snapshot consistency",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Mutable endpoint + offset pagination + no raw pages; manifest mentions keyset but code does not.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-081",
+        "DFL-AUDIT-082"
+      ],
+      "labels": [
+        "bug",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-096",
+      "criterion": "GeoNames normalization fidelity",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Strict field count; claimed sort is not visible in normalizer.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-082"
+      ],
+      "labels": [
+        "bug",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-097",
+      "criterion": "Stars representativeness",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Single Apple-heavy user sample with heuristic labels.",
+      "disposition": "ISSUE",
+      "workstream": "provenance",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-080"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-098",
+      "criterion": "Six-dataset external validity",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Supports conditional flat-table claims only, not general data-format claims.",
+      "disposition": "ISSUE",
+      "workstream": "external-validity",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [
+        "DFL-AUDIT-086",
+        "DFL-AUDIT-087",
+        "DFL-AUDIT-088",
+        "DFL-AUDIT-089",
+        "DFL-AUDIT-090",
+        "DFL-AUDIT-092",
+        "DFL-AUDIT-094",
+        "DFL-AUDIT-095",
+        "DFL-AUDIT-096",
+        "DFL-AUDIT-097"
+      ],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-099",
+      "criterion": "Adapter API size",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Small and comprehensible.",
+      "disposition": "MONITOR",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-100",
+      "criterion": "Adapter API typing",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Public boundaries rely heavily on nested `dict` and string keys.",
+      "disposition": "ISSUE",
+      "workstream": "typing",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-101",
+      "criterion": "State-machine adjacency",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Illegal transitions are explicitly rejected and tested.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-102",
+      "criterion": "Global verification aggregation",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "All adapters may be FAILED/UNSUPPORTED while run becomes `ROUNDTRIP_VERIFIED`.",
+      "disposition": "ISSUE",
+      "workstream": "correctness",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-103",
+      "criterion": "Error taxonomy",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Robustness is rich; ordinary profiles collapse broad exceptions into strings.",
+      "disposition": "MONITOR",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-104",
+      "criterion": "Crash classification",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Signals and target outcomes are recorded.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-105",
+      "criterion": "Timeout classification",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Explicit timeout and cleanup-incomplete outcomes.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-106",
+      "criterion": "Descendant cleanup",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Strong in robustness; ordinary benchmark worker process groups are weaker.",
+      "disposition": "MONITOR",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-107",
+      "criterion": "Filesystem isolation",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Worker process can write broadly inside run directory.",
+      "disposition": "ISSUE",
+      "workstream": "robustness",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-108",
+      "criterion": "Memory/process/file limits",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "No RLIMIT/cgroup/sandbox resource caps.",
+      "disposition": "ISSUE",
+      "workstream": "robustness",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-109",
+      "criterion": "Output retention limits",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Concurrent drain, bounded tails and hashes.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-110",
+      "criterion": "Artifact-budget enforcement",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Parent-managed evidence budget is good; arbitrary worker writes can bypass it.",
+      "disposition": "MONITOR",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-111",
+      "criterion": "Path traversal protection",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Absolute, traversal and outside-run paths rejected.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-112",
+      "criterion": "Symlink safety",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Release and evidence paths reject symlink escapes.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-113",
+      "criterion": "Release archive safety",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Deterministic streaming tar.zst with path checks.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "robustness",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-114",
+      "criterion": "Test breadth",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Broad unit/adversarial tests across lifecycle, adapters, crashes, paths and reports.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-115",
+      "criterion": "Current test execution",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Fresh Nix run passed; two expected TsFile optional tests skipped.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-116",
+      "criterion": "Optional integration coverage",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "TsFile can remain skipped in ordinary CI.",
+      "disposition": "MONITOR",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-117",
+      "criterion": "Pyright strict breadth",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Strict checking covers only five production modules.",
+      "disposition": "ISSUE",
+      "workstream": "typing",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-118",
+      "criterion": "Ruff gate",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Blocking and fast, but deliberately narrow rule set.",
+      "disposition": "MONITOR",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-119",
+      "criterion": "`ty` gate",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Useful observation, non-blocking by design.",
+      "disposition": "MONITOR",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-120",
+      "criterion": "CI correctness coverage",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Nix, locks, lint, typing, tests, lane smoke and implementation audit.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "typing",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-121",
+      "criterion": "Coverage/mutation metrics",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "No coverage threshold or mutation-testing evidence.",
+      "disposition": "ISSUE",
+      "workstream": "typing",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-122",
+      "criterion": "Duplication/schema-drift risk",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Repeated path/JSON/untyped-dict logic raises change risk.",
+      "disposition": "ISSUE",
+      "workstream": "typing",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-123",
+      "criterion": "Nix pinning",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Python/native/Rust environment is locked for declared systems.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "release",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-124",
+      "criterion": "`uv.lock` reproducibility",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "Exact Python dependencies and frozen sync.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "release",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-125",
+      "criterion": "Environment capture",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Commit, flake hash, platform, hardware, Python and package versions.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "release",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-126",
+      "criterion": "Host-result separation",
+      "original_score": 9,
+      "severity": "INFORMATIONAL",
+      "evidence": "No machine-spanning ranking.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "release",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-127",
+      "criterion": "Machine-load capture",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Governor, thermal state, filesystem and background load omitted.",
+      "disposition": "ISSUE",
+      "workstream": "measurement",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-128",
+      "criterion": "Machine-readable public evidence",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Raw JSON is in release archives, not directly reviewable in repository.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-163",
+        "DFL-AUDIT-164",
+        "DFL-AUDIT-165",
+        "DFL-AUDIT-166"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-129",
+      "criterion": "Current tracked report",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "No tracked v0.2 aggregate/six-dataset report; README points to v0.1.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-128"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-130",
+      "criterion": "Release asset checksums",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Assets and SHA-256 sidecars exist and are manifest-linked.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "release",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-131",
+      "criterion": "Release tag/code identity",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Evidence includes commits after the RC tag target; per-shard provenance mitigates but does not cure discovery.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P3",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-128"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-132",
+      "criterion": "Package/release version identity",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "`pyproject.toml` remains `0.1.0` at `v0.2.0-rc1`.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-133",
+      "criterion": "Release body accuracy",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Says benchmark assets will be appended after they already exist.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-131",
+        "DFL-AUDIT-132"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-134",
+      "criterion": "English README",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Strong methodology and quick-start documentation.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "documentation",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-135",
+      "criterion": "Japanese README parity",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Still presents three lanes and omits current equivalence model.",
+      "disposition": "ISSUE",
+      "workstream": "documentation",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-136",
+      "criterion": "Research log candor",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Corrections, failures and unsupported paths are documented.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "documentation",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-137",
+      "criterion": "Data notice/ethics",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Third-party rights and prohibited inference are acknowledged.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "documentation",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-138",
+      "criterion": "Issue/review hygiene",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Policies exist and one open bug is visible; full review-thread closure not re-audited.",
+      "disposition": "MONITOR",
+      "workstream": "documentation",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-139",
+      "criterion": "GitHub Pages/no-build path",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "Pages endpoint returns 404; no hosted current-result explorer.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P0",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-140",
+      "criterion": "Supported-platform clarity",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Nix systems imply support; no explicit supported/unsupported platform table.",
+      "disposition": "MONITOR",
+      "workstream": "documentation",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-141",
+      "criterion": "Problem framing",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "“Do not compare incomparable formats” is strong and memorable.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-142",
+      "criterion": "Idea quality",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Evidence-first, lane-local, negative-result lab is distinctive.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-143",
+      "criterion": "Novelty evidence",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Distinct combination; no comparison against existing benchmark products.",
+      "disposition": "MONITOR",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-144",
+      "criterion": "Target-user clarity",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Data engineers/researchers are inferable, not directly framed.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P3",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-145",
+      "criterion": "User-pain evidence",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "No interviews, incidents, adoption or quantified decision cost.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P2",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-146",
+      "criterion": "Decision usefulness",
+      "original_score": 7,
+      "severity": "LOW",
+      "evidence": "Selection guide is useful to informed engineers.",
+      "disposition": "MONITOR",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-147",
+      "criterion": "Product coherence",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Coherent research toolkit, but framework/report/guide identity competes.",
+      "disposition": "MONITOR",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-148",
+      "criterion": "Three-minute demoability",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "No single demo command, hosted explorer or visual result path.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P0",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-139",
+        "DFL-AUDIT-149",
+        "DFL-AUDIT-150",
+        "DFL-AUDIT-151"
+      ],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-149",
+      "criterion": "Visual communication",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "No dashboard, chart, screenshot or tracked visual asset.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P2",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-150",
+      "criterion": "Installation friction",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Nix + uv is reproducible but heavy for a judge.",
+      "disposition": "ISSUE",
+      "workstream": "documentation",
+      "priority": "P3",
+      "owner": "Mixed",
+      "milestone": "Audit M3 - Publication Grade",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-151",
+      "criterion": "Judge no-build test path",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Old Markdown is readable; latest results require release archive inspection.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P0",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-128",
+        "DFL-AUDIT-129",
+        "DFL-AUDIT-139",
+        "DFL-AUDIT-149",
+        "DFL-AUDIT-150"
+      ],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-152",
+      "criterion": "Codex usage evidence",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Commit/branch hints exist; README does not explain concrete Codex contributions.",
+      "disposition": "ISSUE",
+      "workstream": "codex-narrative",
+      "priority": "P2",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-153",
+      "criterion": "GPT-5.6 usage evidence",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "No repository proof; tokenizer use is not GPT-5.6 use.",
+      "disposition": "ISSUE",
+      "workstream": "codex-narrative",
+      "priority": "P2",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-154",
+      "criterion": "Devpost factual accuracy",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Current text overstates Lance meaning search, “bug rate,” and Rust non-use.",
+      "disposition": "ISSUE",
+      "workstream": "codex-narrative",
+      "priority": "P0",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-152",
+        "DFL-AUDIT-153"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-155",
+      "criterion": "Devpost prose quality",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Candid but meandering and self-undermining for judges.",
+      "disposition": "ISSUE",
+      "workstream": "codex-narrative",
+      "priority": "P0",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-154"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-156",
+      "criterion": "Category fit",
+      "original_score": 6,
+      "severity": "LOW",
+      "evidence": "Strong Developer Tools fit; weak model-centric fit without usage proof.",
+      "disposition": "MONITOR",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-157",
+      "criterion": "Potential impact argument",
+      "original_score": 5,
+      "severity": "MEDIUM",
+      "evidence": "Credible need, no traction or measurable outcome.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P3",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-158",
+      "criterion": "Technological Implementation",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Non-trivial code, contracts, tests and evidence machinery.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-159",
+      "criterion": "Design",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Runnable CLI, not a complete judge-facing product experience.",
+      "disposition": "ISSUE",
+      "workstream": "product-ux",
+      "priority": "P2",
+      "owner": "Mixed",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [],
+      "labels": [
+        "enhancement"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-160",
+      "criterion": "Quality of Idea",
+      "original_score": 8,
+      "severity": "INFORMATIONAL",
+      "evidence": "Strongest official criterion after implementation.",
+      "disposition": "REGRESSION_GUARD",
+      "workstream": "product-ux",
+      "priority": null,
+      "owner": "Agent",
+      "milestone": null,
+      "dependencies": [],
+      "labels": [],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-161",
+      "criterion": "Video readiness",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "Live Devpost project has an empty video URL.",
+      "disposition": "ISSUE",
+      "workstream": "submission",
+      "priority": "P0",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-148",
+        "DFL-AUDIT-149",
+        "DFL-AUDIT-152",
+        "DFL-AUDIT-153",
+        "DFL-AUDIT-154",
+        "DFL-AUDIT-155"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-162",
+      "criterion": "Submission readiness",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "Live state is `submission_draft`, `submitted_at` is null.",
+      "disposition": "ISSUE",
+      "workstream": "submission",
+      "priority": "P0",
+      "owner": "Human",
+      "milestone": "Audit M0 - Submission Ready",
+      "dependencies": [
+        "DFL-AUDIT-139",
+        "DFL-AUDIT-148",
+        "DFL-AUDIT-151",
+        "DFL-AUDIT-154",
+        "DFL-AUDIT-155",
+        "DFL-AUDIT-161"
+      ],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-human",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-163",
+      "criterion": "Public aggregate-generator reproducibility",
+      "original_score": 1,
+      "severity": "HIGH",
+      "evidence": "`work/build_revalidation_aggregate.py` and `work/finalize_revalidation.sh` generated the v0.2 aggregate but are ignored by the tracked `work/` rule. The public repository cannot regenerate the published aggregate.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "documentation"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-164",
+      "criterion": "Archive-internal reference closure",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Aggregate evidence points to `.data/revalidation-20260719/...`; the archive stores the same files under `revalidation-20260719/claims/...`, so the recorded paths do not resolve after extraction.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-163"
+      ],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-165",
+      "criterion": "Archived artifact completeness",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Nested pair manifests reference `artifacts/*.parquet`, `*.orc`, databases, and other encoded outputs, but the aggregate archive carries only nested manifest/results/report files.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-163"
+      ],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-166",
+      "criterion": "Package validation depth",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "The packager validates top-level result references, but aggregate evidence lives under `datasets[].evidence[]`; therefore broken nested paths and missing nested artifacts pass packaging.",
+      "disposition": "ISSUE",
+      "workstream": "release",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [
+        "DFL-AUDIT-164",
+        "DFL-AUDIT-165"
+      ],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-167",
+      "criterion": "Robustness exception attribution",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "A broad target-side `Exception` becomes `REJECTED`; `MUST_REJECT` and `MUST_NOT_CRASH` can therefore pass on a lab `NameError`, `TypeError`, or other implementation defect.",
+      "disposition": "ISSUE",
+      "workstream": "robustness",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-168",
+      "criterion": "Robustness CI completeness",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "The gate fails only explicit CORE `FAIL`; an all-`INCOMPLETE` or all-`HARNESS_FAILED` CORE run can remain green, and the fixture omits most boundary families.",
+      "disposition": "ISSUE",
+      "workstream": "robustness",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-169",
+      "criterion": "Runtime dependency security",
+      "original_score": 2,
+      "severity": "HIGH",
+      "evidence": "Live Dependabot reports two High alerts and one Medium alert for pinned `cbor2`/`msgpack`; green PR #223 exists but is unmerged.",
+      "disposition": "ISSUE",
+      "workstream": "security",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "bug"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-170",
+      "criterion": "Protected-main governance",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "GitHub reports `main` as unprotected, so required CI/review and force-push prevention are policy rather than enforced repository state.",
+      "disposition": "ISSUE",
+      "workstream": "security",
+      "priority": "P2",
+      "owner": "Agent",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "dependencies": [],
+      "labels": [
+        "security"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-171",
+      "criterion": "Parquet/ORC codec parity",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "The pair compares Parquet Zstd with ORC Zlib. It is useful as a configured-system comparison, not an isolated format-layout comparison.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-172",
+      "criterion": "Parquet/ORC execution parity",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Parquet uses column/filter pushdown while ORC reads the table and applies Arrow operations afterward; reader implementation and format effects are confounded.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-173",
+      "criterion": "Compact-TSV semantic legend cost",
+      "original_score": 3,
+      "severity": "HIGH",
+      "evidence": "Taxonomy bytes are counted, but the abbreviated `m,r,l,s,k,t,d` header has no counted mapping to full semantic field names; object JSONL is self-describing and array JSONL counts its full schema.",
+      "disposition": "ISSUE",
+      "workstream": "format-coverage",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    },
+    {
+      "id": "DFL-AUDIT-174",
+      "criterion": "Claim-result value verification",
+      "original_score": 4,
+      "severity": "MEDIUM",
+      "evidence": "Vortex stress and TsFile query comparisons primarily assert returned row counts, not value/schema hashes, so equal counts can conceal wrong records.",
+      "disposition": "ISSUE",
+      "workstream": "causal-validity",
+      "priority": "P1",
+      "owner": "Agent",
+      "milestone": "Audit M2 - Methodology v2",
+      "dependencies": [],
+      "labels": [
+        "enhancement",
+        "wayfinder:research"
+      ],
+      "readiness_label": "ready-for-agent",
+      "issue_number": null
+    }
+  ]
+}

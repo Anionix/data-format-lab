@@ -1,0 +1,90 @@
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from types import ModuleType
+
+import pytest
+
+
+def _tracker() -> ModuleType:
+    path = Path(__file__).parents[1] / "tools/audit_tracker.py"
+    spec = importlib.util.spec_from_file_location("audit_tracker", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _registry() -> dict[str, object]:
+    path = Path(__file__).parents[1] / "docs/audits/2026-07-19/audit.json"
+    return json.loads(path.read_text())
+
+
+def test_registry_matches_strict_audit_contract() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    items = tracker.validate_registry(registry)
+
+    assert len(items) == 174
+    assert sum(item.disposition == "ISSUE" for item in items) == 85
+    assert tracker.render_report(registry, items).startswith("# Strict Audit Registry\n")
+    report = Path(__file__).parents[1] / "docs/audits/2026-07-19/report.md"
+    assert tracker.render_report(registry, items) == report.read_text()
+
+
+def test_registry_rejects_original_score_drift_within_a_band() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["items"][0]["original_score"] = 9
+
+    with pytest.raises(tracker.AuditError, match="immutable audit source digest differs"):
+        tracker.validate_registry(registry)
+
+
+def test_registry_rejects_dependency_cycle() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["items"][0]["dependencies"] = ["DFL-AUDIT-002"]
+    registry["items"][1]["dependencies"] = ["DFL-AUDIT-001"]
+    registry["source_digest"] = tracker.SOURCE_DIGEST
+
+    with pytest.raises(tracker.AuditError):
+        tracker.validate_registry(registry)
+
+
+def test_registry_rejects_unknown_item_fields() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["items"][0]["unexpected"] = True
+
+    with pytest.raises(tracker.AuditError, match="item fields differ"):
+        tracker.validate_registry(registry)
+
+
+def test_registry_requires_canonical_readiness_and_sync_state() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    issue = next(item for item in registry["items"] if item["disposition"] == "ISSUE")
+    issue["readiness_label"] = "wayfinder:research"
+    with pytest.raises(tracker.AuditError, match="canonical readiness"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    registry["github"]["sync_state"] = "VERIFIED"
+    with pytest.raises(tracker.AuditError, match="issue_number"):
+        tracker.validate_registry(registry)
+
+
+def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["workstreams"][0]["blocked_by"] = ["measurement"]
+    with pytest.raises(tracker.AuditError, match="workstream dependency cycle"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    registry["workstreams"].append(registry["workstreams"][0])
+    with pytest.raises(tracker.AuditError, match="exactly 15"):
+        tracker.validate_registry(registry)
