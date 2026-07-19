@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from .canonical import load_dataset, read_csv
-from .datasets import capture_github_stars, fetch_dataset, load_manifest
+from .datasets import capture_github_stars, capture_nyc_snapshot, fetch_dataset, load_manifest
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
 from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
@@ -61,9 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--output", type=Path)
 
     capture = actions.add_parser("capture")
-    capture.add_argument("source", choices=["github-stars"])
-    capture.add_argument("--user", required=True)
-    capture.add_argument("--output", type=Path, default=Path(".data/captures"))
+    capture.add_argument("source", choices=["github-stars", "nyc-311-2010-2019"])
+    capture.add_argument("--user")
+    capture.add_argument("--output", type=Path)
 
     prepare = subcommands.add_parser("prepare")
     prepare.add_argument("--dataset", required=True)
@@ -263,13 +263,26 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     root = Path.cwd()
     if args.command == "dataset":
         if args.dataset_command == "fetch":
             path = fetch_dataset(root, args.dataset_id, args.output)
+        elif args.source == "nyc-311-2010-2019":
+            if args.user is not None:
+                parser.error("--user only applies to github-stars capture")
+            output = args.output or Path(".data/captures") / (
+                "nyc-311-2010-2019-"
+                + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            )
+            path = capture_nyc_snapshot(root, output)
         else:
-            path = capture_github_stars(args.user, args.output)
+            if args.user is None:
+                parser.error("github-stars capture requires --user")
+            path = capture_github_stars(
+                args.user, args.output or Path(".data/captures")
+            )
     elif args.command == "prepare":
         path = prepare_run(root, args.dataset, args.run_dir, fixture=args.fixture)
     elif args.command == "verify":

@@ -16,8 +16,12 @@
     "dataset_id": "76ig-c548",
     "url": "https://data.cityofnewyork.us/resource/76ig-c548.csv",
     "metadata_url": "https://data.cityofnewyork.us/api/views/76ig-c548",
-    "query": "SELECT unique_key,created_date,complaint_type,borough,descriptor AS complaint_text WHERE created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00' ORDER BY unique_key ASC",
-    "pagination": "explicit select, limit 50000, offset/keyset pages",
+    "query": {"select": ["unique_key", "created_date", "complaint_type", "borough", "descriptor AS complaint_text"], "where": "created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00'", "order": "unique_key ASC"},
+    "future_capture": {
+      "query": {"select": [":id", "unique_key", "created_date", "complaint_type", "borough", "descriptor AS complaint_text"], "where": "created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00'", "order": ":id ASC"},
+      "pagination": {"strategy": "keyset", "cursor_column": ":id", "cursor_source_type": "socrata_system_id", "page_size": 50000},
+      "consistency": {"metadata_revision_field": "rowsUpdatedAt", "require_unchanged_during_capture": true, "retain_raw_metadata": true, "retain_raw_pages": true}
+    },
     "snapshot_rows_target": 1000000,
     "license": "not machine-readable; retain NYC Open Data terms",
     "terms_url": "https://opendata.cityofnewyork.us/overview/"
@@ -41,5 +45,5 @@
     "head_10": {"kind": "head", "limit": 10}
   },
   "fixture": "fixture.csv",
-  "provenance": {"retrieved_at": "2026-07-17", "raw_pages_retained": false}
+  "provenance": {"retrieved_at": "2026-07-17", "published_asset_raw_pages_retained": false, "published_asset_limitation": "The v0.2.0-rc1 raw pages were not retained and cannot be reconstructed from the mutable endpoint.", "regeneration_contract": "keyset-v1"}
 }
