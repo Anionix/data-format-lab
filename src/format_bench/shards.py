@@ -119,18 +119,23 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
         name = entry.get("format")
         if not isinstance(name, str) or name in identities:
             raise ValueError("manifest format names must be unique strings")
-        unsupported = entry.get("state") == ExecutionState.UNSUPPORTED
+        terminal_without_artifact = entry.get("state") in {
+            ExecutionState.UNSUPPORTED,
+            ExecutionState.FAILED,
+        }
         artifact = _safe_run_path(
             run,
             entry.get("artifact"),
             f"{name}.artifact",
-            allow_missing=unsupported,
+            allow_missing=terminal_without_artifact,
         )
         identities[name] = {
             "artifact": entry["artifact"],
             "lane": entry.get("lane"),
             "comparability": entry.get("comparability"),
             "settings": entry.get("settings"),
+            "state": entry.get("state"),
+            "failure_reason": entry.get("failure_reason"),
             "native_bytes": entry.get("native_bytes"),
             "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
             "artifact_sha256": _sha256(artifact) if artifact.exists() else None,
@@ -212,6 +217,17 @@ def merge_equivalence_shards(
             raise ValueError(f"shard is not benchmarked: {shard}")
         if results.get("status") != "MEASURED":
             raise ValueError(f"shard is not fully measured: {shard}")
+        terminal_formats = {
+            name
+            for name, identity in base_formats.items()
+            if identity.get("state")
+            in {ExecutionState.UNSUPPORTED, ExecutionState.FAILED}
+        }
+        if any(
+            any(job_id.startswith(f"{name}/") for name in terminal_formats)
+            for job_id in _object_map(results.get("results", {}), f"{shard}/results")
+        ):
+            raise ValueError(f"terminal format has benchmark job: {shard}")
         if results.get("profile") != "equivalence":
             raise ValueError(f"shard does not declare the equivalence profile: {shard}")
         equivalence = _object(results.get("equivalence"), f"{shard}/equivalence")
