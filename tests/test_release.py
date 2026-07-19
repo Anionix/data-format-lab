@@ -55,6 +55,7 @@ def _aggregate_run(root: Path) -> tuple[Path, Path]:
         ],
     }
     (claim / "manifest.json").write_text(json.dumps(nested_manifest))
+    (source_run / "manifest.json").write_text(json.dumps(nested_manifest))
     nested_results = {
         "state": "REPORTED",
         "results": {
@@ -65,6 +66,7 @@ def _aggregate_run(root: Path) -> tuple[Path, Path]:
         },
     }
     (claim / "results.json").write_text(json.dumps(nested_results))
+    (source_run / "results.json").write_text(json.dumps(nested_results))
     (claim / "report.md").write_text("# pair report\n")
     (run / "manifest.json").write_text(
         json.dumps({"state": "REPORTED", "dataset_id": "aggregate-fixture"})
@@ -83,7 +85,17 @@ def _aggregate_run(root: Path) -> tuple[Path, Path]:
                         "evidence": [
                             {
                                 "pair": "parquet-orc",
-                                "source": {"run_path": "runs/pair-run"},
+                                "source": {
+                                    "run_path": "runs/pair-run",
+                                    "manifest_path": (
+                                        ".data/aggregate-1/claims/fixture-dataset/"
+                                        "parquet-orc/manifest.json"
+                                    ),
+                                    "results_path": (
+                                        ".data/aggregate-1/claims/fixture-dataset/"
+                                        "parquet-orc/results.json"
+                                    ),
+                                },
                             }
                         ],
                     }
@@ -287,6 +299,68 @@ def test_release_aggregate_rejects_missing_nested_artifact(tmp_path: Path) -> No
         package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
 
 
+@pytest.mark.parametrize(
+    ("key", "value", "error"),
+    [
+        ("manifest_path", None, "manifest_path must be a string"),
+        ("results_path", "../results.json", "path is unsafe"),
+        (
+            "manifest_path",
+            "claims/other/parquet-orc/manifest.json",
+            "manifest_path mismatch",
+        ),
+    ],
+)
+def test_release_aggregate_rejects_invalid_source_document_reference(
+    tmp_path: Path, key: str, value: str | None, error: str
+) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    results_path = run / "results.json"
+    results = json.loads(results_path.read_text())
+    source = results["datasets"][0]["evidence"][0]["source"]
+    source[key] = value
+    results_path.write_text(json.dumps(results))
+
+    with pytest.raises((TypeError, ValueError), match=error):
+        package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
+
+
+@pytest.mark.parametrize("location", ["claim", "source"])
+def test_release_aggregate_rejects_mismatched_or_missing_document(
+    tmp_path: Path, location: str
+) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    if location == "claim":
+        (run / "claims/fixture-dataset/parquet-orc/manifest.json").write_text("{}")
+        error = ValueError
+    else:
+        (source_root / "runs/pair-run/results.json").unlink()
+        error = FileNotFoundError
+
+    with pytest.raises(error, match="aggregate claim"):
+        package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
+
+
+@pytest.mark.parametrize("state", ["FAILED", "UNSUPPORTED"])
+def test_release_aggregate_allows_missing_terminal_artifact(
+    tmp_path: Path, state: str
+) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    claim = run / "claims/fixture-dataset/parquet-orc/manifest.json"
+    manifest = json.loads(claim.read_text())
+    manifest["formats"][0]["state"] = state
+    claim.write_text(json.dumps(manifest))
+    source_manifest = source_root / "runs/pair-run/manifest.json"
+    source_manifest.write_text(json.dumps(manifest))
+    (source_root / "runs/pair-run/artifacts/value.parquet").unlink()
+
+    archive = package_run(
+        run, tmp_path / "output", "linux-x86_64", source_root=source_root
+    )
+
+    assert archive.is_file()
+
+
 def test_release_aggregate_rejects_stale_claim_artifact(tmp_path: Path) -> None:
     run, source_root = _aggregate_run(tmp_path)
     target = run / "claims/fixture-dataset/parquet-orc/artifacts/value.parquet"
@@ -303,6 +377,7 @@ def test_release_aggregate_rejects_stale_directory_member(tmp_path: Path) -> Non
     manifest = json.loads((claim / "manifest.json").read_text())
     manifest["formats"][0]["artifact"] = "artifacts/bundle"
     (claim / "manifest.json").write_text(json.dumps(manifest))
+    (source_root / "runs/pair-run/manifest.json").write_text(json.dumps(manifest))
     source = source_root / "runs/pair-run/artifacts/bundle"
     source.mkdir()
     (source / "current.bin").write_bytes(b"current")
