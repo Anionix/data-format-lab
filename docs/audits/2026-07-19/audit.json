@@ -303,7 +303,7 @@
         "level": "Existing"
       }
     ],
-    "sync_state": "PLANNED"
+    "sync_state": "APPLIED"
   },
   "items": [
     {
@@ -498,7 +498,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 254
     },
     {
       "id": "DFL-AUDIT-013",
@@ -564,7 +564,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 255
     },
     {
       "id": "DFL-AUDIT-017",
@@ -582,7 +582,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 256
     },
     {
       "id": "DFL-AUDIT-018",
@@ -600,7 +600,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 257
     },
     {
       "id": "DFL-AUDIT-019",
@@ -668,7 +668,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 258
     },
     {
       "id": "DFL-AUDIT-023",
@@ -799,7 +799,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 259
     },
     {
       "id": "DFL-AUDIT-031",
@@ -818,7 +818,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 260
     },
     {
       "id": "DFL-AUDIT-032",
@@ -837,7 +837,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 261
     },
     {
       "id": "DFL-AUDIT-033",
@@ -872,7 +872,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 262
     },
     {
       "id": "DFL-AUDIT-035",
@@ -891,7 +891,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 263
     },
     {
       "id": "DFL-AUDIT-036",
@@ -910,7 +910,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 264
     },
     {
       "id": "DFL-AUDIT-037",
@@ -929,7 +929,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 265
     },
     {
       "id": "DFL-AUDIT-038",
@@ -964,7 +964,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 266
     },
     {
       "id": "DFL-AUDIT-040",
@@ -983,7 +983,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 267
     },
     {
       "id": "DFL-AUDIT-041",
@@ -1034,7 +1034,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 268
     },
     {
       "id": "DFL-AUDIT-044",
@@ -1103,7 +1103,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 269
     },
     {
       "id": "DFL-AUDIT-048",
@@ -1140,7 +1140,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 270
     },
     {
       "id": "DFL-AUDIT-050",
@@ -1161,7 +1161,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 271
     },
     {
       "id": "DFL-AUDIT-051",
@@ -1182,7 +1182,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 272
     },
     {
       "id": "DFL-AUDIT-052",
@@ -1203,7 +1203,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 273
     },
     {
       "id": "DFL-AUDIT-053",
@@ -1224,7 +1224,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 274
     },
     {
       "id": "DFL-AUDIT-054",
@@ -1245,7 +1245,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 275
     },
     {
       "id": "DFL-AUDIT-055",
@@ -1264,7 +1264,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 276
     },
     {
       "id": "DFL-AUDIT-056",
@@ -1286,7 +1286,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 277
     },
     {
       "id": "DFL-AUDIT-057",
@@ -1308,7 +1308,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 278
     },
     {
       "id": "DFL-AUDIT-058",
@@ -1329,7 +1329,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 279
     },
     {
       "id": "DFL-AUDIT-059",
@@ -1428,7 +1428,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 280
     },
     {
       "id": "DFL-AUDIT-065",
@@ -1559,7 +1559,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 281
     },
     {
       "id": "DFL-AUDIT-073",
@@ -1658,7 +1658,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 282
     },
     {
       "id": "DFL-AUDIT-079",
@@ -1693,7 +1693,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 283
     },
     {
       "id": "DFL-AUDIT-081",
@@ -1712,7 +1712,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 284
     },
     {
       "id": "DFL-AUDIT-082",
@@ -1733,7 +1733,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 285
     },
     {
       "id": "DFL-AUDIT-083",
@@ -1754,7 +1754,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 286
     },
     {
       "id": "DFL-AUDIT-084",
@@ -1805,7 +1805,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 287
     },
     {
       "id": "DFL-AUDIT-087",
@@ -1824,7 +1824,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 288
     },
     {
       "id": "DFL-AUDIT-088",
@@ -1843,7 +1843,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 289
     },
     {
       "id": "DFL-AUDIT-089",
@@ -1862,7 +1862,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 290
     },
     {
       "id": "DFL-AUDIT-090",
@@ -1881,7 +1881,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 291
     },
     {
       "id": "DFL-AUDIT-091",
@@ -1916,7 +1916,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 292
     },
     {
       "id": "DFL-AUDIT-093",
@@ -1951,7 +1951,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 293
     },
     {
       "id": "DFL-AUDIT-095",
@@ -1973,7 +1973,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 294
     },
     {
       "id": "DFL-AUDIT-096",
@@ -1994,7 +1994,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 295
     },
     {
       "id": "DFL-AUDIT-097",
@@ -2015,7 +2015,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 296
     },
     {
       "id": "DFL-AUDIT-098",
@@ -2045,7 +2045,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 297
     },
     {
       "id": "DFL-AUDIT-099",
@@ -2079,7 +2079,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 298
     },
     {
       "id": "DFL-AUDIT-101",
@@ -2113,7 +2113,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 299
     },
     {
       "id": "DFL-AUDIT-103",
@@ -2195,7 +2195,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 300
     },
     {
       "id": "DFL-AUDIT-108",
@@ -2213,7 +2213,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 301
     },
     {
       "id": "DFL-AUDIT-109",
@@ -2359,7 +2359,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 302
     },
     {
       "id": "DFL-AUDIT-118",
@@ -2425,7 +2425,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 303
     },
     {
       "id": "DFL-AUDIT-122",
@@ -2443,7 +2443,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 304
     },
     {
       "id": "DFL-AUDIT-123",
@@ -2526,7 +2526,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 305
     },
     {
       "id": "DFL-AUDIT-128",
@@ -2549,7 +2549,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 306
     },
     {
       "id": "DFL-AUDIT-129",
@@ -2569,7 +2569,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 307
     },
     {
       "id": "DFL-AUDIT-130",
@@ -2605,7 +2605,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 308
     },
     {
       "id": "DFL-AUDIT-132",
@@ -2623,7 +2623,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 309
     },
     {
       "id": "DFL-AUDIT-133",
@@ -2644,7 +2644,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 310
     },
     {
       "id": "DFL-AUDIT-134",
@@ -2678,7 +2678,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 311
     },
     {
       "id": "DFL-AUDIT-136",
@@ -2744,7 +2744,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 312
     },
     {
       "id": "DFL-AUDIT-140",
@@ -2826,7 +2826,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 313
     },
     {
       "id": "DFL-AUDIT-145",
@@ -2844,7 +2844,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 314
     },
     {
       "id": "DFL-AUDIT-146",
@@ -2899,7 +2899,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 315
     },
     {
       "id": "DFL-AUDIT-149",
@@ -2917,7 +2917,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 316
     },
     {
       "id": "DFL-AUDIT-150",
@@ -2935,7 +2935,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 317
     },
     {
       "id": "DFL-AUDIT-151",
@@ -2959,7 +2959,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 318
     },
     {
       "id": "DFL-AUDIT-152",
@@ -2977,7 +2977,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 319
     },
     {
       "id": "DFL-AUDIT-153",
@@ -2995,7 +2995,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 320
     },
     {
       "id": "DFL-AUDIT-154",
@@ -3016,7 +3016,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 321
     },
     {
       "id": "DFL-AUDIT-155",
@@ -3036,7 +3036,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 322
     },
     {
       "id": "DFL-AUDIT-156",
@@ -3070,7 +3070,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 323
     },
     {
       "id": "DFL-AUDIT-158",
@@ -3104,7 +3104,7 @@
         "enhancement"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 324
     },
     {
       "id": "DFL-AUDIT-160",
@@ -3145,7 +3145,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 325
     },
     {
       "id": "DFL-AUDIT-162",
@@ -3170,7 +3170,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-human",
-      "issue_number": null
+      "issue_number": 326
     },
     {
       "id": "DFL-AUDIT-163",
@@ -3188,7 +3188,7 @@
         "documentation"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 327
     },
     {
       "id": "DFL-AUDIT-164",
@@ -3208,7 +3208,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 328
     },
     {
       "id": "DFL-AUDIT-165",
@@ -3228,7 +3228,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 329
     },
     {
       "id": "DFL-AUDIT-166",
@@ -3249,7 +3249,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 330
     },
     {
       "id": "DFL-AUDIT-167",
@@ -3267,7 +3267,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 331
     },
     {
       "id": "DFL-AUDIT-168",
@@ -3285,7 +3285,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 332
     },
     {
       "id": "DFL-AUDIT-169",
@@ -3303,7 +3303,7 @@
         "bug"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 333
     },
     {
       "id": "DFL-AUDIT-170",
@@ -3321,7 +3321,7 @@
         "security"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 334
     },
     {
       "id": "DFL-AUDIT-171",
@@ -3340,7 +3340,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 335
     },
     {
       "id": "DFL-AUDIT-172",
@@ -3359,7 +3359,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 336
     },
     {
       "id": "DFL-AUDIT-173",
@@ -3378,7 +3378,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 337
     },
     {
       "id": "DFL-AUDIT-174",
@@ -3397,7 +3397,7 @@
         "wayfinder:research"
       ],
       "readiness_label": "ready-for-agent",
-      "issue_number": null
+      "issue_number": 338
     }
   ]
 }

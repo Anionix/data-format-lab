@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
+if __name__ == "__main__":
+    sys.modules.setdefault("audit_tracker", sys.modules[__name__])
+
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
@@ -152,6 +155,12 @@ def load_registry(path: Path = REGISTRY) -> dict[str, object]:
         return _mapping(json.loads(path.read_text()), "registry")
     except (OSError, json.JSONDecodeError) as error:
         raise AuditError(f"cannot read registry: {error}") from error
+
+
+def write_registry(path: Path, registry: dict[str, object]) -> None:
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n")
+    temporary.replace(path)
 
 
 def _band_counts(scores: list[int]) -> dict[str, int]:
@@ -354,22 +363,66 @@ def render_report(registry: dict[str, object], items: list[AuditItem]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("validate",))
+    parser.add_argument("command", choices=("validate", "plan", "apply", "verify"))
     parser.add_argument("--registry", type=Path, default=REGISTRY)
     parser.add_argument("--report", type=Path, default=REPORT)
     parser.add_argument("--write-report", action="store_true")
     args = parser.parse_args(argv)
     try:
         registry = load_registry(args.registry)
-        report = render_report(registry, validate_registry(registry))
+        items = validate_registry(registry)
+        report = render_report(registry, items)
         if args.write_report:
             args.report.write_text(report)
         elif args.report.read_text() != report:
             raise AuditError("generated report is stale")
+        if args.command != "validate":
+            import audit_github
+
+            client = audit_github.GitHubRest()
+            live = audit_github.read_live(client, str(registry["repository"]))
+            github_config = _mapping(registry["github"], "github")
+            sync_state = cast(audit_github.SyncState, github_config["sync_state"])
+            if args.command == "plan":
+                plan = audit_github.build_plan(registry, items, live)
+                print(
+                    json.dumps(
+                        [
+                            {
+                                "method": mutation.method,
+                                "path": mutation.path,
+                                "key": mutation.key,
+                                "payload": mutation.payload,
+                            }
+                            for mutation in plan
+                        ],
+                        indent=2,
+                    )
+                )
+            elif args.command == "apply":
+                next_state = audit_github.apply(client, registry, items, sync_state)
+                live = audit_github.read_live(client, str(registry["repository"]))
+                updated = audit_github.synchronized_registry(
+                    registry, items, live, next_state
+                )
+                validate_registry(updated)
+                write_registry(args.registry, updated)
+                print(f"next sync state: {next_state}")
+            else:
+                next_state = audit_github.verify(registry, items, live, sync_state)
+                updated = audit_github.synchronized_registry(
+                    registry, items, live, next_state
+                )
+                validate_registry(updated)
+                write_registry(args.registry, updated)
+                print(
+                    f"next sync state: "
+                    f"{next_state}"
+                )
     except (AuditError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print("audit registry valid")
+    print(f"audit {args.command} complete")
     return 0
 
 

@@ -81,7 +81,7 @@ def test_registry_requires_canonical_readiness_and_sync_state() -> None:
         tracker.validate_registry(registry)
 
     registry = _registry()
-    registry["github"]["sync_state"] = "VERIFIED"
+    registry["github"]["sync_state"] = "PLANNED"
     with pytest.raises(tracker.AuditError, match="issue_number"):
         tracker.validate_registry(registry)
 
