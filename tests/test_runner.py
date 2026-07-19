@@ -1,5 +1,7 @@
 import json
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -73,6 +75,45 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     assert result["fresh_process"]["samples"] == 2
     assert result["warm"]["samples"] == 4
     assert result["max_rss_bytes_p50"] == 100
+
+
+def test_run_job_stops_after_first_failed_fresh_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+    release_second = threading.Event()
+
+    def fake_run_fresh_process(job, config, cwd):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {"status": "FAILED", "reason": "fixture timeout"}
+        release_second.wait(timeout=2)
+        return {"status": "FAILED", "reason": "later failure"}
+
+    monkeypatch.setattr(runner, "_run_fresh_process", fake_run_fresh_process)
+    job = Job("fixture/read", ("fixture",), 7)
+
+    result_holder: list[dict] = []
+    thread = threading.Thread(
+        target=lambda: result_holder.append(
+            run_job(
+                job,
+                MeasurementConfig(fresh_processes=4, fresh_workers=1),
+                tmp_path,
+            )
+        )
+    )
+    started = time.monotonic()
+    thread.start()
+    thread.join(timeout=0.5)
+    elapsed = time.monotonic() - started
+    release_second.set()
+    thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert elapsed < 0.5
+    assert result_holder == [{"status": "FAILED", "reason": "fixture timeout"}]
 
 
 def test_run_job_classifies_invalid_worker_output_as_failure(tmp_path: Path) -> None:

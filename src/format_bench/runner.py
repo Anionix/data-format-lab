@@ -11,7 +11,7 @@ import statistics
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -176,19 +176,33 @@ def _run_fresh_process(
 def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
     if config.fresh_workers <= 0:
         raise ValueError("fresh_workers must be positive")
-    with ThreadPoolExecutor(
+    executor = ThreadPoolExecutor(
         max_workers=min(config.fresh_workers, config.fresh_processes)
-    ) as executor:
-        futures = [
-            executor.submit(_run_fresh_process, job, config, cwd)
-            for _ in range(config.fresh_processes)
-        ]
-        processes = [future.result() for future in futures]
-    failed = next(
-        (process for process in processes if process.get("status") == "FAILED"), None
     )
-    if failed is not None:
-        return failed
+    futures = [
+        executor.submit(_run_fresh_process, job, config, cwd)
+        for _ in range(config.fresh_processes)
+    ]
+    completed: list[dict | None] = [None] * len(futures)
+    shutdown = False
+    try:
+        # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+        # A failed fresh attempt terminates the active benchmark as FAILED; canceled attempts do not change that failure.
+        future_indexes = {future: index for index, future in enumerate(futures)}
+        for future in as_completed(futures):
+            process = future.result()
+            if process.get("status") == "FAILED":
+                for pending in futures:
+                    pending.cancel()
+                executor.shutdown(wait=False, cancel_futures=True)
+                shutdown = True
+                return process
+            completed[future_indexes[future]] = process
+    finally:
+        if not shutdown:
+            executor.shutdown()
+
+    processes = [process for process in completed if process is not None]
 
     evidence = processes[-1].get("evidence")
     if any(process.get("evidence") != evidence for process in processes):
