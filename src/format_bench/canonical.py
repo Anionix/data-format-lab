@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
+from .arrow_compute import equal, greater
 from .datasets import load_manifest, normalized_columns, sha256_bytes
 from .workloads import apply_workload, load_workloads
 
@@ -100,12 +100,12 @@ def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int
         }
     return {
         "rows": table.num_rows,
-        "group_ai_llm": table.filter(pc.equal(table["group"], "AI / LLM")).num_rows,
+        "group_ai_llm": table.filter(equal(table["group"], "AI / LLM")).num_rows,
         "repo_stars_gt_100000": table.filter(
-            pc.greater(table["repo_stars"], 100000)
+            greater(table["repo_stars"], 100000)
         ).num_rows,
         "full_name_anomalyco_opencode": table.filter(
-            pc.equal(table["full_name"], "anomalyco/opencode")
+            equal(table["full_name"], "anomalyco/opencode")
         ).num_rows,
     }
 
