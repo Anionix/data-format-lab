@@ -19,6 +19,20 @@ def _archive_names(path: Path) -> list[str]:
         return archive.getnames()
 
 
+def _archive_member(path: Path, name: str) -> bytes:
+    with (
+        path.open("rb") as source,
+        zstd.ZstdDecompressor().stream_reader(source) as reader,
+        tarfile.open(fileobj=reader, mode="r|") as archive,
+    ):
+        for member in archive:
+            if member.name == name:
+                extracted = archive.extractfile(member)
+                assert extracted is not None
+                return extracted.read()
+    raise AssertionError(f"archive member not found: {name}")
+
+
 def _robustness_run(root: Path) -> Path:
     run = root / "run"
     case = run / "robustness" / "cases" / "csv" / "rows-1"
@@ -50,14 +64,10 @@ def _robustness_run(root: Path) -> Path:
                         "stdout": "robustness/cases/csv/rows-1/stdout.txt",
                         "stderr": "robustness/cases/csv/rows-1/stderr.txt",
                         "artifact_records": [
-                            {
-                                "path": "robustness/cases/csv/rows-1/artifact.csv"
-                            }
+                            {"path": "robustness/cases/csv/rows-1/artifact.csv"}
                         ],
                         "corpus_records": [
-                            {
-                                "path": "robustness/cases/csv/rows-1/source.csv"
-                            }
+                            {"path": "robustness/cases/csv/rows-1/source.csv"}
                         ],
                     }
                 ]
@@ -87,9 +97,7 @@ def test_release_package_is_deterministic_and_relative(
         "profile": "fair",
         "run_id": "run-1",
         "results": {
-            "negative_research": {
-                "source_commits": {"artifact": "not-a-run-path"}
-            }
+            "negative_research": {"source_commits": {"artifact": "not-a-run-path"}}
         },
     }
     payloads = {
@@ -125,6 +133,54 @@ def test_release_package_is_deterministic_and_relative(
         "run-1/results.json",
     ]
     assert all(not Path(name).is_absolute() for name in names)
+
+
+def test_release_closes_aggregate_archive_references(tmp_path: Path) -> None:
+    run_id = "revalidation-20260719"
+    run = tmp_path / run_id
+    claim = run / "claims" / "fixture" / "parquet-orc"
+    claim.mkdir(parents=True)
+    (run / "input").mkdir()
+    source = {
+        "manifest_path": f".data/{run_id}/claims/fixture/parquet-orc/manifest.json",
+        "results_path": f".data/{run_id}/claims/fixture/parquet-orc/results.json",
+    }
+    aggregate_evidence = {"datasets": [{"evidence": [{"source": source}]}]}
+    manifest = {
+        "state": "REPORTED",
+        "dataset_id": run_id,
+        **aggregate_evidence,
+    }
+    results = {
+        "state": "REPORTED",
+        "dataset_id": run_id,
+        "profile": "equivalence",
+        "run_id": run_id,
+        **aggregate_evidence,
+    }
+    (run / "manifest.json").write_text(json.dumps(manifest))
+    (run / "results.json").write_text(json.dumps(results))
+    (run / "report.md").write_text("# report\n")
+    (run / "input" / "manifest.json").write_text("{}\n")
+    (claim / "manifest.json").write_text("{}\n")
+    (claim / "results.json").write_text("{}\n")
+
+    archive = package_run(run, tmp_path / "output", "macos-arm64")
+
+    names = set(_archive_names(archive))
+    for document_name in ("manifest.json", "results.json"):
+        document = json.loads(_archive_member(archive, f"{run_id}/{document_name}"))
+        archived_source = document["datasets"][0]["evidence"][0]["source"]
+        for key in ("manifest_path", "results_path"):
+            assert archived_source[key] == source[key].removeprefix(f".data/{run_id}/")
+            assert f"{run_id}/{archived_source[key]}" in names
+
+    assert (
+        json.loads((run / "results.json").read_text())["datasets"][0]["evidence"][0][
+            "source"
+        ]
+        == source
+    )
 
 
 def test_release_rejects_missing_corpus_record(tmp_path: Path) -> None:
@@ -168,7 +224,7 @@ def test_release_rejects_missing_referenced_artifact(tmp_path: Path) -> None:
         )
     )
     (run / "report.md").write_text("# report\n")
-    (run / "input" / "manifest.json").write_text('{}\n')
+    (run / "input" / "manifest.json").write_text("{}\n")
 
     try:
         package_run(run, tmp_path / "output", "linux-x86_64")
@@ -204,7 +260,7 @@ def test_release_allows_missing_terminal_format_artifact(
         )
     )
     (run / "report.md").write_text("# report\n")
-    (run / "input" / "manifest.json").write_text('{}\n')
+    (run / "input" / "manifest.json").write_text("{}\n")
 
     archive = package_run(run, tmp_path / "output", "linux-x86_64")
 
