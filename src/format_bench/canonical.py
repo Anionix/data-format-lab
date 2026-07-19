@@ -61,20 +61,24 @@ def _normalize_row(row: dict, column_names: list[str]) -> dict:
     return normalized
 
 
+def _canonical_json(value: object) -> str:
+    return json.dumps(
+        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+
+
 def _hash_rows(rows: list[dict], *, order_sensitive: bool) -> str:
     if not order_sensitive and rows:
         sort_column = "full_name" if "full_name" in rows[0] else next(iter(rows[0]), "")
+        # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED accepts unordered evidence
+        # only after deterministic canonicalization; ordered HEAD evidence stays order-sensitive.
         rows.sort(
             key=lambda row: (
-                row[sort_column] or "",
-                json.dumps(
-                    row, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-                ),
+                _canonical_json(row[sort_column]),
+                _canonical_json(row),
             )
         )
-    payload = json.dumps(
-        rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True
-    )
+    payload = _canonical_json(rows)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

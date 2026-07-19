@@ -48,6 +48,32 @@ def test_order_insensitive_hash_breaks_duplicate_keys_with_the_full_row() -> Non
     assert order_insensitive_hash(table) == order_insensitive_hash(reversed_table)
 
 
+def test_order_insensitive_hash_handles_integer_zero_and_null_keys() -> None:
+    table = pa.table(
+        {
+            "sort_key": pa.array([2, 0, None], type=pa.int64()),
+            "value": ["two", "zero", "null"],
+        }
+    )
+    reversed_table = table.take(pa.array([2, 1, 0]))
+
+    assert order_insensitive_hash(table) == order_insensitive_hash(reversed_table)
+    assert canonical_hash(table) != canonical_hash(reversed_table)
+
+
+def test_order_insensitive_hash_handles_mixed_scalar_keys() -> None:
+    sort_keys = pa.UnionArray.from_dense(
+        pa.array([0, 1, 0], type=pa.int8()),
+        pa.array([0, 0, 1], type=pa.int32()),
+        [pa.array([1, None], type=pa.int64()), pa.array(["1"])],
+        field_names=["integer", "string"],
+    )
+    table = pa.table({"sort_key": sort_keys, "value": ["integer", "string", "null"]})
+    reversed_table = table.take(pa.array([2, 1, 0]))
+
+    assert order_insensitive_hash(table) == order_insensitive_hash(reversed_table)
+
+
 def test_verify_table_checks_hash_schema_rows_and_queries() -> None:
     manifest, table = fixture_contract()
     assert verify_table(table, manifest)["passed"] is True
