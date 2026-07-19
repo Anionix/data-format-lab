@@ -8,10 +8,10 @@ version = "0.1.0"
 description = "Evidence-first benchmarks for data formats and format-native claims"
 requires-python = "==3.12.*"
 dependencies = [
-  "cbor2==5.7.0",
+  "cbor2==5.9.0",
   "duckdb==1.4.3",
   "fastavro==1.12.1",
-  "msgpack==1.1.1",
+  "msgpack==1.2.1",
   "openpyxl==3.1.5",
   "pyarrow==23.0.1",
   "pylance==8.0.0",
