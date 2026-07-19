@@ -43,6 +43,45 @@ def _safe_claim_segment(value: object, label: str) -> str:
     return value
 
 
+def _aggregate_documents(
+    run_dir: Path,
+    source_run: Path,
+    source: dict,
+    claim_relative: Path,
+    run_id: str,
+) -> tuple[dict, dict]:
+    documents = []
+    prefix = f".data/{run_id}/"
+    for name in ("manifest", "results"):
+        key = f"{name}_path"
+        value = source.get(key)
+        if not isinstance(value, str):
+            raise TypeError(f"aggregate evidence source {key} must be a string")
+        relative = _safe_relative_path(
+            value.removeprefix(prefix) if value.startswith(prefix) else value,
+            f"aggregate source {name}",
+        )
+        expected = claim_relative / f"{name}.json"
+        if relative != expected:
+            raise ValueError(
+                f"aggregate source {key} mismatch: expected {expected}, got {relative}"
+            )
+        claim_path = run_dir / relative
+        source_path = source_run / f"{name}.json"
+        for path, root in ((claim_path, run_dir), (source_path, source_run)):
+            _reject_symlink_path(path, root)
+            if not path.is_file():
+                raise FileNotFoundError(f"aggregate claim {name} missing: {relative}")
+        claim_document = json.loads(claim_path.read_text(encoding="utf-8"))
+        source_document = json.loads(source_path.read_text(encoding="utf-8"))
+        if not isinstance(claim_document, dict) or not isinstance(source_document, dict):
+            raise TypeError(f"aggregate claim {name} must be an object")
+        if claim_document != source_document:
+            raise ValueError(f"aggregate claim {name} does not match source run")
+        documents.append(claim_document)
+    return documents[0], documents[1]
+
+
 def _artifact_references(manifest: dict, results: dict) -> list[tuple[str, bool]]:
     terminal_failures = {ExecutionState.FAILED, ExecutionState.UNSUPPORTED}
     references = [
@@ -118,20 +157,6 @@ def _aggregate_artifact_files(
             if not isinstance(run_path, str):
                 raise TypeError("aggregate evidence source run_path must be a string")
 
-            claim_root = run_dir / "claims" / dataset_id / pair
-            nested_documents: list[dict] = []
-            for name in ("manifest", "results"):
-                path = claim_root / f"{name}.json"
-                if not path.is_file():
-                    raise FileNotFoundError(
-                        f"aggregate claim {name} missing: {path.relative_to(run_dir)}"
-                    )
-                document = json.loads(path.read_text(encoding="utf-8"))
-                if not isinstance(document, dict):
-                    raise TypeError(f"aggregate claim {name} must be an object")
-                nested_documents.append(document)
-            nested_manifest, nested_results = nested_documents
-
             source_run_path = source_root / _safe_relative_path(
                 run_path, "aggregate source run"
             )
@@ -141,6 +166,16 @@ def _aggregate_artifact_files(
             source_run = source_run_path.resolve()
             if not source_run.is_relative_to(source_root):
                 raise ValueError(f"aggregate source run path is unsafe: {run_path}")
+
+            claim_relative = Path("claims") / dataset_id / pair
+            claim_root = run_dir / claim_relative
+            nested_manifest, nested_results = _aggregate_documents(
+                run_dir,
+                source_run,
+                source,
+                claim_relative,
+                results["run_id"],
+            )
 
             for value, must_exist in _artifact_references(
                 nested_manifest, nested_results
@@ -365,8 +400,8 @@ def package_run(
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("release manifest and results dataset mismatch")
 
-    # LLM contract: BENCHMARKED -> REPORTED publishes only REPORTED run evidence;
-    # UNSUPPORTED and FAILED remain terminal and unrankable.
+    # LLM contract: BENCHMARKED -> REPORTED occurs only after required archive
+    # references resolve; UNSUPPORTED and FAILED remain terminal and unrankable.
     files = _release_files(run_dir, manifest, results)
     replacements: dict[Path, bytes] = {}
     for path, document in (
