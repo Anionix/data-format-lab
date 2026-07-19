@@ -33,6 +33,69 @@ def _archive_member(path: Path, name: str) -> bytes:
     raise AssertionError(f"archive member not found: {name}")
 
 
+def _aggregate_run(root: Path) -> tuple[Path, Path]:
+    run = root / "aggregate"
+    claim = run / "claims" / "fixture-dataset" / "parquet-orc"
+    (run / "input").mkdir(parents=True)
+    claim.mkdir(parents=True)
+    source_root = root / "source"
+    source_run = source_root / "runs" / "pair-run"
+    (source_run / "artifacts").mkdir(parents=True)
+    (source_run / "artifacts" / "value.parquet").write_bytes(b"encoded parquet")
+    (source_run / "artifacts" / "result.arrow").write_bytes(b"result artifact")
+    nested_manifest = {
+        "state": "REPORTED",
+        "dataset_id": "fixture-dataset",
+        "formats": [
+            {
+                "format": "parquet_default",
+                "artifact": "artifacts/value.parquet",
+                "state": "REPORTED",
+            }
+        ],
+    }
+    (claim / "manifest.json").write_text(json.dumps(nested_manifest))
+    nested_results = {
+        "state": "REPORTED",
+        "results": {
+            "read_all": {
+                "artifact": "artifacts/result.arrow",
+                "status": "MEASURED",
+            }
+        },
+    }
+    (claim / "results.json").write_text(json.dumps(nested_results))
+    (claim / "report.md").write_text("# pair report\n")
+    (run / "manifest.json").write_text(
+        json.dumps({"state": "REPORTED", "dataset_id": "aggregate-fixture"})
+    )
+    (run / "results.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "aggregate-1",
+                "state": "REPORTED",
+                "dataset_id": "aggregate-fixture",
+                "profile": "equivalence",
+                "run_id": "aggregate-1",
+                "datasets": [
+                    {
+                        "dataset_id": "fixture-dataset",
+                        "evidence": [
+                            {
+                                "pair": "parquet-orc",
+                                "source": {"run_path": "runs/pair-run"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    (run / "report.md").write_text("# aggregate report\n")
+    (run / "input" / "manifest.json").write_text("{}\n")
+    return run, source_root
+
+
 def _robustness_run(root: Path) -> Path:
     run = root / "run"
     case = run / "robustness" / "cases" / "csv" / "rows-1"
@@ -181,6 +244,55 @@ def test_release_closes_aggregate_archive_references(tmp_path: Path) -> None:
         ]
         == source
     )
+
+
+def test_release_aggregate_closes_nested_manifest_artifact_references(
+    tmp_path: Path,
+) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    assert not (run / "claims/fixture-dataset/parquet-orc/artifacts").exists()
+
+    archive = package_run(
+        run, tmp_path / "output", "linux-x86_64", source_root=source_root
+    )
+    claim = "aggregate-1/claims/fixture-dataset/parquet-orc"
+    assert _archive_member(archive, f"{claim}/artifacts/value.parquet")
+    assert _archive_member(archive, f"{claim}/artifacts/result.arrow")
+
+
+def test_release_aggregate_rejects_missing_nested_artifact(tmp_path: Path) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    (source_root / "runs/pair-run/artifacts/value.parquet").unlink()
+
+    with pytest.raises(FileNotFoundError, match="value.parquet"):
+        package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
+
+
+def test_release_aggregate_rejects_stale_claim_artifact(tmp_path: Path) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    target = run / "claims/fixture-dataset/parquet-orc/artifacts/value.parquet"
+    target.parent.mkdir()
+    target.write_bytes(b"stale parquet")
+
+    with pytest.raises(ValueError, match="archive member collision"):
+        package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
+
+
+def test_release_aggregate_rejects_stale_directory_member(tmp_path: Path) -> None:
+    run, source_root = _aggregate_run(tmp_path)
+    claim = run / "claims/fixture-dataset/parquet-orc"
+    manifest = json.loads((claim / "manifest.json").read_text())
+    manifest["formats"][0]["artifact"] = "artifacts/bundle"
+    (claim / "manifest.json").write_text(json.dumps(manifest))
+    source = source_root / "runs/pair-run/artifacts/bundle"
+    source.mkdir()
+    (source / "current.bin").write_bytes(b"current")
+    archived = claim / "artifacts/bundle"
+    archived.mkdir(parents=True)
+    (archived / "stale.bin").write_bytes(b"stale")
+
+    with pytest.raises(ValueError, match="archive member collision"):
+        package_run(run, tmp_path / "output", "linux-x86_64", source_root=source_root)
 
 
 def test_release_rejects_missing_corpus_record(tmp_path: Path) -> None:
