@@ -212,6 +212,14 @@ def merge_equivalence_shards(
             raise ValueError(f"shard is not benchmarked: {shard}")
         if results.get("status") != "MEASURED":
             raise ValueError(f"shard is not fully measured: {shard}")
+        if results.get("profile") != "equivalence":
+            raise ValueError(f"shard does not declare the equivalence profile: {shard}")
+        equivalence = _object(results.get("equivalence"), f"{shard}/equivalence")
+        pairs = _object_map(
+            equivalence.get("pairs"), f"{shard}/equivalence.pairs"
+        )
+        if not pairs:
+            raise ValueError(f"shard has no equivalence pair evidence: {shard}")
         for job_id, evidence in _object_map(
             results.get("results", {}), f"{shard}/results"
         ).items():
@@ -226,10 +234,6 @@ def merge_equivalence_shards(
                 shared_job_ids.append(job_id)
                 continue
             merged_results[job_id] = evidence
-        equivalence = _object(results.get("equivalence", {}), f"{shard}/equivalence")
-        pairs = _object_map(
-            equivalence.get("pairs", {}), f"{shard}/equivalence.pairs"
-        )
         for pair, evidence in pairs.items():
             if pair in merged_pairs:
                 raise ValueError(f"duplicate equivalence pair: {pair}")
@@ -250,6 +254,7 @@ def merge_equivalence_shards(
     _copy_run_files(base_run, output_run)
 
     manifest = dict(base_manifest)
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     manifest["state"] = transition(
         ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
     )

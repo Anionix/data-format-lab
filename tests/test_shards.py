@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from format_bench.shards import merge_equivalence_shards
 
 
@@ -54,6 +56,7 @@ def _shard_results(pair: str, name: str) -> dict:
         "dataset_id": "fixture",
         "environment": {"platform": "test"},
         "measurement": {"fresh_processes": 10, "warmups": 5, "iterations": 30},
+        "profile": "equivalence",
         "state": "BENCHMARKED",
         "status": "MEASURED",
         "results": {f"{name}/read_all": {"status": "MEASURED", "result": 4}},
@@ -96,6 +99,36 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     assert set(merged["equivalence"]["pairs"]) == {"arrow-feather", "csv-tsv"}
     assert manifest["state"] == "BENCHMARKED"
     assert not any(path.is_symlink() for path in output.rglob("*"))
+
+
+@pytest.mark.parametrize("missing_evidence", ["profile", "empty_profile", "pairs"])
+def test_merge_equivalence_shards_requires_equivalence_evidence(
+    tmp_path: Path, missing_evidence: str
+) -> None:
+    base = tmp_path / "base"
+    _write(base / "input" / "manifest.json", {"rows": 4})
+    (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    _write(base / "artifacts" / "arrow.arrow", {"format": "arrow"})
+    _write(base / "artifacts" / "feather.feather", {"format": "feather"})
+    _write(base / "manifest.json", _manifest())
+
+    shard = tmp_path / "shards" / "arrow-feather"
+    _write(shard / "input" / "manifest.json", {"rows": 4})
+    (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    _write(shard / "artifacts" / "arrow.arrow", {"format": "arrow"})
+    _write(shard / "artifacts" / "feather.feather", {"format": "feather"})
+    _write(shard / "manifest.json", {**_manifest(), "state": "BENCHMARKED"})
+    results = _shard_results("arrow-feather", "arrow_ipc")
+    if missing_evidence == "profile":
+        results.pop("profile")
+    elif missing_evidence == "empty_profile":
+        results["profile"] = ""
+    else:
+        results["equivalence"]["pairs"] = {}
+    _write(shard / "results.json", results)
+
+    with pytest.raises(ValueError, match="equivalence"):
+        merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
 
 
 def test_merge_equivalence_shards_hashes_directory_artifacts(tmp_path: Path) -> None:
