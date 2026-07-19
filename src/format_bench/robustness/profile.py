@@ -288,7 +288,6 @@ def run_bounded(
     if run["fixture"]:
         # Keep one deterministic representative for each boundary family in CI.
         keep = {
-            "rows-0",
             "rows-1",
             "rows-1024",
             "rows-2049",

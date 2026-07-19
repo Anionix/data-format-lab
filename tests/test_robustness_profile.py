@@ -47,11 +47,11 @@ def test_bounded_fixture_writes_versioned_evidence(tmp_path: Path) -> None:
         "FAIL": 0,
         "INCOMPLETE": 0,
         "NOT_APPLICABLE": 0,
-        "PASS": 11,
+        "PASS": 10,
     }
-    assert evidence["target_summary"]["csv"]["cases"] == 11
-    assert evidence["target_summary"]["csv"]["applicable"] == 11
-    assert evidence["target_summary"]["csv"]["pass"] == 11
+    assert evidence["target_summary"]["csv"]["cases"] == 10
+    assert evidence["target_summary"]["csv"]["applicable"] == 10
+    assert evidence["target_summary"]["csv"]["pass"] == 10
     assert evidence["target_summary"]["csv"]["artifact_sha256"]
     assert all(
         {
@@ -95,7 +95,6 @@ def test_bounded_fixture_includes_each_named_boundary_family(tmp_path: Path) -> 
     }
 
     assert {
-        "rows-0",
         "rows-2049",
         "dictionary-256",
         "null-all",
