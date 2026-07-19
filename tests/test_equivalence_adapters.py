@@ -13,6 +13,7 @@ from format_bench.formats import (
     DuckDbAdapter,
     FeatherV2Adapter,
     MessagePackAdapter,
+    ObjectJsonlAdapter,
     OrcAdapter,
     SqliteAdapter,
     TsvAdapter,
@@ -74,18 +75,21 @@ def test_engine_adapters_execute_the_declared_operations(
         assert actual == expected
 
 
-def test_binary_row_adapters_accept_default_nullable_manifest_fields(
+def test_equivalence_adapters_accept_default_nullable_manifest_fields(
     fixture_contract, tmp_path: Path
 ) -> None:
     manifest, table = fixture_contract
     manifest = {
         **manifest,
         "columns": [
-            {key: value for key, value in column.items() if key != "nullable"}
+            {
+                **{key: value for key, value in column.items() if key != "nullable"},
+                "description": "extension metadata excluded from the schema envelope",
+            }
             for column in manifest["columns"]
         ],
     }
-    for adapter in (MessagePackAdapter(), CborAdapter()):
+    for adapter in (ObjectJsonlAdapter(), MessagePackAdapter(), CborAdapter()):
         path = tmp_path / f"artifact{adapter.describe().extension}"
         adapter.encode(table, path)
         assert adapter.verify_roundtrip(path, manifest)["passed"] is True

@@ -6,6 +6,7 @@ from typing import Any
 import pyarrow as pa
 
 from format_bench.canonical import arrow_schema, verify_table
+from format_bench.datasets import normalized_columns
 from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
@@ -43,19 +44,14 @@ def _rows_payload(table: pa.Table) -> dict[str, Any]:
     }
 
 
-def _manifest_columns(manifest: dict) -> list[dict[str, object]]:
-    return [
-        {**column, "nullable": column.get("nullable", True)}
-        for column in manifest["columns"]
-    ]
-
-
 def _table_from_payload(payload: Any, manifest: dict) -> pa.Table:
     if not isinstance(payload, dict) or payload.get("schema_version") != "1":
         raise ValueError("serialized row payload has an unsupported schema")
     rows = payload.get("rows")
     columns = payload.get("columns")
-    if not isinstance(rows, list) or columns != _manifest_columns(manifest):
+    if not isinstance(rows, list) or columns != normalized_columns(
+        manifest.get("columns")
+    ):
         raise ValueError("serialized row payload schema mismatch")
     schema = arrow_schema(manifest)
     expected_names = {field.name for field in schema}
@@ -107,7 +103,11 @@ class AvroAdapter:
 
         with path.open("rb") as handle:
             rows = list(reader(handle))
-        payload = {"schema_version": "1", "columns": _manifest_columns(manifest), "rows": rows}
+        payload = {
+            "schema_version": "1",
+            "columns": normalized_columns(manifest.get("columns")),
+            "rows": rows,
+        }
         return _table_from_payload(payload, manifest)
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
@@ -115,9 +115,11 @@ class AvroAdapter:
 
     def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         spec = workload_for(operation, manifest)
-        columns = list(spec.columns) if spec.kind is WorkloadKind.PROJECTION else [
-            column["name"] for column in manifest["columns"]
-        ]
+        columns = (
+            list(spec.columns)
+            if spec.kind is WorkloadKind.PROJECTION
+            else [column["name"] for column in manifest["columns"]]
+        )
         rows: list[dict[str, Any]] = []
         with path.open("rb") as handle:
             from fastavro import reader
@@ -146,7 +148,7 @@ class AvroAdapter:
             )
         payload = {
             "schema_version": "1",
-            "columns": _manifest_columns(manifest),
+            "columns": normalized_columns(manifest.get("columns")),
             "rows": rows,
         }
         return _table_from_payload(payload, manifest)

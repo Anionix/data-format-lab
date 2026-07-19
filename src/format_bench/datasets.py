@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TypedDict
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -20,6 +21,12 @@ from .dataset_sources import materialize_official
 API_VERSION = "2026-03-10"
 _GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
 _SUPPORTED_ARROW_TYPES = frozenset({"string", "float64", "int64", "bool"})
+
+
+class NormalizedColumn(TypedDict):
+    name: str
+    arrow_type: str
+    nullable: bool
 
 
 def _validate_json_value(value: object, path: str) -> None:
@@ -55,10 +62,11 @@ def _validate_source_format(value: object) -> None:
     _validate_json_value(dict(value), "manifest source_format")
 
 
-def _validate_columns(value: object) -> set[str]:
+def normalized_columns(value: object) -> list[NormalizedColumn]:
     if not isinstance(value, list) or not value:
         raise ValueError("manifest columns must be a non-empty list")
     names: set[str] = set()
+    normalized: list[NormalizedColumn] = []
     for index, column in enumerate(value):
         path = f"manifest columns[{index}]"
         if not isinstance(column, Mapping):
@@ -75,7 +83,14 @@ def _validate_columns(value: object) -> set[str]:
         if not isinstance(nullable, bool):
             raise ValueError(f"{path}.nullable must be a boolean")
         names.add(name)
-    return names
+        normalized.append(
+            NormalizedColumn(name=name, arrow_type=arrow_type, nullable=nullable)
+        )
+    return normalized
+
+
+def _validate_columns(value: object) -> set[str]:
+    return {column["name"] for column in normalized_columns(value)}
 
 
 def _validate_workloads(value: object, columns: set[str]) -> None:
@@ -92,7 +107,7 @@ def _validate_workloads(value: object, columns: set[str]) -> None:
             spec = WorkloadSpec.from_mapping(operation, payload)
         except (TypeError, ValueError, KeyError) as error:
             raise ValueError(f"invalid workload {operation}: {error}") from error
-        references = (*spec.columns, *(([spec.column] if spec.column else [])))
+        references = (*spec.columns, *([spec.column] if spec.column else []))
         if any(column not in columns for column in references):
             raise ValueError(f"workload {operation} references an unknown column")
 
@@ -125,7 +140,9 @@ def load_manifest(root: Path, dataset_id: str) -> dict:
 
 
 def _download(url: str) -> bytes:
-    request = Request(url, headers={"User-Agent": "data-format-lab/0.2", "Accept": "*/*"})
+    request = Request(
+        url, headers={"User-Agent": "data-format-lab/0.2", "Accept": "*/*"}
+    )
     with urlopen(request, timeout=120) as response:
         return response.read()
 
@@ -140,7 +157,9 @@ def fetch_dataset(root: Path, dataset_id: str, output: Path | None = None) -> Pa
         if dataset_id == "nyc-311-2010-2019":
             return materialize_official(dataset_id, manifest, b"", destination)
         raw = _download(source["url"])
-        expected_raw = source.get("archive_sha256_observed", source.get("observed_sha256"))
+        expected_raw = source.get(
+            "archive_sha256_observed", source.get("observed_sha256")
+        )
         if expected_raw is not None and sha256_bytes(raw) != expected_raw:
             raise ValueError("official source SHA-256 mismatch")
         return materialize_official(dataset_id, manifest, raw, destination)
