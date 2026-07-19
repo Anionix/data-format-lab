@@ -1,0 +1,68 @@
+{
+  "schema_version": "audit_ui_readback/v1",
+  "method": "authenticated_github_ui",
+  "captured_at": "2026-07-19T04:02:25Z",
+  "actor": "Anionix",
+  "project": {
+    "url": "https://github.com/users/Anionix/projects/15",
+    "views": [
+      {
+        "name": "Now",
+        "url": "https://github.com/users/Anionix/projects/15/views/1",
+        "filter": "status:\"Needs decision\",Ready,\"In progress\",\"In review\""
+      },
+      {
+        "name": "Roadmap",
+        "url": "https://github.com/users/Anionix/projects/15/views/2",
+        "filter": "level:Roadmap"
+      },
+      {
+        "name": "Workstreams",
+        "url": "https://github.com/users/Anionix/projects/15/views/3",
+        "filter": "level:Workstream"
+      },
+      {
+        "name": "Human actions",
+        "url": "https://github.com/users/Anionix/projects/15/views/4",
+        "filter": "owner:Human,Mixed"
+      },
+      {
+        "name": "Blocked",
+        "url": "https://github.com/users/Anionix/projects/15/views/5",
+        "filter": "status:Blocked"
+      },
+      {
+        "name": "Closure",
+        "url": "https://github.com/users/Anionix/projects/15/views/6",
+        "filter": "status:Done,\"Accepted risk\""
+      }
+    ]
+  },
+  "saved_issue_views": [
+    {
+      "name": "Data Format Lab - Audit P0",
+      "url": "https://github.com/Anionix/data-format-lab/issues/views/5118",
+      "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:priority:p0"
+    },
+    {
+      "name": "Data Format Lab - Audit P1",
+      "url": "https://github.com/Anionix/data-format-lab/issues/views/5119",
+      "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:priority:p1"
+    },
+    {
+      "name": "Data Format Lab - Ready for agent",
+      "url": "https://github.com/Anionix/data-format-lab/issues/views/5120",
+      "query": "repo:Anionix/data-format-lab is:issue is:open label:ready-for-agent"
+    },
+    {
+      "name": "Data Format Lab - Ready for human",
+      "url": "https://github.com/Anionix/data-format-lab/issues/views/5121",
+      "query": "repo:Anionix/data-format-lab is:issue is:open label:ready-for-human"
+    },
+    {
+      "name": "Data Format Lab - Audit bugs",
+      "url": "https://github.com/Anionix/data-format-lab/issues/views/5122",
+      "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:bug"
+    }
+  ]
+}

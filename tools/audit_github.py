@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal, cast
 from urllib.parse import quote
 
-from audit_tracker import AuditError, AuditItem
+from audit_tracker import AuditError, AuditItem, validate_ui_readback
 
 MARKER = "data-format-lab-audit:v1"
 MARKER_RE = re.compile(r"<!-- data-format-lab-audit:v1 id=([^ ]+) -->")
@@ -362,6 +362,7 @@ def verify(
     project = _obj(github["project"], "github.project")
     if project.get("views_verified") is not True or github.get("saved_views_verified") is not True:
         raise AuditError("GitHub project and saved views are not independently verified")
+    validate_ui_readback(registry)
     return transition_sync(state, "VERIFIED")
 
 

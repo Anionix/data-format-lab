@@ -9,6 +9,7 @@ import json
 import sys
 from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, cast
 
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
-GITHUB_PLAN_DIGEST = "1e1f07cfd0deb5117bdcb1db845f9d2d96994fcf59ac42e51d03ac6cf1cf9ba6"
+GITHUB_PLAN_DIGEST = "c5c40d0c81a021e4d242b30c7fe5d7dd70cd86069bd07c80499b3b863f922ac3"
 TRIAGE_DIGEST = "a2837f8456b0511d2b5620be00cb6d26b4f3ff4fde471525c3292a0ff810cd3a"
 AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
 AUDIT_DATE = "2026-07-19"
@@ -102,6 +103,15 @@ def _optional_text(data: dict[str, object], key: str, context: str) -> str | Non
     if value is not None and (not isinstance(value, str) or not value):
         raise AuditError(f"{context}.{key} must be a non-empty string or null")
     return value
+
+
+def _records(
+    value: object, context: str, fields: tuple[str, ...]
+) -> list[dict[str, str]]:
+    rows = [_mapping(raw, context) for raw in _sequence(value, context)]
+    if any(set(row) != set(fields) for row in rows):
+        raise AuditError(f"{context} fields differ")
+    return [{field: _text(row, field, context) for field in fields} for row in rows]
 
 
 def _item(value: object) -> AuditItem:
@@ -193,6 +203,70 @@ def _assert_graph_acyclic(graph: dict[str, tuple[str, ...]], context: str) -> No
         visit(node)
 
 
+def validate_ui_readback(registry: dict[str, object]) -> None:
+    github = _mapping(registry.get("github"), "github")
+    reference = _mapping(github.get("ui_readback"), "github.ui_readback")
+    if set(reference) != {"path", "sha256"}:
+        raise AuditError("github.ui_readback fields differ from the evidence reference")
+    relative_path = Path(_text(reference, "path", "github.ui_readback"))
+    evidence_path = ROOT / relative_path
+    root = ROOT.resolve()
+    path_components = [
+        ROOT.joinpath(*relative_path.parts[:index])
+        for index in range(1, len(relative_path.parts) + 1)
+    ]
+    if (
+        relative_path.is_absolute()
+        or any(component.is_symlink() for component in path_components)
+        or not evidence_path.resolve().is_relative_to(root)
+    ):
+        raise AuditError("github.ui_readback.path must be a non-symlink repository path")
+    try:
+        raw_evidence = evidence_path.read_bytes()
+        evidence = _mapping(json.loads(raw_evidence), "ui readback evidence")
+    except (OSError, json.JSONDecodeError) as error:
+        raise AuditError(f"cannot read UI evidence: {error}") from error
+    if hashlib.sha256(raw_evidence).hexdigest() != _text(
+        reference, "sha256", "github.ui_readback"
+    ):
+        raise AuditError("UI evidence SHA-256 differs")
+    if set(evidence) != {
+        "schema_version", "method", "captured_at", "actor", "project",
+        "saved_issue_views",
+    } or evidence.get("schema_version") != "audit_ui_readback/v1":
+        raise AuditError("UI evidence fields differ from audit_ui_readback/v1")
+    if _text(evidence, "method", "UI evidence") != "authenticated_github_ui":
+        raise AuditError("github.ui_readback.method is invalid")
+    captured_at = _text(evidence, "captured_at", "UI evidence")
+    try:
+        datetime.strptime(captured_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as error:
+        raise AuditError(
+            "github.ui_readback.captured_at must be a UTC timestamp"
+        ) from error
+    if _text(evidence, "actor", "UI evidence") != _text(github, "project_owner", "github"):
+        raise AuditError("github.ui_readback.actor differs from the Project owner")
+
+    configured_project = _mapping(github.get("project"), "github.project")
+    observed_project = _mapping(evidence.get("project"), "UI evidence.project")
+    if set(observed_project) != {"url", "views"}:
+        raise AuditError("UI evidence.project fields differ")
+    if _text(observed_project, "url", "UI evidence.project") != _text(
+        configured_project, "url", "github.project"
+    ):
+        raise AuditError("UI evidence Project URL differs")
+    view_fields = ("name", "url", "filter")
+    if _records(observed_project.get("views"), "UI evidence views", view_fields) != _records(
+        configured_project.get("views"), "configured views", view_fields
+    ):
+        raise AuditError("UI evidence Project views differ")
+    saved_fields = ("name", "url", "query")
+    if _records(
+        evidence.get("saved_issue_views"), "UI evidence saved views", saved_fields
+    ) != _records(github.get("saved_views"), "configured saved views", saved_fields):
+        raise AuditError("UI evidence saved views differ")
+
+
 def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     if set(registry) != TOP_LEVEL_FIELDS:
         raise AuditError("top-level fields differ from audit_registry/v1")
@@ -216,6 +290,7 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     if type(github.get("saved_views_verified")) is not bool:
         raise AuditError("github.saved_views_verified must be a boolean")
     canonical_github = dict(github)
+    canonical_github.pop("ui_readback", None)
     canonical_project = dict(project)
     canonical_github["sync_state"] = "PLANNED"
     canonical_github["saved_views_verified"] = False
@@ -300,6 +375,10 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     synced_numbers = [item.issue_number for item in items if item.issue_number is not None]
     if sync_state != "PLANNED" and len(set(synced_numbers)) != 85:
         raise AuditError("synced issue numbers must be present and unique")
+    if "ui_readback" in github:
+        validate_ui_readback(registry)
+    elif project["views_verified"] or github["saved_views_verified"]:
+        raise AuditError("verified views require external UI readback evidence")
     if sync_state == "VERIFIED" and not (
         project["views_verified"] and github["saved_views_verified"]
     ):

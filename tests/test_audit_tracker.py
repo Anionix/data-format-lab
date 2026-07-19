@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import sys
@@ -32,6 +33,44 @@ def test_registry_matches_strict_audit_contract() -> None:
     assert tracker.render_report(registry, items).startswith("# Strict Audit Registry\n")
     report = Path(__file__).parents[1] / "docs/audits/2026-07-19/report.md"
     assert tracker.render_report(registry, items) == report.read_text()
+
+
+def test_ui_readback_rejects_symlinked_parent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tracker = _tracker()
+    registry = _registry()
+    source = Path(__file__).parents[1] / registry["github"]["ui_readback"]["path"]
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "ui-readback.json").write_bytes(source.read_bytes())
+    (tmp_path / "evidence").symlink_to(real, target_is_directory=True)
+    registry["github"]["ui_readback"]["path"] = "evidence/ui-readback.json"
+    monkeypatch.setattr(tracker, "ROOT", tmp_path)
+
+    with pytest.raises(tracker.AuditError, match="non-symlink"):
+        tracker.validate_ui_readback(registry)
+
+
+def test_ui_readback_rejects_impossible_timestamp(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tracker = _tracker()
+    registry = _registry()
+    source = Path(__file__).parents[1] / registry["github"]["ui_readback"]["path"]
+    evidence = json.loads(source.read_text())
+    evidence["captured_at"] = "2026-99-99T99:99:99Z"
+    raw = (json.dumps(evidence, indent=2) + "\n").encode()
+    target = tmp_path / "ui-readback.json"
+    target.write_bytes(raw)
+    registry["github"]["ui_readback"] = {
+        "path": target.name,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+    monkeypatch.setattr(tracker, "ROOT", tmp_path)
+
+    with pytest.raises(tracker.AuditError, match="UTC timestamp"):
+        tracker.validate_ui_readback(registry)
 
 
 def test_registry_rejects_original_score_drift_within_a_band() -> None:
