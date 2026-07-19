@@ -23,6 +23,7 @@ from format_bench.robustness import (
 )
 from format_bench.robustness.worker import run_request
 from format_bench.robustness.targets import TargetExecutionError
+from format_bench.robustness.targets import RobustnessTarget, read_robustness
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -109,6 +110,22 @@ def test_malformed_column_cases_are_rejected_by_worker(
     }))
     result = run_request(request)
     assert result["observed"] is ObservedOutcome.REJECTED
+
+
+def test_read_robustness_attributes_input_errors_to_target_boundary(
+    tmp_path: Path,
+) -> None:
+    class RejectingAdapter:
+        def read(self, path, manifest):
+            raise ValueError("malformed artifact")
+
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"broken")
+    manifest = _fixture()[0]
+    target = RobustnessTarget("custom", RejectingAdapter())
+
+    with pytest.raises(TargetExecutionError, match="malformed artifact"):
+        read_robustness(target, artifact, manifest)
 
 
 def test_worker_reports_value_mismatch_when_verification_returns_false(

@@ -60,49 +60,52 @@ def read_target(adapter: FormatAdapter, path: Path, manifest: dict) -> pa.Table:
 
 def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.Table:
     expected = arrow_schema(manifest).names
-    if target.name == "csv":
-        try:
+    try:
+        if target.name == "csv":
             with path.open(encoding="utf-8", newline="") as handle:
                 physical = next(csv.reader(handle), [])
-        except (UnicodeDecodeError, csv.Error) as error:
-            raise TargetExecutionError(error) from error
-        if physical != expected:
-            raise TargetExecutionError(
-                ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
-            )
-    elif target.name == "object_jsonl":
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except UnicodeDecodeError as error:
-            raise TargetExecutionError(error) from error
-        for line_number, line in enumerate(lines, 1):
-            try:
-                value = json.loads(line)
-            except json.JSONDecodeError as error:
-                raise TargetExecutionError(error) from error
-            if not isinstance(value, dict) or set(value) != set(expected):
+            if physical != expected:
                 raise TargetExecutionError(
-                    ValueError(f"JSONL object shape mismatch at line {line_number}")
+                    ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
                 )
-    elif target.name.startswith("parquet_"):
-        physical = pq.ParquetFile(path).schema_arrow.names
-        if physical != expected:
-            raise TargetExecutionError(
-                ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
-            )
-    elif target.name == "lance_base":
-        physical = lance.dataset(path).schema.names
-        if physical != expected:
-            raise TargetExecutionError(
-                ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
-            )
-    elif target.name.startswith("vortex_"):
-        physical = vortex.open(str(path)).to_dataset().schema.names
-        if physical != expected:
-            raise TargetExecutionError(
-                ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
-            )
-    return read_target(target.adapter, path, manifest)
+        elif target.name == "object_jsonl":
+            lines = path.read_text(encoding="utf-8").splitlines()
+            for line_number, line in enumerate(lines, 1):
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as error:
+                    raise TargetExecutionError(error) from error
+                if not isinstance(value, dict) or set(value) != set(expected):
+                    raise TargetExecutionError(
+                        ValueError(f"JSONL object shape mismatch at line {line_number}")
+                    )
+        elif target.name.startswith("parquet_"):
+            physical = pq.ParquetFile(path).schema_arrow.names
+            if physical != expected:
+                raise TargetExecutionError(
+                    ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
+                )
+        elif target.name == "lance_base":
+            physical = lance.dataset(path).schema.names
+            if physical != expected:
+                raise TargetExecutionError(
+                    ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
+                )
+        elif target.name.startswith("vortex_"):
+            physical = vortex.open(str(path)).to_dataset().schema.names
+            if physical != expected:
+                raise TargetExecutionError(
+                    ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
+                )
+        return read_target(target.adapter, path, manifest)
+    except TargetExecutionError:
+        raise
+    except (ImportError, ModuleNotFoundError):
+        raise
+    except Exception as error:
+        # The robustness worker has crossed the explicit target boundary: malformed
+        # input is a target rejection, while setup failures remain HARNESS_FAILED.
+        raise TargetExecutionError(error) from error
 
 
 def encode_valid(target: RobustnessTarget, table: pa.Table, path: Path) -> Artifact:
