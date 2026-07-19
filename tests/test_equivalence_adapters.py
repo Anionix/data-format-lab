@@ -65,8 +65,12 @@ def test_engine_adapters_execute_the_declared_operations(
     adapter.encode(table, path)
 
     for operation in OPERATIONS:
-        actual = result_evidence(adapter.scan(path, manifest, operation))
-        expected = result_evidence(apply_arrow(table, operation, manifest))
+        actual = result_evidence(
+            adapter.scan(path, manifest, operation), operation, manifest
+        )
+        expected = result_evidence(
+            apply_arrow(table, operation, manifest), operation, manifest
+        )
         assert actual == expected
 
 
@@ -96,6 +100,10 @@ def test_avro_adapter_executes_the_declared_operations(
     adapter.encode(table, path)
 
     for operation in OPERATIONS:
-        actual = result_evidence(adapter.scan(path, manifest, operation))
-        expected = result_evidence(apply_arrow(table, operation, manifest))
+        actual = result_evidence(
+            adapter.scan(path, manifest, operation), operation, manifest
+        )
+        expected = result_evidence(
+            apply_arrow(table, operation, manifest), operation, manifest
+        )
         assert actual == expected

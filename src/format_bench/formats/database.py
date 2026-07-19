@@ -7,7 +7,7 @@ from typing import Any
 import pyarrow as pa
 
 from format_bench.canonical import arrow_schema, verify_table
-from format_bench.fair import FairOperation, columns_for, workload_for
+from format_bench.fair import Operation, columns_for, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -63,7 +63,7 @@ def _table_from_rows(
 
 
 def _query_parts(
-    manifest: dict, operation: FairOperation
+    manifest: dict, operation: Operation
 ) -> tuple[str, list[Any], list[str]]:
     schema_names = set(arrow_schema(manifest).names)
     spec = workload_for(operation, manifest)
@@ -133,7 +133,7 @@ class SqliteAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         query, parameters, columns = _query_parts(manifest, operation)
         return _table_from_rows(self._fetch(path, query, parameters), manifest, columns)
 

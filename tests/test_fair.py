@@ -5,7 +5,13 @@ import pytest
 
 from format_bench.canonical import read_csv
 from format_bench.datasets import load_manifest
-from format_bench.fair import OPERATIONS, apply_arrow, expected_rows, result_evidence
+from format_bench.fair import (
+    OPERATIONS,
+    FairOperation,
+    apply_arrow,
+    expected_rows,
+    result_evidence,
+)
 from format_bench.formats.arrow_ipc import ArrowIpcAdapter
 from format_bench.formats.lance import LanceAdapter
 from format_bench.formats.parquet import ParquetAdapter
@@ -22,14 +28,28 @@ def test_result_evidence_includes_type_and_nullability() -> None:
         [pa.array([1], type=pa.int64())],
         schema=pa.schema([pa.field("value", pa.int64(), nullable=False)]),
     )
-    assert result_evidence(nullable)["schema"] != result_evidence(required)["schema"]
+    assert (
+        result_evidence(nullable, FairOperation.READ_ALL)["schema"]
+        != result_evidence(required, FairOperation.READ_ALL)["schema"]
+    )
 
 
 def test_result_evidence_remains_order_insensitive() -> None:
     table = pa.table({"value": [1, 2, 3]})
     reversed_table = table.take(pa.array([2, 1, 0]))
 
-    assert result_evidence(table) == result_evidence(reversed_table)
+    evidence = result_evidence(table, FairOperation.READ_ALL)
+    assert evidence["row_order"] == "ORDER_INSENSITIVE"
+    assert evidence == result_evidence(reversed_table, FairOperation.READ_ALL)
+
+
+def test_head_result_evidence_preserves_row_order() -> None:
+    table = pa.table({"value": [1, 2, 3]})
+    reversed_table = table.take(pa.array([2, 1, 0]))
+
+    evidence = result_evidence(table, FairOperation.HEAD_10)
+    assert evidence["row_order"] == "ORDER_SENSITIVE"
+    assert evidence != result_evidence(reversed_table, FairOperation.HEAD_10)
 
 
 @pytest.mark.parametrize(
@@ -71,4 +91,6 @@ def test_fair_operations_return_the_same_fixture_rows(tmp_path: Path, adapter) -
         actual = adapter.scan(path, manifest, operation)
         expected = apply_arrow(table, operation)
         assert actual.num_rows == expected_rows(operation, manifest)
-        assert result_evidence(actual) == result_evidence(expected)
+        assert result_evidence(actual, operation) == result_evidence(
+            expected, operation
+        )

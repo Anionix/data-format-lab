@@ -8,7 +8,7 @@ import pyarrow.csv as pacsv
 import pyarrow.json as pajson
 
 from format_bench.canonical import arrow_schema, read_csv, verify_table
-from format_bench.fair import FairOperation, apply_arrow, workload_for
+from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -33,7 +33,7 @@ class CsvAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
@@ -69,7 +69,7 @@ class TsvAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
@@ -98,7 +98,7 @@ class ObjectJsonlAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         spec = workload_for(operation, manifest)
         if spec.kind is WorkloadKind.READ_ALL:
             return self.read(path, manifest)

@@ -7,7 +7,7 @@ import pyarrow.feather as feather
 import pyarrow.orc as orc
 
 from format_bench.canonical import arrow_schema, verify_table
-from format_bench.fair import FairOperation, apply_arrow
+from format_bench.fair import Operation, apply_arrow
 from format_bench.model import Comparability, Lane
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -37,7 +37,7 @@ class FeatherV2Adapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
@@ -62,5 +62,5 @@ class OrcAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)

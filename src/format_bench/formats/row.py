@@ -6,7 +6,7 @@ from typing import Any
 import pyarrow as pa
 
 from format_bench.canonical import arrow_schema, verify_table
-from format_bench.fair import FairOperation, apply_arrow, workload_for
+from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -113,7 +113,7 @@ class AvroAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         spec = workload_for(operation, manifest)
         columns = list(spec.columns) if spec.kind is WorkloadKind.PROJECTION else [
             column["name"] for column in manifest["columns"]
@@ -184,7 +184,7 @@ class BinaryRowAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from typing import Literal, TypedDict
 
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from .canonical import order_insensitive_hash
+from .canonical import canonical_hash, order_insensitive_hash
+from .model import WorkloadKind
 from .workloads import apply_workload, expected_workload_rows, load_workloads
 
 
@@ -21,6 +23,20 @@ class FairOperation(StrEnum):
 
 OPERATIONS = tuple(FairOperation)
 Operation = FairOperation | str
+
+
+class ResultSchemaField(TypedDict):
+    name: str
+    type: str
+    nullable: bool
+
+
+class ResultEvidence(TypedDict):
+    rows: int
+    columns: list[str]
+    schema: list[ResultSchemaField]
+    row_order: Literal["ORDER_SENSITIVE", "ORDER_INSENSITIVE"]
+    normalized_hash: str
 
 
 def operations_for(manifest: Mapping[str, object] | None = None) -> tuple[str, ...]:
@@ -103,7 +119,14 @@ def expected_rows(operation: Operation, manifest: dict) -> int:
     return expected_workload_rows(name, manifest, spec)
 
 
-def result_evidence(table: pa.Table) -> dict:
+def result_evidence(
+    table: pa.Table,
+    operation: Operation,
+    manifest: Mapping[str, object] | None = None,
+) -> ResultEvidence:
+    order_sensitive = workload_for(operation, manifest).kind is WorkloadKind.HEAD
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # HEAD evidence advances only when its source-prefix row order is preserved.
     return {
         "rows": table.num_rows,
         "columns": table.column_names,
@@ -111,5 +134,8 @@ def result_evidence(table: pa.Table) -> dict:
             {"name": field.name, "type": str(field.type), "nullable": field.nullable}
             for field in table.schema
         ],
-        "normalized_hash": order_insensitive_hash(table),
+        "row_order": "ORDER_SENSITIVE" if order_sensitive else "ORDER_INSENSITIVE",
+        "normalized_hash": (
+            canonical_hash(table) if order_sensitive else order_insensitive_hash(table)
+        ),
     }
