@@ -226,7 +226,6 @@ def _measurement_config(args: argparse.Namespace, run_dir: Path) -> MeasurementC
     else:
         raise ValueError("measurement options require --profile fair or equivalence")
 
-    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     return MeasurementConfig(
         fresh_processes=_default(args.fresh_processes, defaults.fresh_processes),
         fresh_workers=_default(args.fresh_workers, defaults.fresh_workers),
@@ -332,9 +331,12 @@ def main(argv: list[str] | None = None) -> None:
                     config=measurement,
                     parallel=args.parallel_jobs,
                 )
+            elif args.profile == "fair":
+                path = run_fair(root, run_dir, config=measurement)
+            elif args.profile == "claims":
+                path = run_claims(root, run_dir)
             else:
-                runners = {"fair": run_fair, "claims": run_claims, "prompt": run_prompt}
-                path = runners[args.profile](root, run_dir, config=measurement) if measurement else runners[args.profile](root, run_dir)
+                path = run_prompt(root, run_dir)
     elif args.command == "report":
         path = render_report(args.run_dir)
     elif args.command == "interop":
