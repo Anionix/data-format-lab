@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from format_bench.model import RobustnessVerdict, TargetTier
+from format_bench.model import ObservedOutcome, RobustnessVerdict, TargetTier
 
 
 JsonObject = dict[str, object]
@@ -44,19 +44,39 @@ def core_failures(payload: object) -> list[JsonObject]:
     ]
 
 
+def core_blockers(payload: object) -> list[JsonObject]:
+    return [
+        case
+        for case in _cases(payload)
+        if case.get("tier") == TargetTier.CORE.value
+        and (
+            case.get("verdict")
+            in {RobustnessVerdict.FAIL.value, RobustnessVerdict.INCOMPLETE.value}
+            or case.get("observed") == ObservedOutcome.HARNESS_FAILED.value
+        )
+    ]
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Fail only for bounded robustness CORE target failures."
+        description="Require complete, passing bounded robustness CORE evidence."
     )
     parser.add_argument("results", type=Path)
     args = parser.parse_args(argv)
     payload: object = json.loads(args.results.read_text(encoding="utf-8"))
     cases = _cases(payload)
-    failures = core_failures(payload)
-    if failures:
+    core_cases = [case for case in cases if case.get("tier") == TargetTier.CORE.value]
+    blockers = core_blockers(payload)
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # A CORE result may not report green while its evidence is incomplete.
+    if not core_cases or blockers:
         print(
-            "core robustness failures: "
-            + json.dumps(failures, sort_keys=True, ensure_ascii=True),
+            "core robustness gate blocked: "
+            + json.dumps(
+                blockers or [{"reason": "no CORE cases"}],
+                sort_keys=True,
+                ensure_ascii=True,
+            ),
             file=sys.stderr,
         )
         raise SystemExit(1)

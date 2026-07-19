@@ -47,11 +47,11 @@ def test_bounded_fixture_writes_versioned_evidence(tmp_path: Path) -> None:
         "FAIL": 0,
         "INCOMPLETE": 0,
         "NOT_APPLICABLE": 0,
-        "PASS": 4,
+        "PASS": 10,
     }
-    assert evidence["target_summary"]["csv"]["cases"] == 4
-    assert evidence["target_summary"]["csv"]["applicable"] == 4
-    assert evidence["target_summary"]["csv"]["pass"] == 4
+    assert evidence["target_summary"]["csv"]["cases"] == 10
+    assert evidence["target_summary"]["csv"]["applicable"] == 10
+    assert evidence["target_summary"]["csv"]["pass"] == 10
     assert evidence["target_summary"]["csv"]["artifact_sha256"]
     assert all(
         {
@@ -73,6 +73,36 @@ def test_bounded_fixture_writes_versioned_evidence(tmp_path: Path) -> None:
     )
     assert mutated["case_id"] == "mutation-000-empty"
     assert mutated["mutation"]["member_size_bytes"] > 1
+
+
+def test_bounded_fixture_includes_each_named_boundary_family(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    adapter = CsvAdapter()
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(adapter,))
+    verify_run(run_dir, {"csv": adapter})
+
+    result_path = run_bounded(
+        root,
+        run_dir,
+        generated_count=0,
+        mutations_per_target=0,
+        targets=(core_targets()[0],),
+    )
+    case_ids = {
+        item["case_id"]
+        for item in json.loads(result_path.read_text())["results"]["robustness_v1"]["cases"]
+    }
+
+    assert {
+        "rows-2049",
+        "dictionary-256",
+        "null-all",
+        "string-utf8",
+        "numeric-int64",
+        "malformed-missing-column",
+        "malformed-truncated",
+    } <= case_ids
 
 
 def test_public_cli_runs_and_reports_bounded_fixture(
