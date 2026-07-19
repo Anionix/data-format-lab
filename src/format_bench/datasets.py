@@ -183,6 +183,11 @@ def fetch_dataset(root: Path, dataset_id: str, output: Path | None = None) -> Pa
     return source_path
 
 
+def capture_nyc_snapshot(root: Path, output: Path) -> Path:
+    manifest = load_manifest(root, "nyc-311-2010-2019")
+    return materialize_official("nyc-311-2010-2019", manifest, b"", output)
+
+
 def _next_link(header: str | None) -> str | None:
     if not header:
         return None

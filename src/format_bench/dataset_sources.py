@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
+import platform
 import zipfile
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from pathlib import Path
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+from .nyc_snapshot import CaptureState, fail_active_capture, finalize_capture, nyc_rows
 
 
 _GEONAMES_COLUMNS = (
@@ -32,10 +34,7 @@ def _columns(manifest: Mapping[str, object]) -> tuple[str, ...]:
 
 
 def _types(manifest: Mapping[str, object]) -> dict[str, str]:
-    return {
-        str(column["name"]): str(column["arrow_type"])
-        for column in manifest["columns"]
-    }
+    return {str(column["name"]): str(column["arrow_type"]) for column in manifest["columns"]}
 
 
 def _write_rows(destination: Path, manifest: Mapping[str, object], rows: Iterable[Mapping[str, object]]) -> int:
@@ -100,15 +99,11 @@ def _geonames_rows(raw: bytes) -> Iterable[Mapping[str, object]]:
             for line_number, line in enumerate(data, start=1):
                 values = tuple(line.rstrip("\r\n").split("\t"))
                 if len(values) != len(_GEONAMES_COLUMNS):
-                    raise ValueError(
-                        f"GeoNames row {line_number} has {len(values)} fields, expected 19"
-                    )
+                    raise ValueError(f"GeoNames row {line_number} has {len(values)} fields, expected 19")
                 try:
                     geonameid = int(values[0])
                 except ValueError as error:
-                    raise ValueError(
-                        f"GeoNames row {line_number} has invalid geonameid {values[0]!r}"
-                    ) from error
+                    raise ValueError(f"GeoNames row {line_number} has invalid geonameid {values[0]!r}") from error
                 records.append((geonameid, values))
 
     records.sort()
@@ -122,32 +117,6 @@ def _owid_rows(raw: bytes) -> Iterable[Mapping[str, object]]:
         yield from csv.DictReader(text)
 
 
-def _nyc_rows(manifest: Mapping[str, object]) -> Iterable[Mapping[str, object]]:
-    source = manifest["source"]
-    if not isinstance(source, Mapping):
-        raise ValueError("NYC source contract must be an object")
-    target = int(source.get("snapshot_rows_target", 1_000_000))
-    page_size = 50_000
-    offset = 0
-    while offset < target:
-        limit = min(page_size, target - offset)
-        params = {
-            "$select": "unique_key,created_date,complaint_type,borough,descriptor AS complaint_text",
-            "$where": "created_date >= '2010-01-01T00:00:00' AND created_date < '2020-01-01T00:00:00'",
-            "$order": "unique_key ASC",
-            "$limit": str(limit),
-            "$offset": str(offset),
-        }
-        url = f"{source['url']}?{urlencode(params)}"
-        request = Request(url, headers={"Accept": "text/csv", "User-Agent": "data-format-lab"})
-        with urlopen(request, timeout=120) as response:
-            page = list(csv.DictReader(io.TextIOWrapper(response, encoding="utf-8", newline="")))
-        if not page:
-            raise ValueError(f"NYC source ended at {offset} rows, expected {target}")
-        yield from page
-        offset += len(page)
-
-
 def materialize_official(
     dataset_id: str,
     manifest: Mapping[str, object],
@@ -155,7 +124,8 @@ def materialize_official(
     destination: Path,
 ) -> Path:
     destination.mkdir(parents=True, exist_ok=False)
-    (destination / "raw.bin").write_bytes(raw)
+    if raw:
+        (destination / "raw.bin").write_bytes(raw)
     source_format = str(manifest.get("source_format", ""))
     output = destination / "source.csv"
     if dataset_id == "uci-bank-marketing":
@@ -167,14 +137,53 @@ def materialize_official(
     elif dataset_id == "owid-energy":
         rows = _owid_rows(raw)
     elif dataset_id == "nyc-311-2010-2019":
-        rows = _nyc_rows(manifest)
+        rows = nyc_rows(manifest, destination)
     else:
         raise ValueError(f"no official normalizer for {dataset_id} ({source_format})")
-    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
-    # This materializer advances only DISCOVERED -> ENCODED; parse failures remain FAILED.
-    row_count = _write_rows(output, manifest, rows)
-    (destination / "materialization.json").write_text(
-        json.dumps({"dataset_id": dataset_id, "rows": row_count, "source_format": source_format}, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    partial = destination / "source.csv.partial"
+    is_nyc = dataset_id == "nyc-311-2010-2019"
+    materialized = partial if is_nyc else output
+    succeeded = False
+    try:
+        row_count = _write_rows(materialized, manifest, rows)
+        if is_nyc:
+            partial.replace(output)
+        materialization = destination / "materialization.json"
+        with output.open("rb") as source:
+            source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+        materialization.write_text(
+            json.dumps(
+                {
+                    "dataset_id": dataset_id,
+                    "rows": row_count,
+                    "source_format": source_format,
+                    "source_sha256": source_sha256,
+                    "writer": {
+                        "format": "csv",
+                        "encoding": "utf-8",
+                        "newline": "",
+                        "dialect": "excel",
+                        "lineterminator": "\n",
+                    },
+                    "runtime_versions": {"python": platform.python_version()},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        if is_nyc:
+            # LLM contract: CAPTURED -> COMPLETE atomically advances
+            # DISCOVERED -> ENCODED; ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED remain downstream.
+            finalize_capture(destination, CaptureState.COMPLETE)
+        succeeded = True
+    except BaseException as error:
+        if is_nyc:
+            if (destination / "capture.json").is_file():
+                fail_active_capture(destination, error)
+        raise
+    finally:
+        if is_nyc and not succeeded:
+            for path in (partial, output, destination / "materialization.json"):
+                path.unlink(missing_ok=True)
     return output
