@@ -17,6 +17,14 @@ from format_bench.model import TargetTier
 from format_bench.registry import adapter_map
 
 
+class TargetExecutionError(Exception):
+    """An exception raised by the format target at the adapter boundary."""
+
+    def __init__(self, cause: Exception) -> None:
+        self.cause = cause
+        super().__init__(str(cause))
+
+
 @dataclass(frozen=True)
 class RobustnessTarget:
     name: str
@@ -44,31 +52,57 @@ def target_map() -> dict[str, RobustnessTarget]:
     return {target.name: target for target in core_targets()}
 
 
+def read_target(adapter: FormatAdapter, path: Path, manifest: dict) -> pa.Table:
+    # Adapter exceptions remain harness failures unless the adapter explicitly
+    # raises TargetExecutionError at a target boundary.
+    return adapter.read(path, manifest)
+
+
 def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.Table:
     expected = arrow_schema(manifest).names
     if target.name == "csv":
-        with path.open(encoding="utf-8", newline="") as handle:
-            physical = next(csv.reader(handle), [])
+        try:
+            with path.open(encoding="utf-8", newline="") as handle:
+                physical = next(csv.reader(handle), [])
+        except (UnicodeDecodeError, csv.Error) as error:
+            raise TargetExecutionError(error) from error
         if physical != expected:
-            raise ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
+            raise TargetExecutionError(
+                ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
+            )
     elif target.name == "object_jsonl":
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            value = json.loads(line)
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError as error:
+            raise TargetExecutionError(error) from error
+        for line_number, line in enumerate(lines, 1):
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise TargetExecutionError(error) from error
             if not isinstance(value, dict) or set(value) != set(expected):
-                raise ValueError(f"JSONL object shape mismatch at line {line_number}")
+                raise TargetExecutionError(
+                    ValueError(f"JSONL object shape mismatch at line {line_number}")
+                )
     elif target.name.startswith("parquet_"):
         physical = pq.ParquetFile(path).schema_arrow.names
         if physical != expected:
-            raise ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
+            raise TargetExecutionError(
+                ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
+            )
     elif target.name == "lance_base":
         physical = lance.dataset(path).schema.names
         if physical != expected:
-            raise ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
+            raise TargetExecutionError(
+                ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
+            )
     elif target.name.startswith("vortex_"):
         physical = vortex.open(str(path)).to_dataset().schema.names
         if physical != expected:
-            raise ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
-    return target.adapter.read(path, manifest)
+            raise TargetExecutionError(
+                ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
+            )
+    return read_target(target.adapter, path, manifest)
 
 
 def encode_valid(target: RobustnessTarget, table: pa.Table, path: Path) -> Artifact:

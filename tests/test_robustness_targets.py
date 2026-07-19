@@ -7,7 +7,12 @@ import pytest
 
 import format_bench.robustness.worker as worker
 from format_bench.canonical import canonical_hash, query_counts, read_csv
-from format_bench.model import ObservedOutcome
+from format_bench.model import (
+    ObservedOutcome,
+    RobustnessExpectation,
+    RobustnessVerdict,
+    robustness_verdict,
+)
 from format_bench.robustness import (
     core_targets,
     encode_malformed,
@@ -17,6 +22,7 @@ from format_bench.robustness import (
     target_map,
 )
 from format_bench.robustness.worker import run_request
+from format_bench.robustness.targets import TargetExecutionError
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -178,3 +184,98 @@ def test_worker_reports_non_value_verification_errors_as_harness_failure(
 
     assert result["observed"] is ObservedOutcome.HARNESS_FAILED
     assert result["details"]["error_type"] == "TypeError"
+
+
+@pytest.mark.parametrize("error_type", [NameError, TypeError])
+@pytest.mark.parametrize("expectation", ["MUST_REJECT", "MUST_NOT_CRASH"])
+def test_worker_does_not_attribute_lab_setup_errors_to_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
+    expectation: str,
+) -> None:
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "lab-setup-error",
+        "target": "broken",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+        "expectation": expectation,
+    }))
+
+    def broken_target_map() -> dict:
+        raise error_type("lab setup failure")
+
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": object()})
+    monkeypatch.setattr(worker, "target_map", broken_target_map)
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+
+    assert result["observed"] is ObservedOutcome.HARNESS_FAILED
+    assert result["details"]["error_type"] == error_type.__name__
+    assert robustness_verdict(
+        RobustnessExpectation(expectation), result["observed"]
+    ) is RobustnessVerdict.INCOMPLETE
+
+
+@pytest.mark.parametrize("expectation", ["MUST_REJECT", "MUST_NOT_CRASH"])
+def test_worker_does_not_attribute_adapter_type_error_to_rejection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    expectation: str,
+) -> None:
+    class RejectingAdapter:
+        def read(self, path, manifest):
+            raise TypeError("target rejected artifact")
+
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "target-type-error",
+        "target": "broken",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+        "expectation": expectation,
+    }))
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": RejectingAdapter()})
+    monkeypatch.setattr(worker, "target_map", lambda: {})
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+
+    assert result["observed"] is ObservedOutcome.HARNESS_FAILED
+    assert result["details"]["error_type"] == "TypeError"
+    assert robustness_verdict(
+        RobustnessExpectation(expectation), result["observed"]
+    ) is RobustnessVerdict.INCOMPLETE
+
+
+def test_worker_accepts_explicit_target_boundary_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class RejectingAdapter:
+        def read(self, path, manifest):
+            raise TargetExecutionError(TypeError("target rejected artifact"))
+
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "target-boundary-error",
+        "target": "broken",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+        "expectation": "MUST_REJECT",
+    }))
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": RejectingAdapter()})
+    monkeypatch.setattr(worker, "target_map", lambda: {})
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+
+    assert result["observed"] is ObservedOutcome.REJECTED
+    assert result["details"]["error_type"] == "TypeError"
+    assert robustness_verdict(
+        RobustnessExpectation.MUST_REJECT, result["observed"]
+    ) is RobustnessVerdict.PASS
