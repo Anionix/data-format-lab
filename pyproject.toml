@@ -52,6 +52,7 @@ include = [
   "tools/audit_tracker.py",
   "tools/audit_github.py",
   "tools/audit_project.py",
+  "tools/review_closeout.py",
 ]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
