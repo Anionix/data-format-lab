@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TypeGuard
 
 import pyarrow as pa
 
@@ -30,11 +31,19 @@ def _null_positions(table: pa.Table) -> dict[str, list[int]]:
     }
 
 
+def _is_evidence_object(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _failure_evidence(error_type: str, error: str) -> dict[str, object]:
+    return {"status": "FAILED", "error_type": error_type, "error": error}
+
+
 def _consume(
     path: Path,
     manifest: dict,
     expected_null_positions: dict[str, list[int]],
-) -> dict:
+) -> dict[str, object]:
     manifest_path = path.parent / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
     process = subprocess.run(
@@ -52,19 +61,15 @@ def _consume(
         check=False,
     )
     try:
-        result = json.loads(process.stdout)
+        result: object = json.loads(process.stdout)
     except json.JSONDecodeError:
-        return {
-            "status": "FAILED",
-            "error_type": "WorkerProtocolError",
-            "error": process.stderr[-500:] or "worker did not return JSON",
-        }
-    if not isinstance(result, dict):
-        return {
-            "status": "FAILED",
-            "error_type": "WorkerProtocolError",
-            "error": "worker returned a non-object JSON value",
-        }
+        return _failure_evidence(
+            "WorkerProtocolError", process.stderr[-500:] or "worker did not return JSON"
+        )
+    if not _is_evidence_object(result):
+        return _failure_evidence(
+            "WorkerProtocolError", "worker returned a non-object JSON value"
+        )
     if process.returncode != 0:
         result["status"] = "FAILED"
         result.setdefault("error", process.stderr[-500:])
@@ -73,11 +78,9 @@ def _consume(
         or result.get("expected_counts") != manifest["expected_counts"]
         or result.get("null_positions") != expected_null_positions
     ):
-        result = {
-            "status": "FAILED",
-            "error_type": "ContractMismatch",
-            "error": "worker returned values outside the canonical contract",
-        }
+        result = _failure_evidence(
+            "ContractMismatch", "worker returned values outside the canonical contract"
+        )
     return result
 
 
@@ -120,23 +123,16 @@ def run_arrow_ipc_interoperability(
         for compression in ("none", "lz4", "zstd"):
             adapter = ArrowIpcAdapter(compression)
             artifact = stage / f"{adapter.name}.arrow"
-            # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
-            # This lane verifies conformance before collecting decode timings.
             try:
+                # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED;
+                # this lane writes ENCODED and advances to ROUNDTRIP_VERIFIED only on consumer PASS.
                 adapter.encode(table, artifact)
                 result = _consume(artifact, manifest, expected_null_positions)
             except (ImportError, ModuleNotFoundError) as error:
-                result = {
-                    "status": "UNSUPPORTED",
-                    "error_type": type(error).__name__,
-                    "error": str(error),
-                }
+                result = _failure_evidence(type(error).__name__, str(error))
+                result["status"] = "UNSUPPORTED"
             except Exception as error:
-                result = {
-                    "status": "FAILED",
-                    "error_type": type(error).__name__,
-                    "error": str(error),
-                }
+                result = _failure_evidence(type(error).__name__, str(error))
             result.update(
                 {
                     "format": adapter.name,

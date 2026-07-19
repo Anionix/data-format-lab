@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from .model import Comparability, ExecutionState, Lane, RobustnessVerdict, transition
@@ -14,7 +15,15 @@ def _cell(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def _table(headers: list[str], rows: list[list[object]]) -> list[str]:
+def _string_values(value: object) -> list[str]:
+    if isinstance(value, list):
+        strings = [item for item in value if isinstance(item, str)]
+        if len(strings) == len(value):
+            return strings
+    return []
+
+
+def _table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str]:
     output = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
@@ -33,7 +42,7 @@ def _package_versions(environment: dict) -> str:
 
 
 def _environment_rows(environment: dict) -> list[list[object]]:
-    rows = [
+    rows: list[list[object]] = [
         ["Git commit", environment.get("git_commit")],
         ["Flake lock SHA-256", environment.get("flake_lock_sha256")],
         ["Platform", environment.get("platform")],
@@ -453,8 +462,8 @@ def _robustness(results: dict) -> list[str]:
     identity_rows = [
         [
             target,
-            ", ".join(item["artifact_sha256"]) or "N/A",
-            ", ".join(item["source_identities"]) or "N/A",
+            ", ".join(_string_values(item["artifact_sha256"])) or "N/A",
+            ", ".join(_string_values(item["source_identities"])) or "N/A",
         ]
         for target, item in sorted(target_summary.items())
     ]
