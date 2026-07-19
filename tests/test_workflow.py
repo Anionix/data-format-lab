@@ -217,6 +217,64 @@ def test_cli_run_prepares_and_verifies_new_explicit_destination(
 
 
 @pytest.mark.parametrize(
+    ("profile", "runner_name"),
+    [("fair", "run_fair"), ("claims", "run_claims"), ("prompt", "run_prompt")],
+)
+def test_cli_profile_dispatch_matches_runner_signatures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: str,
+    runner_name: str,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    captured: list[object] = []
+
+    def prepare(
+        root: Path, dataset: str, destination: Path, *, fixture: bool
+    ) -> Path:
+        del root
+        destination.mkdir()
+        (destination / "manifest.json").write_text(
+            json.dumps({"dataset_id": dataset, "fixture": fixture})
+        )
+        return destination
+
+    monkeypatch.setattr(cli, "prepare_run", prepare)
+    monkeypatch.setattr(cli, "verify_run", lambda path: None)
+    if profile == "fair":
+        def run_fair(root: Path, path: Path, *, config: object) -> Path:
+            del root
+            captured.append(config)
+            return path
+
+        monkeypatch.setattr(cli, runner_name, run_fair)
+    else:
+        def run_profile(root: Path, path: Path) -> Path:
+            del root
+            captured.append(profile)
+            return path
+
+        monkeypatch.setattr(cli, runner_name, run_profile)
+    monkeypatch.chdir(root)
+
+    cli.main(
+        [
+            "run",
+            "--profile",
+            profile,
+            "--dataset",
+            DATASET,
+            "--run-dir",
+            str(run_dir),
+            "--fixture",
+        ]
+    )
+
+    assert captured == [None if profile == "fair" else profile]
+
+
+@pytest.mark.parametrize(
     ("profile", "expected_sampling"),
     [
         ("fair", (1, 1, 0, 1)),

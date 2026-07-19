@@ -3,10 +3,49 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from format_bench.claims.fastlanes import _fatal_cases, _run_case
 from format_bench.claims import fastlanes_worker
 from format_bench.claims.fastlanes_worker import MIXED_COLUMNS, _input
 from format_bench.model import ObservedOutcome
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr"),
+    [
+        (b"partial stdout: \xff", b"partial stderr: \xfe"),
+        ("partial stdout", "partial stderr"),
+    ],
+)
+def test_fastlanes_timeout_output_is_persisted_as_text(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: str | bytes,
+    stderr: str | bytes,
+) -> None:
+    def time_out(*args, **kwargs):
+        raise subprocess.TimeoutExpired(
+            args[0], kwargs["timeout"], output=stdout, stderr=stderr
+        )
+
+    monkeypatch.setattr(subprocess, "run", time_out)
+
+    result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
+
+    expected_stdout = (
+        stdout.decode("utf-8", errors="replace")
+        if isinstance(stdout, bytes)
+        else stdout
+    )
+    expected_stderr = (
+        stderr.decode("utf-8", errors="replace")
+        if isinstance(stderr, bytes)
+        else stderr
+    )
+    assert result["outcome"] is ObservedOutcome.TIMED_OUT
+    assert (tmp_path / "mixed-13-columns" / "stdout.txt").read_text() == expected_stdout
+    assert (tmp_path / "mixed-13-columns" / "stderr.txt").read_text() == expected_stderr
 
 
 def test_fastlanes_input_contract_uses_pipe_and_pinned_schema(tmp_path: Path) -> None:

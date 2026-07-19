@@ -20,6 +20,14 @@ MIXED_ROWS = 1024
 CASE_SCOPES = ("full", "mixed")
 
 
+def _text_output(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace")
+    return output
+
+
 def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> dict:
     directory = directory.resolve()
     case_dir = directory / name
@@ -52,7 +60,7 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as error:
-        stdout, stderr = error.stdout or "", error.stderr or ""
+        stdout, stderr = _text_output(error.stdout), _text_output(error.stderr)
         process = {"returncode": None, "timed_out": True, "signal": None}
     else:
         stdout, stderr = completed.stdout, completed.stderr
