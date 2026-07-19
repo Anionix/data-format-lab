@@ -119,6 +119,11 @@ def test_registry_pins_audit_identity_and_triage_assignments() -> None:
         tracker.validate_registry(registry)
 
     registry = _registry()
+    registry["method"] = "A different review method."
+    with pytest.raises(tracker.AuditError, match="audit identity"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
     issue = next(item for item in registry["items"] if item["id"] == "DFL-AUDIT-139")
     issue["priority"] = "P2"
     with pytest.raises(tracker.AuditError, match="priority differs"):

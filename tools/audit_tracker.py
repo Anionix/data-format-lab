@@ -21,6 +21,10 @@ TRIAGE_DIGEST = "a2837f8456b0511d2b5620be00cb6d26b4f3ff4fde471525c3292a0ff810cd3
 AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
 AUDIT_DATE = "2026-07-19"
 REPOSITORY = "Anionix/data-format-lab"
+AUDIT_METHOD = (
+    "Six-role strict audit consolidated from 156 raw judgments into "
+    "174 non-duplicate criteria."
+)
 P0_IDS = {139, 148, 151, 154, 155, 161, 162}
 P1_IDS = {17, 53, 54, 95, 102, *range(163, 170), *range(171, 175)}
 HUMAN_IDS = {145, *range(152, 156), 161, 162}
@@ -187,7 +191,9 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
         raise AuditError("schema_version must be audit_registry/v1")
     for key in ("audit_date", "repository", "audited_commit", "method"):
         _text(registry, key, "registry")
-    if (registry.get("audit_date"), registry.get("repository")) != (AUDIT_DATE, REPOSITORY):
+    if (
+        registry.get("audit_date"), registry.get("repository"), registry.get("method")
+    ) != (AUDIT_DATE, REPOSITORY, AUDIT_METHOD):
         raise AuditError("audit identity differs from the immutable audit source")
     if registry.get("audited_commit") != AUDITED_COMMIT:
         raise AuditError("audited_commit differs from the immutable audit source")
