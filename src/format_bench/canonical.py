@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
-from .datasets import load_manifest, sha256_bytes
+from .datasets import load_manifest, normalized_columns, sha256_bytes
 from .workloads import apply_workload, load_workloads
 
 
@@ -21,13 +21,15 @@ _ARROW_TYPES = {
 
 
 def arrow_schema(manifest: dict) -> pa.Schema:
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # Resolve schema defaults before round-trip verification compares any envelope.
     return pa.schema(
         pa.field(
             column["name"],
             _ARROW_TYPES[column["arrow_type"]],
-            nullable=column.get("nullable", True),
+            nullable=column["nullable"],
         )
-        for column in manifest["columns"]
+        for column in normalized_columns(manifest.get("columns"))
     )
 
 
@@ -65,10 +67,14 @@ def _hash_rows(rows: list[dict], *, order_sensitive: bool) -> str:
         rows.sort(
             key=lambda row: (
                 row[sort_column] or "",
-                json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+                json.dumps(
+                    row, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+                ),
             )
         )
-    payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    payload = json.dumps(
+        rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -105,19 +111,27 @@ def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int
 def verify_table(table: pa.Table, manifest: dict) -> dict:
     expected_schema = arrow_schema(manifest)
     if table.schema != expected_schema:
-        raise ValueError(f"schema mismatch: expected {expected_schema}, got {table.schema}")
+        raise ValueError(
+            f"schema mismatch: expected {expected_schema}, got {table.schema}"
+        )
     if table.num_rows != manifest["rows"]:
-        raise ValueError(f"row count mismatch: expected {manifest['rows']}, got {table.num_rows}")
+        raise ValueError(
+            f"row count mismatch: expected {manifest['rows']}, got {table.num_rows}"
+        )
     actual_hash = canonical_hash(table)
     if actual_hash != manifest["canonical_hash"]:
         raise ValueError("canonical hash mismatch")
     counts = query_counts(table, manifest)
     if counts != manifest["expected_counts"]:
-        raise ValueError(f"query count mismatch: expected {manifest['expected_counts']}, got {counts}")
+        raise ValueError(
+            f"query count mismatch: expected {manifest['expected_counts']}, got {counts}"
+        )
     return {"canonical_hash": actual_hash, "counts": counts, "passed": True}
 
 
-def load_dataset(root: Path, dataset_id: str, source: Path | None = None) -> tuple[dict, pa.Table]:
+def load_dataset(
+    root: Path, dataset_id: str, source: Path | None = None
+) -> tuple[dict, pa.Table]:
     manifest = load_manifest(root, dataset_id)
     source_path = source or root / ".data" / dataset_id / "source.csv"
     actual_source_sha256 = sha256_bytes(source_path.read_bytes())
