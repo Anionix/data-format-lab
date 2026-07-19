@@ -193,6 +193,43 @@ def _default(value: _T | None, default: _T) -> _T:
     return default if value is None else value
 
 
+def _measurement_config(args: argparse.Namespace, run_dir: Path) -> MeasurementConfig | None:
+    options = (
+        args.fresh_processes,
+        args.fresh_workers,
+        args.warmups,
+        args.iterations,
+        args.worker_timeout_seconds,
+    )
+    if not any(value is not None for value in options):
+        return None
+
+    run_manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    if args.profile == "fair":
+        defaults = (
+            MeasurementConfig(fresh_processes=1, warmups=0, iterations=1)
+            if run_manifest.get("fixture")
+            else MeasurementConfig()
+        )
+    elif args.profile == "equivalence":
+        defaults = (
+            MeasurementConfig(fresh_processes=2, warmups=1, iterations=2)
+            if run_manifest.get("fixture")
+            else MeasurementConfig()
+        )
+    else:
+        raise ValueError("measurement options require --profile fair or equivalence")
+
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    return MeasurementConfig(
+        fresh_processes=_default(args.fresh_processes, defaults.fresh_processes),
+        fresh_workers=_default(args.fresh_workers, defaults.fresh_workers),
+        warmups=_default(args.warmups, defaults.warmups),
+        iterations=_default(args.iterations, defaults.iterations),
+        timeout_seconds=_default(args.worker_timeout_seconds, defaults.timeout_seconds),
+    )
+
+
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     load_manifest(root, args.dataset)
     if args.run_dir is None or not args.run_dir.exists():
@@ -240,24 +277,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "run":
         _validate_run_options(args)
         run_dir = _run_directory(root, args)
-        measurement = None
-        if any(
-            value is not None
-            for value in (
-                args.fresh_processes,
-                args.fresh_workers,
-                args.warmups,
-                args.iterations,
-                args.worker_timeout_seconds,
-            )
-        ):
-            measurement = MeasurementConfig(
-                fresh_processes=_default(args.fresh_processes, 10),
-                fresh_workers=_default(args.fresh_workers, 1),
-                warmups=_default(args.warmups, 5),
-                iterations=_default(args.iterations, 30),
-                timeout_seconds=_default(args.worker_timeout_seconds, 120),
-            )
+        measurement = _measurement_config(args, run_dir)
         if args.profile == "robustness":
             if args.suite == "native":
                 selected = None
