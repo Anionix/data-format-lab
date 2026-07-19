@@ -110,6 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
     package.add_argument("--run-dir", type=Path, required=True)
     package.add_argument("--output", type=Path, default=Path("outputs/release"))
     package.add_argument("--platform", required=True)
+    package.add_argument(
+        "--source-root",
+        type=Path,
+        default=Path("."),
+        help="root for aggregate source run paths (default: current directory)",
+    )
 
     merge = subcommands.add_parser("merge-equivalence-shards")
     merge.add_argument("--base-run-dir", type=Path, required=True)
@@ -385,5 +391,10 @@ def main(argv: list[str] | None = None) -> None:
             args.base_run_dir, args.shard_dir, args.output_run_dir
         )
     else:
-        path = package_run(args.run_dir, args.output, args.platform)
+        path = package_run(
+            args.run_dir,
+            args.output,
+            args.platform,
+            source_root=args.source_root,
+        )
     print(path)
