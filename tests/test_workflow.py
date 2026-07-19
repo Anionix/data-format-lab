@@ -103,6 +103,122 @@ def test_cli_run_prepares_and_verifies_new_explicit_destination(
     assert calls == [("prepare", run_dir), ("verify", run_dir), ("run", run_dir)]
 
 
+@pytest.mark.parametrize(
+    ("profile", "expected_sampling"),
+    [
+        ("fair", (1, 1, 0, 1)),
+        ("equivalence", (2, 1, 1, 2)),
+    ],
+)
+def test_cli_timeout_preserves_fixture_sampling_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    profile: str,
+    expected_sampling: tuple[int, int, int, int],
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    captured: list[object] = []
+
+    def prepare(
+        root: Path, dataset: str, destination: Path, *, fixture: bool, **kwargs
+    ) -> Path:
+        del root, kwargs
+        destination.mkdir()
+        (destination / "manifest.json").write_text(
+            json.dumps({"dataset_id": dataset, "fixture": fixture})
+        )
+        return destination
+
+    def run(*args, **kwargs):
+        captured.append(kwargs["config"])
+        return run_dir
+
+    monkeypatch.setattr(cli, "prepare_run", prepare)
+    monkeypatch.setattr(cli, "verify_run", lambda path: None)
+    if profile == "fair":
+        monkeypatch.setattr(cli, "run_fair", run)
+    else:
+        monkeypatch.setattr(cli, "run_equivalence", run)
+    monkeypatch.chdir(root)
+
+    arguments = [
+        "run",
+        "--profile",
+        profile,
+        "--dataset",
+        DATASET,
+        "--run-dir",
+        str(run_dir),
+        "--fixture",
+        "--worker-timeout-seconds",
+        "7.5",
+    ]
+    if profile == "equivalence":
+        arguments.extend(["--pair", "csv-tsv"])
+    cli.main(arguments)
+
+    config = captured[0]
+    assert (config.fresh_processes, config.fresh_workers, config.warmups, config.iterations) == expected_sampling
+    assert config.timeout_seconds == 7.5
+
+
+@pytest.mark.parametrize("profile", ["fair", "equivalence"])
+def test_cli_explicit_fixture_sampling_flags_override_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    captured: list[object] = []
+
+    def prepare(
+        root: Path, dataset: str, destination: Path, *, fixture: bool, **kwargs
+    ) -> Path:
+        del root, kwargs
+        destination.mkdir()
+        (destination / "manifest.json").write_text(
+            json.dumps({"dataset_id": dataset, "fixture": fixture})
+        )
+        return destination
+
+    monkeypatch.setattr(cli, "prepare_run", prepare)
+    monkeypatch.setattr(cli, "verify_run", lambda path: None)
+    def run(*args, **kwargs):
+        captured.append(kwargs["config"])
+        return run_dir
+
+    monkeypatch.setattr(cli, "run_fair" if profile == "fair" else "run_equivalence", run)
+    monkeypatch.chdir(root)
+
+    arguments = [
+        "run",
+        "--profile",
+        profile,
+        "--dataset",
+        DATASET,
+        "--run-dir",
+        str(run_dir),
+        "--fixture",
+        "--fresh-processes",
+        "3",
+        "--fresh-workers",
+        "2",
+        "--warmups",
+        "4",
+        "--iterations",
+        "6",
+        "--worker-timeout-seconds",
+        "7.5",
+    ]
+    if profile == "equivalence":
+        arguments.extend(["--pair", "csv-tsv"])
+    cli.main(arguments)
+
+    config = captured[0]
+    assert (config.fresh_processes, config.fresh_workers, config.warmups, config.iterations) == (3, 2, 4, 6)
+    assert config.timeout_seconds == 7.5
+
+
 def test_cli_validates_robustness_profile_options() -> None:
     invalid_profiles = (
         (["--profile", "robustness"], "--suite bounded"),
