@@ -130,6 +130,7 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
     )
     registered = selected or adapter_map()
     if not run_manifest["formats"]:
+        # LLM contract: empty verification selection transitions ENCODED -> FAILED with a failure reason.
         run_manifest["state"] = transition(
             ExecutionState.ENCODED, ExecutionState.FAILED
         )
