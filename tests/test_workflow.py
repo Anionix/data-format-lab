@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 from format_bench import cli
-from format_bench.fair import FairOperation
+from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
 from format_bench.model import Comparability, Lane
@@ -39,7 +39,7 @@ class FailingAdapter:
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         raise NotImplementedError
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table:
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
         raise NotImplementedError
 
 
