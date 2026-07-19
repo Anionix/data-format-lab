@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import cast
+from pathlib import Path
+from typing import Protocol, cast
 
 from audit_github import LiveState, desired_issues
 from audit_tracker import AuditError, AuditItem
@@ -24,6 +26,10 @@ class ProjectEvidence:
     item_count: int
     field_count: int
     repository_linked: bool
+
+
+class RestReader(Protocol):
+    def get(self, path: str) -> object: ...
 
 
 # LLM contract: PLANNED -> APPLIED -> VERIFIED. This read-only Project
@@ -229,3 +235,166 @@ def read_project(
         _integer(field_result, "totalCount", "project fields"),
         linked,
     )
+
+
+def hierarchy_contract(
+    registry: dict[str, object], items: list[AuditItem], live: LiveState
+) -> tuple[dict[int, frozenset[int]], dict[int, frozenset[int]]]:
+    workstreams = [
+        _obj(raw, "workstream")
+        for raw in _list(registry.get("workstreams"), "workstreams")
+    ]
+    root = live.issues["DFL-AUDIT-ROOT"]
+    workstream_issues = {
+        _text(workstream, "key", "workstream"): live.issues[
+            f"DFL-AUDIT-WS-{_text(workstream, 'key', 'workstream').upper()}"
+        ]
+        for workstream in workstreams
+    }
+    children = {
+        root.number: frozenset(issue.number for issue in workstream_issues.values())
+    }
+    for key, parent in workstream_issues.items():
+        numbers = {
+            live.issues[item.id].number
+            for item in items
+            if item.disposition == "ISSUE" and item.workstream == key
+        }
+        if key == "robustness":
+            numbers.add(236)
+        children[parent.number] = frozenset(numbers)
+    children[236] = frozenset()
+    children.update({
+        live.issues[item.id].number: frozenset()
+        for item in items
+        if item.disposition == "ISSUE"
+    })
+
+    dependencies: dict[int, frozenset[int]] = {
+        root.number: frozenset(),
+        236: frozenset(),
+    }
+    for workstream in workstreams:
+        key = _text(workstream, "key", "workstream")
+        blocked_by = {
+            workstream_issues[blocker].number
+            for blocker in _strings(workstream.get("blocked_by"), "blocked_by")
+        }
+        dependencies[workstream_issues[key].number] = frozenset(blocked_by)
+    for item in items:
+        if item.disposition == "ISSUE":
+            dependencies[live.issues[item.id].number] = frozenset(
+                live.issues[blocker].number for blocker in item.dependencies
+            )
+    return children, dependencies
+
+
+def verify_hierarchy(
+    registry: dict[str, object],
+    items: list[AuditItem],
+    live: LiveState,
+    client: RestReader,
+) -> None:
+    repository = _text(registry, "repository", "registry")
+    children, dependencies = hierarchy_contract(registry, items, live)
+    requests: list[tuple[str, str, str, int, frozenset[int]]] = []
+    for parent, expected in children.items():
+        requests.append((
+            f"repos/{repository}/issues/{parent}/sub_issues?per_page=100",
+            "sub-issue",
+            "sub-issue hierarchy",
+            parent,
+            expected,
+        ))
+    for issue, expected in dependencies.items():
+        requests.append((
+            f"repos/{repository}/issues/{issue}/dependencies/blocked_by?per_page=100",
+            "dependency",
+            "blocking dependencies",
+            issue,
+            expected,
+        ))
+    blocking: dict[int, frozenset[int]] = {
+        issue: frozenset() for issue in dependencies
+    }
+    for issue, blockers in dependencies.items():
+        for blocker in blockers:
+            blocking[blocker] = blocking[blocker] | {issue}
+    for issue, expected in blocking.items():
+        requests.append((
+            f"repos/{repository}/issues/{issue}/dependencies/blocking?per_page=100",
+            "dependency",
+            "outbound dependencies",
+            issue,
+            expected,
+        ))
+
+    def mismatch(
+        request: tuple[str, str, str, int, frozenset[int]],
+    ) -> str | None:
+        path, item_name, label, issue, expected = request
+        rows = _list(client.get(path), f"{item_name} response")
+        objects = [_obj(raw, item_name) for raw in rows]
+        expected_repository = f"https://api.github.com/repos/{repository}"
+        if any(
+            _text(row, "repository_url", item_name) != expected_repository
+            for row in objects
+        ):
+            return f"{label} repository differs for issue #{issue}"
+        observed = frozenset(
+            _integer(row, "number", item_name) for row in objects
+        )
+        return None if observed == expected else f"{label} differs for issue #{issue}"
+
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        for error in executor.map(mismatch, requests):
+            if error is not None:
+                raise AuditError(error)
+
+
+def issue_map(
+    registry: dict[str, object],
+    items: list[AuditItem],
+    live: LiveState,
+    project: ProjectEvidence,
+) -> dict[str, object]:
+    repository = _text(registry, "repository", "registry")
+    github = _obj(registry.get("github"), "github")
+    config = _obj(github.get("project"), "github.project")
+    issues: list[dict[str, object]] = []
+    for spec in desired_issues(registry, items):
+        current = live.issues.get(spec.key)
+        if current is None:
+            raise AuditError(f"issue map is missing {spec.key}")
+        issues.append({
+            "audit_id": spec.key,
+            "issue_number": current.number,
+            "repository_path": f"/{repository}/issues/{current.number}",
+        })
+    return {
+        "schema_version": "audit_issue_map/v1",
+        "repository": repository,
+        "issues": issues,
+        "existing_issues": github.get("existing_issues"),
+        "project": {
+            "number": project.number,
+            "url": project.url,
+            "item_count": project.item_count,
+            "field_count": project.field_count,
+            "repository_linked": project.repository_linked,
+        },
+        "pending_ui": {
+            "project_views": [] if config.get("views_verified") else config.get("views"),
+            "saved_issue_views": (
+                [] if github.get("saved_views_verified") else github.get("saved_views")
+            ),
+        },
+    }
+
+
+def write_issue_map(path: Path, value: dict[str, object]) -> None:
+    temporary = path.with_suffix(f"{path.suffix}.tmp")
+    temporary.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)

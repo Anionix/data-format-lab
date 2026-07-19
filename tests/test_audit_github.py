@@ -297,8 +297,14 @@ def test_verify_cli_gates_transition_on_project_readback(
     monkeypatch.setattr(Path, "read_text", lambda _path: "report\n")
     monkeypatch.setattr(github, "GitHubRest", lambda: object())
     monkeypatch.setattr(github, "read_live", lambda *_args: live)
+    evidence = project.ProjectEvidence(15, "project", 102, 19, True)
     monkeypatch.setattr(
-        project, "read_project", lambda *_args: calls.append("project")
+        project,
+        "read_project",
+        lambda *_args: calls.append("project") or evidence,
+    )
+    monkeypatch.setattr(
+        project, "verify_hierarchy", lambda *_args: calls.append("hierarchy")
     )
     monkeypatch.setattr(
         github,
@@ -308,6 +314,86 @@ def test_verify_cli_gates_transition_on_project_readback(
     monkeypatch.setattr(
         github, "synchronized_registry", lambda *_args: registry
     )
+    monkeypatch.setattr(
+        project, "issue_map", lambda *_args: calls.append("map") or {}
+    )
+    monkeypatch.setattr(project, "write_issue_map", lambda *_args: None)
 
     assert tracker.main(["verify"]) == 0
-    assert calls == ["project", "transition"]
+    assert calls == ["project", "hierarchy", "map", "transition", "map"]
+
+
+def test_hierarchy_and_issue_map_are_contract_driven(tmp_path: Path) -> None:
+    tracker = _module("audit_tracker")
+    github = _module("audit_github")
+    project = _module("audit_project")
+    registry = _registry()
+    items = tracker.validate_registry(registry)
+    specs = github.desired_issues(registry, items)
+    live_issues = {
+        spec.key: github.LiveIssue(
+            number, spec.title, spec.body, frozenset(spec.labels), spec.milestone
+        )
+        for number, spec in enumerate(specs, start=238)
+    }
+    live = github.LiveState(
+        {}, {}, live_issues, github.LiveIssue(236, "", "", frozenset(), None)
+    )
+    children, dependencies = project.hierarchy_contract(registry, items, live)
+    blocking = {issue: set() for issue in dependencies}
+    for issue, blockers in dependencies.items():
+        for blocker in blockers:
+            blocking[blocker].add(issue)
+
+    class FakeRest:
+        def get(self, path: str) -> list[dict[str, object]]:
+            number = int(path.split("/issues/", 1)[1].split("/", 1)[0])
+            if "/dependencies/blocked_by" in path:
+                expected = dependencies[number]
+            elif "/dependencies/blocking" in path:
+                expected = blocking[number]
+            else:
+                expected = children[number]
+            return [
+                {
+                    "number": issue_number,
+                    "repository_url": "https://api.github.com/repos/Anionix/data-format-lab",
+                }
+                for issue_number in sorted(expected)
+            ]
+
+    project.verify_hierarchy(registry, items, live, FakeRest())
+    assert len(children) == 102
+    assert sum(len(value) for value in children.values()) == 101
+    assert len(dependencies) == len(blocking) == 102
+
+    class WrongRepositoryRest(FakeRest):
+        def get(self, path: str) -> list[dict[str, object]]:
+            rows = super().get(path)
+            if rows:
+                rows[0]["repository_url"] = "https://api.github.com/repos/Anionix/other"
+            return rows
+
+    with pytest.raises(tracker.AuditError, match="repository differs"):
+        project.verify_hierarchy(registry, items, live, WrongRepositoryRest())
+
+    evidence = project.ProjectEvidence(15, "project", 102, 19, True)
+    mapping = project.issue_map(registry, items, live, evidence)
+    output = tmp_path / "issue-map.json"
+    project.write_issue_map(output, mapping)
+    first = output.read_bytes()
+    project.write_issue_map(output, mapping)
+
+    assert output.read_bytes() == first
+    assert len(mapping["issues"]) == 101
+    assert mapping["issues"][0]["repository_path"].startswith(
+        "/Anionix/data-format-lab/issues/"
+    )
+    assert len(mapping["pending_ui"]["project_views"]) == 6
+
+    registry["github"]["project"]["views_verified"] = True
+    registry["github"]["saved_views_verified"] = True
+    assert project.issue_map(registry, items, live, evidence)["pending_ui"] == {
+        "project_views": [],
+        "saved_issue_views": [],
+    }
