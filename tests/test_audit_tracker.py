@@ -195,6 +195,8 @@ def test_registry_pins_github_plan_and_synced_issue_numbers() -> None:
     for number, issue in enumerate(issues, start=300):
         issue["issue_number"] = number
     registry["github"]["sync_state"] = "VERIFIED"
+    registry["github"]["project"]["views_verified"] = False
+    registry["github"]["saved_views_verified"] = False
     with pytest.raises(tracker.AuditError, match="verified project and saved views"):
         tracker.validate_registry(registry)
 

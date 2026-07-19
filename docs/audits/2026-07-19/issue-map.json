@@ -1,0 +1,531 @@
+{
+  "schema_version": "audit_issue_map/v1",
+  "repository": "Anionix/data-format-lab",
+  "issues": [
+    {
+      "audit_id": "DFL-AUDIT-ROOT",
+      "issue_number": 238,
+      "repository_path": "/Anionix/data-format-lab/issues/238"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-CORRECTNESS",
+      "issue_number": 239,
+      "repository_path": "/Anionix/data-format-lab/issues/239"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-MEASUREMENT",
+      "issue_number": 240,
+      "repository_path": "/Anionix/data-format-lab/issues/240"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-CAUSAL-VALIDITY",
+      "issue_number": 241,
+      "repository_path": "/Anionix/data-format-lab/issues/241"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-STATISTICS",
+      "issue_number": 242,
+      "repository_path": "/Anionix/data-format-lab/issues/242"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-FORMAT-COVERAGE",
+      "issue_number": 243,
+      "repository_path": "/Anionix/data-format-lab/issues/243"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-PROVENANCE",
+      "issue_number": 244,
+      "repository_path": "/Anionix/data-format-lab/issues/244"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-EXTERNAL-VALIDITY",
+      "issue_number": 245,
+      "repository_path": "/Anionix/data-format-lab/issues/245"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-TYPING",
+      "issue_number": 246,
+      "repository_path": "/Anionix/data-format-lab/issues/246"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-ROBUSTNESS",
+      "issue_number": 247,
+      "repository_path": "/Anionix/data-format-lab/issues/247"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-RELEASE",
+      "issue_number": 248,
+      "repository_path": "/Anionix/data-format-lab/issues/248"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-SECURITY",
+      "issue_number": 249,
+      "repository_path": "/Anionix/data-format-lab/issues/249"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-DOCUMENTATION",
+      "issue_number": 250,
+      "repository_path": "/Anionix/data-format-lab/issues/250"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-PRODUCT-UX",
+      "issue_number": 251,
+      "repository_path": "/Anionix/data-format-lab/issues/251"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-CODEX-NARRATIVE",
+      "issue_number": 252,
+      "repository_path": "/Anionix/data-format-lab/issues/252"
+    },
+    {
+      "audit_id": "DFL-AUDIT-WS-SUBMISSION",
+      "issue_number": 253,
+      "repository_path": "/Anionix/data-format-lab/issues/253"
+    },
+    {
+      "audit_id": "DFL-AUDIT-012",
+      "issue_number": 254,
+      "repository_path": "/Anionix/data-format-lab/issues/254"
+    },
+    {
+      "audit_id": "DFL-AUDIT-016",
+      "issue_number": 255,
+      "repository_path": "/Anionix/data-format-lab/issues/255"
+    },
+    {
+      "audit_id": "DFL-AUDIT-017",
+      "issue_number": 256,
+      "repository_path": "/Anionix/data-format-lab/issues/256"
+    },
+    {
+      "audit_id": "DFL-AUDIT-018",
+      "issue_number": 257,
+      "repository_path": "/Anionix/data-format-lab/issues/257"
+    },
+    {
+      "audit_id": "DFL-AUDIT-022",
+      "issue_number": 258,
+      "repository_path": "/Anionix/data-format-lab/issues/258"
+    },
+    {
+      "audit_id": "DFL-AUDIT-030",
+      "issue_number": 259,
+      "repository_path": "/Anionix/data-format-lab/issues/259"
+    },
+    {
+      "audit_id": "DFL-AUDIT-031",
+      "issue_number": 260,
+      "repository_path": "/Anionix/data-format-lab/issues/260"
+    },
+    {
+      "audit_id": "DFL-AUDIT-032",
+      "issue_number": 261,
+      "repository_path": "/Anionix/data-format-lab/issues/261"
+    },
+    {
+      "audit_id": "DFL-AUDIT-034",
+      "issue_number": 262,
+      "repository_path": "/Anionix/data-format-lab/issues/262"
+    },
+    {
+      "audit_id": "DFL-AUDIT-035",
+      "issue_number": 263,
+      "repository_path": "/Anionix/data-format-lab/issues/263"
+    },
+    {
+      "audit_id": "DFL-AUDIT-036",
+      "issue_number": 264,
+      "repository_path": "/Anionix/data-format-lab/issues/264"
+    },
+    {
+      "audit_id": "DFL-AUDIT-037",
+      "issue_number": 265,
+      "repository_path": "/Anionix/data-format-lab/issues/265"
+    },
+    {
+      "audit_id": "DFL-AUDIT-039",
+      "issue_number": 266,
+      "repository_path": "/Anionix/data-format-lab/issues/266"
+    },
+    {
+      "audit_id": "DFL-AUDIT-040",
+      "issue_number": 267,
+      "repository_path": "/Anionix/data-format-lab/issues/267"
+    },
+    {
+      "audit_id": "DFL-AUDIT-043",
+      "issue_number": 268,
+      "repository_path": "/Anionix/data-format-lab/issues/268"
+    },
+    {
+      "audit_id": "DFL-AUDIT-047",
+      "issue_number": 269,
+      "repository_path": "/Anionix/data-format-lab/issues/269"
+    },
+    {
+      "audit_id": "DFL-AUDIT-049",
+      "issue_number": 270,
+      "repository_path": "/Anionix/data-format-lab/issues/270"
+    },
+    {
+      "audit_id": "DFL-AUDIT-050",
+      "issue_number": 271,
+      "repository_path": "/Anionix/data-format-lab/issues/271"
+    },
+    {
+      "audit_id": "DFL-AUDIT-051",
+      "issue_number": 272,
+      "repository_path": "/Anionix/data-format-lab/issues/272"
+    },
+    {
+      "audit_id": "DFL-AUDIT-052",
+      "issue_number": 273,
+      "repository_path": "/Anionix/data-format-lab/issues/273"
+    },
+    {
+      "audit_id": "DFL-AUDIT-053",
+      "issue_number": 274,
+      "repository_path": "/Anionix/data-format-lab/issues/274"
+    },
+    {
+      "audit_id": "DFL-AUDIT-054",
+      "issue_number": 275,
+      "repository_path": "/Anionix/data-format-lab/issues/275"
+    },
+    {
+      "audit_id": "DFL-AUDIT-055",
+      "issue_number": 276,
+      "repository_path": "/Anionix/data-format-lab/issues/276"
+    },
+    {
+      "audit_id": "DFL-AUDIT-056",
+      "issue_number": 277,
+      "repository_path": "/Anionix/data-format-lab/issues/277"
+    },
+    {
+      "audit_id": "DFL-AUDIT-057",
+      "issue_number": 278,
+      "repository_path": "/Anionix/data-format-lab/issues/278"
+    },
+    {
+      "audit_id": "DFL-AUDIT-058",
+      "issue_number": 279,
+      "repository_path": "/Anionix/data-format-lab/issues/279"
+    },
+    {
+      "audit_id": "DFL-AUDIT-064",
+      "issue_number": 280,
+      "repository_path": "/Anionix/data-format-lab/issues/280"
+    },
+    {
+      "audit_id": "DFL-AUDIT-072",
+      "issue_number": 281,
+      "repository_path": "/Anionix/data-format-lab/issues/281"
+    },
+    {
+      "audit_id": "DFL-AUDIT-078",
+      "issue_number": 282,
+      "repository_path": "/Anionix/data-format-lab/issues/282"
+    },
+    {
+      "audit_id": "DFL-AUDIT-080",
+      "issue_number": 283,
+      "repository_path": "/Anionix/data-format-lab/issues/283"
+    },
+    {
+      "audit_id": "DFL-AUDIT-081",
+      "issue_number": 284,
+      "repository_path": "/Anionix/data-format-lab/issues/284"
+    },
+    {
+      "audit_id": "DFL-AUDIT-082",
+      "issue_number": 285,
+      "repository_path": "/Anionix/data-format-lab/issues/285"
+    },
+    {
+      "audit_id": "DFL-AUDIT-083",
+      "issue_number": 286,
+      "repository_path": "/Anionix/data-format-lab/issues/286"
+    },
+    {
+      "audit_id": "DFL-AUDIT-086",
+      "issue_number": 287,
+      "repository_path": "/Anionix/data-format-lab/issues/287"
+    },
+    {
+      "audit_id": "DFL-AUDIT-087",
+      "issue_number": 288,
+      "repository_path": "/Anionix/data-format-lab/issues/288"
+    },
+    {
+      "audit_id": "DFL-AUDIT-088",
+      "issue_number": 289,
+      "repository_path": "/Anionix/data-format-lab/issues/289"
+    },
+    {
+      "audit_id": "DFL-AUDIT-089",
+      "issue_number": 290,
+      "repository_path": "/Anionix/data-format-lab/issues/290"
+    },
+    {
+      "audit_id": "DFL-AUDIT-090",
+      "issue_number": 291,
+      "repository_path": "/Anionix/data-format-lab/issues/291"
+    },
+    {
+      "audit_id": "DFL-AUDIT-092",
+      "issue_number": 292,
+      "repository_path": "/Anionix/data-format-lab/issues/292"
+    },
+    {
+      "audit_id": "DFL-AUDIT-094",
+      "issue_number": 293,
+      "repository_path": "/Anionix/data-format-lab/issues/293"
+    },
+    {
+      "audit_id": "DFL-AUDIT-095",
+      "issue_number": 294,
+      "repository_path": "/Anionix/data-format-lab/issues/294"
+    },
+    {
+      "audit_id": "DFL-AUDIT-096",
+      "issue_number": 295,
+      "repository_path": "/Anionix/data-format-lab/issues/295"
+    },
+    {
+      "audit_id": "DFL-AUDIT-097",
+      "issue_number": 296,
+      "repository_path": "/Anionix/data-format-lab/issues/296"
+    },
+    {
+      "audit_id": "DFL-AUDIT-098",
+      "issue_number": 297,
+      "repository_path": "/Anionix/data-format-lab/issues/297"
+    },
+    {
+      "audit_id": "DFL-AUDIT-100",
+      "issue_number": 298,
+      "repository_path": "/Anionix/data-format-lab/issues/298"
+    },
+    {
+      "audit_id": "DFL-AUDIT-102",
+      "issue_number": 299,
+      "repository_path": "/Anionix/data-format-lab/issues/299"
+    },
+    {
+      "audit_id": "DFL-AUDIT-107",
+      "issue_number": 300,
+      "repository_path": "/Anionix/data-format-lab/issues/300"
+    },
+    {
+      "audit_id": "DFL-AUDIT-108",
+      "issue_number": 301,
+      "repository_path": "/Anionix/data-format-lab/issues/301"
+    },
+    {
+      "audit_id": "DFL-AUDIT-117",
+      "issue_number": 302,
+      "repository_path": "/Anionix/data-format-lab/issues/302"
+    },
+    {
+      "audit_id": "DFL-AUDIT-121",
+      "issue_number": 303,
+      "repository_path": "/Anionix/data-format-lab/issues/303"
+    },
+    {
+      "audit_id": "DFL-AUDIT-122",
+      "issue_number": 304,
+      "repository_path": "/Anionix/data-format-lab/issues/304"
+    },
+    {
+      "audit_id": "DFL-AUDIT-127",
+      "issue_number": 305,
+      "repository_path": "/Anionix/data-format-lab/issues/305"
+    },
+    {
+      "audit_id": "DFL-AUDIT-128",
+      "issue_number": 306,
+      "repository_path": "/Anionix/data-format-lab/issues/306"
+    },
+    {
+      "audit_id": "DFL-AUDIT-129",
+      "issue_number": 307,
+      "repository_path": "/Anionix/data-format-lab/issues/307"
+    },
+    {
+      "audit_id": "DFL-AUDIT-131",
+      "issue_number": 308,
+      "repository_path": "/Anionix/data-format-lab/issues/308"
+    },
+    {
+      "audit_id": "DFL-AUDIT-132",
+      "issue_number": 309,
+      "repository_path": "/Anionix/data-format-lab/issues/309"
+    },
+    {
+      "audit_id": "DFL-AUDIT-133",
+      "issue_number": 310,
+      "repository_path": "/Anionix/data-format-lab/issues/310"
+    },
+    {
+      "audit_id": "DFL-AUDIT-135",
+      "issue_number": 311,
+      "repository_path": "/Anionix/data-format-lab/issues/311"
+    },
+    {
+      "audit_id": "DFL-AUDIT-139",
+      "issue_number": 312,
+      "repository_path": "/Anionix/data-format-lab/issues/312"
+    },
+    {
+      "audit_id": "DFL-AUDIT-144",
+      "issue_number": 313,
+      "repository_path": "/Anionix/data-format-lab/issues/313"
+    },
+    {
+      "audit_id": "DFL-AUDIT-145",
+      "issue_number": 314,
+      "repository_path": "/Anionix/data-format-lab/issues/314"
+    },
+    {
+      "audit_id": "DFL-AUDIT-148",
+      "issue_number": 315,
+      "repository_path": "/Anionix/data-format-lab/issues/315"
+    },
+    {
+      "audit_id": "DFL-AUDIT-149",
+      "issue_number": 316,
+      "repository_path": "/Anionix/data-format-lab/issues/316"
+    },
+    {
+      "audit_id": "DFL-AUDIT-150",
+      "issue_number": 317,
+      "repository_path": "/Anionix/data-format-lab/issues/317"
+    },
+    {
+      "audit_id": "DFL-AUDIT-151",
+      "issue_number": 318,
+      "repository_path": "/Anionix/data-format-lab/issues/318"
+    },
+    {
+      "audit_id": "DFL-AUDIT-152",
+      "issue_number": 319,
+      "repository_path": "/Anionix/data-format-lab/issues/319"
+    },
+    {
+      "audit_id": "DFL-AUDIT-153",
+      "issue_number": 320,
+      "repository_path": "/Anionix/data-format-lab/issues/320"
+    },
+    {
+      "audit_id": "DFL-AUDIT-154",
+      "issue_number": 321,
+      "repository_path": "/Anionix/data-format-lab/issues/321"
+    },
+    {
+      "audit_id": "DFL-AUDIT-155",
+      "issue_number": 322,
+      "repository_path": "/Anionix/data-format-lab/issues/322"
+    },
+    {
+      "audit_id": "DFL-AUDIT-157",
+      "issue_number": 323,
+      "repository_path": "/Anionix/data-format-lab/issues/323"
+    },
+    {
+      "audit_id": "DFL-AUDIT-159",
+      "issue_number": 324,
+      "repository_path": "/Anionix/data-format-lab/issues/324"
+    },
+    {
+      "audit_id": "DFL-AUDIT-161",
+      "issue_number": 325,
+      "repository_path": "/Anionix/data-format-lab/issues/325"
+    },
+    {
+      "audit_id": "DFL-AUDIT-162",
+      "issue_number": 326,
+      "repository_path": "/Anionix/data-format-lab/issues/326"
+    },
+    {
+      "audit_id": "DFL-AUDIT-163",
+      "issue_number": 327,
+      "repository_path": "/Anionix/data-format-lab/issues/327"
+    },
+    {
+      "audit_id": "DFL-AUDIT-164",
+      "issue_number": 328,
+      "repository_path": "/Anionix/data-format-lab/issues/328"
+    },
+    {
+      "audit_id": "DFL-AUDIT-165",
+      "issue_number": 329,
+      "repository_path": "/Anionix/data-format-lab/issues/329"
+    },
+    {
+      "audit_id": "DFL-AUDIT-166",
+      "issue_number": 330,
+      "repository_path": "/Anionix/data-format-lab/issues/330"
+    },
+    {
+      "audit_id": "DFL-AUDIT-167",
+      "issue_number": 331,
+      "repository_path": "/Anionix/data-format-lab/issues/331"
+    },
+    {
+      "audit_id": "DFL-AUDIT-168",
+      "issue_number": 332,
+      "repository_path": "/Anionix/data-format-lab/issues/332"
+    },
+    {
+      "audit_id": "DFL-AUDIT-169",
+      "issue_number": 333,
+      "repository_path": "/Anionix/data-format-lab/issues/333"
+    },
+    {
+      "audit_id": "DFL-AUDIT-170",
+      "issue_number": 334,
+      "repository_path": "/Anionix/data-format-lab/issues/334"
+    },
+    {
+      "audit_id": "DFL-AUDIT-171",
+      "issue_number": 335,
+      "repository_path": "/Anionix/data-format-lab/issues/335"
+    },
+    {
+      "audit_id": "DFL-AUDIT-172",
+      "issue_number": 336,
+      "repository_path": "/Anionix/data-format-lab/issues/336"
+    },
+    {
+      "audit_id": "DFL-AUDIT-173",
+      "issue_number": 337,
+      "repository_path": "/Anionix/data-format-lab/issues/337"
+    },
+    {
+      "audit_id": "DFL-AUDIT-174",
+      "issue_number": 338,
+      "repository_path": "/Anionix/data-format-lab/issues/338"
+    }
+  ],
+  "existing_issues": [
+    {
+      "number": 236,
+      "workstream": "robustness",
+      "priority": "P1",
+      "milestone": "Audit M1 - Evidence Integrity",
+      "level": "Existing"
+    }
+  ],
+  "project": {
+    "number": 15,
+    "url": "https://github.com/users/Anionix/projects/15",
+    "item_count": 102,
+    "field_count": 19,
+    "repository_linked": true
+  },
+  "pending_ui": {
+    "project_views": [],
+    "saved_issue_views": []
+  }
+}

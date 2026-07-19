@@ -28,6 +28,9 @@ def test_desired_issue_contract_and_foundation_plan() -> None:
     tracker = _module("audit_tracker")
     github = _module("audit_github")
     registry = _registry()
+    registry["github"]["sync_state"] = "APPLIED"
+    registry["github"]["project"]["views_verified"] = False
+    registry["github"]["saved_views_verified"] = False
     items = tracker.validate_registry(registry)
     specs = github.desired_issues(registry, items)
 
@@ -47,6 +50,9 @@ def test_issue_plan_converges_to_no_op() -> None:
     tracker = _module("audit_tracker")
     github = _module("audit_github")
     registry = _registry()
+    registry["github"]["sync_state"] = "APPLIED"
+    registry["github"]["project"]["views_verified"] = False
+    registry["github"]["saved_views_verified"] = False
     items = tracker.validate_registry(registry)
     specs = github.desired_issues(registry, items)
     config = registry["github"]
@@ -185,6 +191,9 @@ def test_project_contract_checks_identity_items_and_field_types(
     github = _module("audit_github")
     project = _module("audit_project")
     registry = _registry()
+    registry["github"]["sync_state"] = "APPLIED"
+    registry["github"]["project"]["views_verified"] = False
+    registry["github"]["saved_views_verified"] = False
     items = tracker.validate_registry(registry)
     specs = github.desired_issues(registry, items)
     live_issues = {
@@ -328,6 +337,9 @@ def test_hierarchy_and_issue_map_are_contract_driven(tmp_path: Path) -> None:
     github = _module("audit_github")
     project = _module("audit_project")
     registry = _registry()
+    registry["github"]["sync_state"] = "APPLIED"
+    registry["github"]["project"]["views_verified"] = False
+    registry["github"]["saved_views_verified"] = False
     items = tracker.validate_registry(registry)
     specs = github.desired_issues(registry, items)
     live_issues = {

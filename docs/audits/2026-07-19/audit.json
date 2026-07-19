@@ -221,7 +221,7 @@
           "filter": "status:Done,\"Accepted risk\""
         }
       ],
-      "views_verified": false,
+      "views_verified": true,
       "fields": [
         {
           "name": "Status",
@@ -323,7 +323,7 @@
         "query": "repo:Anionix/data-format-lab is:issue is:open label:audit:2026-07-19 label:bug"
       }
     ],
-    "saved_views_verified": false,
+    "saved_views_verified": true,
     "ui_readback": {
       "path": "docs/audits/2026-07-19/ui-readback.json",
       "sha256": "0e1d459e678ec40b261c65c6608c4d8ca6e8651d70ddf1f3bdf74cc33c36aecb"
@@ -337,7 +337,7 @@
         "level": "Existing"
       }
     ],
-    "sync_state": "APPLIED"
+    "sync_state": "VERIFIED"
   },
   "items": [
     {
