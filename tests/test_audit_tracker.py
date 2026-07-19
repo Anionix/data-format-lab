@@ -149,6 +149,17 @@ def test_registry_pins_github_plan_and_synced_issue_numbers() -> None:
         tracker.validate_registry(registry)
 
 
+def test_registry_pins_item_workstream_assignments() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    issue = next(item for item in registry["items"] if item["disposition"] == "ISSUE")
+    issue["workstream"] = "submission"
+    issue["milestone"] = "Audit M0 - Submission Ready"
+
+    with pytest.raises(tracker.AuditError, match="triage assignments"):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
     tracker = _tracker()
     registry = _registry()

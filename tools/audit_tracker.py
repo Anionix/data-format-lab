@@ -17,6 +17,7 @@ REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
 GITHUB_PLAN_DIGEST = "1e1f07cfd0deb5117bdcb1db845f9d2d96994fcf59ac42e51d03ac6cf1cf9ba6"
+TRIAGE_DIGEST = "a2837f8456b0511d2b5620be00cb6d26b4f3ff4fde471525c3292a0ff810cd3a"
 AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
 AUDIT_DATE = "2026-07-19"
 REPOSITORY = "Anionix/data-format-lab"
@@ -285,6 +286,24 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     if sync_state != "PLANNED" and len(set(synced_numbers)) != 85:
         raise AuditError("synced issue numbers must be present and unique")
     _assert_graph_acyclic({item.id: item.dependencies for item in items}, "item")
+    triage_keys = (
+        "id", "severity", "disposition", "workstream", "priority", "owner",
+        "milestone", "dependencies", "labels", "readiness_label",
+    )
+    triage = {
+        "workstreams": workstreams,
+        "items": [
+            [_mapping(value, "item").get(key) for key in triage_keys]
+            for value in _sequence(registry.get("items"), "items")
+        ],
+    }
+    triage_digest = hashlib.sha256(
+        json.dumps(
+            triage, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    if triage_digest != TRIAGE_DIGEST:
+        raise AuditError("triage assignments differ from the canonical audit plan")
     return items
 
 
