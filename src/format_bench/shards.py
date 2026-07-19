@@ -129,13 +129,26 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
             f"{name}.artifact",
             allow_missing=terminal_without_artifact,
         )
+        state = entry.get("state")
+        active_state = state in {
+            ExecutionState.ROUNDTRIP_VERIFIED,
+            ExecutionState.BENCHMARKED,
+        }
+        # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED advances active evidence
+        # without changing artifact identity; pre-verification states cannot advance.
+        if not terminal_without_artifact and not active_state:
+            raise ValueError(f"{name}.state is not verified for shard identity")
+        identity_state = state if terminal_without_artifact else None
+        identity_failure = (
+            entry.get("failure_reason") if terminal_without_artifact else None
+        )
         identities[name] = {
             "artifact": entry["artifact"],
             "lane": entry.get("lane"),
             "comparability": entry.get("comparability"),
             "settings": entry.get("settings"),
-            "state": entry.get("state"),
-            "failure_reason": entry.get("failure_reason"),
+            "state": identity_state,
+            "failure_reason": identity_failure,
             "native_bytes": entry.get("native_bytes"),
             "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
             "artifact_sha256": _sha256(artifact) if artifact.exists() else None,

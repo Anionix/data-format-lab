@@ -101,6 +101,52 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     assert not any(path.is_symlink() for path in output.rglob("*"))
 
 
+def test_merge_equivalence_shards_normalizes_active_format_state(
+    tmp_path: Path,
+) -> None:
+    base = tmp_path / "base"
+    _write(base / "input" / "manifest.json", {"rows": 4})
+    (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    _write(base / "artifacts" / "arrow.arrow", {"format": "arrow"})
+    _write(base / "artifacts" / "feather.feather", {"format": "feather"})
+    _write(base / "manifest.json", _manifest())
+
+    shard = tmp_path / "shards" / "arrow-feather"
+    shard_manifest = _manifest()
+    shard_manifest["state"] = "BENCHMARKED"
+    shard_manifest["formats"][0]["state"] = "BENCHMARKED"
+    _write(shard / "input" / "manifest.json", {"rows": 4})
+    (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+    _write(shard / "artifacts" / "arrow.arrow", {"format": "arrow"})
+    _write(shard / "artifacts" / "feather.feather", {"format": "feather"})
+    _write(shard / "manifest.json", shard_manifest)
+    _write(shard / "results.json", _shard_results("arrow-feather", "arrow_ipc"))
+
+    merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
+
+
+@pytest.mark.parametrize("state", ["DISCOVERED", "ENCODED"])
+def test_merge_equivalence_shards_rejects_preverification_format_state(
+    tmp_path: Path, state: str
+) -> None:
+    base = tmp_path / "base"
+    shard = tmp_path / "shards" / "arrow-feather"
+    for run in (base, shard):
+        _write(run / "input" / "manifest.json", {"rows": 4})
+        (run / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
+        _write(run / "artifacts" / "arrow.arrow", {"format": "arrow"})
+        _write(run / "artifacts" / "feather.feather", {"format": "feather"})
+    _write(base / "manifest.json", _manifest())
+    shard_manifest = _manifest()
+    shard_manifest["state"] = "BENCHMARKED"
+    shard_manifest["formats"][0]["state"] = state
+    _write(shard / "manifest.json", shard_manifest)
+    _write(shard / "results.json", _shard_results("arrow-feather", "arrow_ipc"))
+
+    with pytest.raises(ValueError, match="not verified for shard identity"):
+        merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
+
+
 def test_merge_equivalence_shards_preserves_failed_evidence_without_artifact(
     tmp_path: Path,
 ) -> None:
@@ -169,8 +215,9 @@ def test_merge_equivalence_shards_rejects_terminal_format_benchmark(
         merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
 
 
-def test_merge_equivalence_shards_rejects_terminal_state_mismatch(
-    tmp_path: Path,
+@pytest.mark.parametrize("identity_field", ["state", "failure_reason"])
+def test_merge_equivalence_shards_rejects_terminal_identity_mismatch(
+    tmp_path: Path, identity_field: str
 ) -> None:
     base = tmp_path / "base"
     _write(base / "input" / "manifest.json", {"rows": 4})
@@ -185,7 +232,12 @@ def test_merge_equivalence_shards_rejects_terminal_state_mismatch(
     shard = tmp_path / "shards" / "mismatch"
     shard_manifest = _manifest()
     shard_manifest["state"] = "BENCHMARKED"
-    shard_manifest["formats"][2]["state"] = "UNSUPPORTED"
+    shard_manifest["formats"][2]["state"] = "FAILED"
+    shard_manifest["formats"][2]["failure_reason"] = "adapter failed"
+    if identity_field == "state":
+        shard_manifest["formats"][2]["state"] = "UNSUPPORTED"
+    else:
+        shard_manifest["formats"][2]["failure_reason"] = "different failure"
     _write(shard / "input" / "manifest.json", {"rows": 4})
     (shard / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")
     _write(shard / "artifacts" / "arrow.arrow", {"format": "arrow"})
