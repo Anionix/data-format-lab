@@ -286,7 +286,19 @@ def run_bounded(
     base = read_csv(run_dir / run["input"]["source"], dataset)
     cases = list(named_cases()) + list(generated_cases(seed, generated_count))
     if run["fixture"]:
-        keep = {"rows-1", "malformed-missing-column", "malformed-truncated"}
+        # Keep one deterministic representative for each boundary family in CI.
+        keep = {
+            "rows-0",
+            "rows-1",
+            "rows-1024",
+            "rows-2049",
+            "dictionary-256",
+            "null-all",
+            "string-utf8",
+            "numeric-int64",
+            "malformed-missing-column",
+            "malformed-truncated",
+        }
         cases = [
             case
             for case in cases
