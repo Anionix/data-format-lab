@@ -2,6 +2,79 @@ from __future__ import annotations
 
 import statistics
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import TypedDict
+
+
+TargetSummary = TypedDict(
+    "TargetSummary",
+    {
+        "tier": str,
+        "cases": int,
+        "applicable": int,
+        "pass": int,
+        "fail": int,
+        "incomplete": int,
+        "crashed": int,
+        "timed_out": int,
+        "unsupported": int,
+        "harness_failed": int,
+        "budget_exhausted": int,
+        "duration_ms_p50": float | None,
+        "artifact_sha256": list[str],
+        "source_identities": list[str],
+    },
+)
+
+
+@dataclass
+class _TargetAccumulator:
+    tier: str
+    cases: int = 0
+    applicable: int = 0
+    passed: int = 0
+    fail: int = 0
+    incomplete: int = 0
+    crashed: int = 0
+    timed_out: int = 0
+    unsupported: int = 0
+    harness_failed: int = 0
+    budget_exhausted: int = 0
+    durations: list[float] = field(default_factory=list)
+    artifact_sha256: set[str] = field(default_factory=set)
+    source_identities: set[str] = field(default_factory=set)
+
+    def observe_outcome(self, observed: str) -> None:
+        if observed == "CRASHED":
+            self.crashed += 1
+        elif observed == "TIMED_OUT":
+            self.timed_out += 1
+        elif observed == "UNSUPPORTED":
+            self.unsupported += 1
+        elif observed == "HARNESS_FAILED":
+            self.harness_failed += 1
+        elif observed == "BUDGET_EXHAUSTED":
+            self.budget_exhausted += 1
+
+    def emit(self) -> TargetSummary:
+        return {
+            "tier": self.tier,
+            "cases": self.cases,
+            "applicable": self.applicable,
+            "pass": self.passed,
+            "fail": self.fail,
+            "incomplete": self.incomplete,
+            "crashed": self.crashed,
+            "timed_out": self.timed_out,
+            "unsupported": self.unsupported,
+            "harness_failed": self.harness_failed,
+            "budget_exhausted": self.budget_exhausted,
+            "duration_ms_p50": (
+                round(statistics.median(self.durations), 3) if self.durations else None
+            ),
+            "artifact_sha256": sorted(self.artifact_sha256),
+            "source_identities": sorted(self.source_identities),
+        }
 
 
 def _value(value: object) -> str:
@@ -24,75 +97,40 @@ def _hash_values(value: object) -> set[str]:
     return found
 
 
-def summarize_cases(cases: Sequence[Mapping[str, object]]) -> dict[str, dict[str, object]]:
+def summarize_cases(cases: Sequence[Mapping[str, object]]) -> dict[str, TargetSummary]:
     """Aggregate robustness cases without turning them into a score."""
 
-    groups: dict[str, dict[str, object]] = {}
+    groups: dict[str, _TargetAccumulator] = {}
     for case in cases:
         target = _value(case.get("target", "unknown"))
         group = groups.setdefault(
             target,
-            {
-                "tier": _value(case.get("tier", "N/A")),
-                "cases": 0,
-                "applicable": 0,
-                "pass": 0,
-                "fail": 0,
-                "incomplete": 0,
-                "crashed": 0,
-                "timed_out": 0,
-                "unsupported": 0,
-                "harness_failed": 0,
-                "budget_exhausted": 0,
-                "durations": [],
-                "artifact_sha256": set(),
-                "source_identities": set(),
-            },
+            _TargetAccumulator(tier=_value(case.get("tier", "N/A"))),
         )
-        group["cases"] = int(group["cases"]) + 1
+        group.cases += 1
         verdict = _value(case.get("verdict"))
         observed = _value(case.get("observed"))
         if verdict != "NOT_APPLICABLE":
-            group["applicable"] = int(group["applicable"]) + 1
+            group.applicable += 1
         if verdict == "PASS":
-            group["pass"] = int(group["pass"]) + 1
+            group.passed += 1
         elif verdict == "FAIL":
-            group["fail"] = int(group["fail"]) + 1
+            group.fail += 1
         elif verdict == "INCOMPLETE":
-            group["incomplete"] = int(group["incomplete"]) + 1
-        for outcome, field in {
-            "CRASHED": "crashed",
-            "TIMED_OUT": "timed_out",
-            "UNSUPPORTED": "unsupported",
-            "HARNESS_FAILED": "harness_failed",
-            "BUDGET_EXHAUSTED": "budget_exhausted",
-        }.items():
-            if observed == outcome:
-                group[field] = int(group[field]) + 1
+            group.incomplete += 1
+        group.observe_outcome(observed)
 
         process = case.get("process")
-        if isinstance(process, Mapping) and isinstance(process.get("duration_ms"), (int, float)):
-            durations = group["durations"]
-            assert isinstance(durations, list)
-            durations.append(float(process["duration_ms"]))
-        artifact_hashes = group["artifact_sha256"]
-        assert isinstance(artifact_hashes, set)
+        duration = process.get("duration_ms") if isinstance(process, Mapping) else None
+        if isinstance(duration, (int, float)):
+            group.durations.append(float(duration))
         records = case.get("artifact_records")
         if isinstance(records, Sequence) and not isinstance(records, (str, bytes)):
             for record in records:
-                artifact_hashes.update(_hash_values(record))
-        source_identities = group["source_identities"]
-        assert isinstance(source_identities, set)
-        source_identities.update(_hash_values(case.get("details")))
+                group.artifact_sha256.update(_hash_values(record))
+        group.source_identities.update(_hash_values(case.get("details")))
 
-    result: dict[str, dict[str, object]] = {}
+    result: dict[str, TargetSummary] = {}
     for target, group in sorted(groups.items()):
-        durations = group.pop("durations")
-        assert isinstance(durations, list)
-        group["duration_ms_p50"] = round(statistics.median(durations), 3) if durations else None
-        for field in ("artifact_sha256", "source_identities"):
-            values = group[field]
-            assert isinstance(values, set)
-            group[field] = sorted(values)
-        result[target] = group
+        result[target] = group.emit()
     return result
