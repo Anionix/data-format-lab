@@ -10,6 +10,7 @@ from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
 from format_bench.model import Comparability, Lane
+from format_bench.runner import MeasurementConfig
 from format_bench.workflow import prepare_run, verify_run
 
 
@@ -289,7 +290,7 @@ def test_cli_timeout_preserves_fixture_sampling_defaults(
 ) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"
-    captured: list[object] = []
+    captured: list[MeasurementConfig] = []
 
     def prepare(
         root: Path, dataset: str, destination: Path, *, fixture: bool, **kwargs
@@ -340,7 +341,7 @@ def test_cli_explicit_fixture_sampling_flags_override_defaults(
 ) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"
-    captured: list[object] = []
+    captured: list[MeasurementConfig] = []
 
     def prepare(
         root: Path, dataset: str, destination: Path, *, fixture: bool, **kwargs

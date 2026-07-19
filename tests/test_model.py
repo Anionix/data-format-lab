@@ -1,4 +1,6 @@
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -107,10 +109,11 @@ def test_dataset_asset_path_stays_under_the_run_root() -> None:
         expected_counts={"rows": 1},
     )
     assert spec.asset_path(Path("datasets")) == Path("datasets/source.csv")
+    mutable_counts = cast(dict[str, int], spec.expected_counts)
     with pytest.raises(TypeError):
-        spec.expected_counts["rows"] = 2
+        mutable_counts["rows"] = 2
 
-    unsafe = DatasetSpec(**{**spec.__dict__, "asset_name": "../source.csv"})
+    unsafe = replace(spec, asset_name="../source.csv")
     with pytest.raises(ValueError, match="safe relative path"):
         unsafe.asset_path(Path("datasets"))
 

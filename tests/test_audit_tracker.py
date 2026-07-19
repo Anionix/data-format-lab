@@ -4,8 +4,36 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import TypedDict, cast
 
 import pytest
+
+
+class _UiReadbackFixture(TypedDict):
+    path: str
+    sha256: str
+
+
+class _ProjectFixture(TypedDict):
+    views_verified: bool
+
+
+class _GitHubFixture(TypedDict):
+    sync_state: str
+    project: _ProjectFixture
+    saved_views_verified: bool
+    ui_readback: _UiReadbackFixture
+    labels: list[dict[str, object]]
+
+
+class _RegistryFixture(TypedDict):
+    source_digest: str
+    audited_commit: str
+    repository: str
+    method: str
+    github: _GitHubFixture
+    items: list[dict[str, object]]
+    workstreams: list[dict[str, object]]
 
 
 def _tracker() -> ModuleType:
@@ -18,9 +46,9 @@ def _tracker() -> ModuleType:
     return module
 
 
-def _registry() -> dict[str, object]:
+def _registry() -> _RegistryFixture:
     path = Path(__file__).parents[1] / "docs/audits/2026-07-19/audit.json"
-    return json.loads(path.read_text())
+    return cast(_RegistryFixture, json.loads(path.read_text()))
 
 
 def test_registry_matches_strict_audit_contract() -> None:
