@@ -51,8 +51,12 @@ class VortexAdapter:
         dataset = vortex.open(str(path)).to_dataset()
         limit = limit_for(operation, manifest["rows"], manifest)
         columns = columns_for(operation, manifest)
-        kwargs = {"columns": columns, "filter": arrow_filter(operation, manifest)}
-        table = dataset.head(limit, **kwargs) if limit is not None else dataset.to_table(**kwargs)
+        row_filter = arrow_filter(operation, manifest)
+        table = (
+            dataset.head(limit, columns=columns, filter=row_filter)
+            if limit is not None
+            else dataset.to_table(columns=columns, filter=row_filter)
+        )
         schema = arrow_schema(manifest)
         if columns:
             schema = pa.schema(schema.field(name) for name in columns)

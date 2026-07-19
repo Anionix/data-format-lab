@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import fastavro
 import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
-from format_bench.fair import OPERATIONS, apply_arrow, result_evidence
+from format_bench.fair import OPERATIONS, FairOperation, apply_arrow, result_evidence
 from format_bench.formats import (
     AvroAdapter,
     CborAdapter,
@@ -111,3 +112,15 @@ def test_avro_adapter_executes_the_declared_operations(
             apply_arrow(table, operation, manifest), operation, manifest
         )
         assert actual == expected
+
+
+def test_avro_scan_rejects_non_object_decoded_rows(
+    fixture_contract, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, _ = fixture_contract
+    path = tmp_path / "artifact.avro"
+    path.write_bytes(b"reader is replaced")
+    monkeypatch.setattr(fastavro, "reader", lambda _: iter([None]))
+
+    with pytest.raises(ValueError, match="non-object row"):
+        AvroAdapter().scan(path, manifest, FairOperation.READ_ALL)

@@ -125,6 +125,8 @@ class AvroAdapter:
             from fastavro import reader
 
             for row in reader(handle):
+                if not isinstance(row, dict):
+                    raise ValueError("serialized row payload contains a non-object row")
                 if spec.kind is WorkloadKind.FILTER:
                     value = row.get(spec.column or "")
                     if value is None:
