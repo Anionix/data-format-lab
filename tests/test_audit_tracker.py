@@ -43,6 +43,15 @@ def test_registry_rejects_original_score_drift_within_a_band() -> None:
         tracker.validate_registry(registry)
 
 
+def test_registry_rejects_severity_drift() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["items"][0]["severity"] = "HIGH"
+
+    with pytest.raises(tracker.AuditError, match="severity"):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_dependency_cycle() -> None:
     tracker = _tracker()
     registry = _registry()

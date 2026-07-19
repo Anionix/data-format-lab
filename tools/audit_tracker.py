@@ -40,6 +40,7 @@ class AuditItem:
     id: str
     criterion: str
     score: int
+    severity: str
     evidence: str
     disposition: str
     workstream: str
@@ -101,6 +102,7 @@ def _item(value: object) -> AuditItem:
         id=_text(data, "id", "item"),
         criterion=_text(data, "criterion", "item"),
         score=score,
+        severity=_text(data, "severity", "item"),
         evidence=_text(data, "evidence", "item"),
         disposition=_text(data, "disposition", "item"),
         workstream=_text(data, "workstream", "item"),
@@ -195,8 +197,14 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     _assert_graph_acyclic(workstream_graph, "workstream")
     for item in items:
         expected = "ISSUE" if item.score <= 5 else "MONITOR" if item.score <= 7 else "REGRESSION_GUARD"
+        expected_severity = (
+            "HIGH" if item.score <= 3 else "MEDIUM" if item.score <= 5
+            else "LOW" if item.score <= 7 else "INFORMATIONAL"
+        )
         if item.disposition != expected or item.workstream not in keys:
             raise AuditError(f"{item.id}: invalid disposition or workstream")
+        if item.severity != expected_severity:
+            raise AuditError(f"{item.id}: severity does not match original_score")
         if expected == "ISSUE" and None in (item.priority, item.milestone):
             raise AuditError(f"{item.id}: actionable fields are incomplete")
         expected_readiness = "ready-for-agent" if item.owner == "Agent" else "ready-for-human"
