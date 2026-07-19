@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 import pyarrow as pa
-import pyarrow.compute as pc
 
+from .arrow_compute import equal, greater, greater_equal, less, less_equal
 from .model import WorkloadKind, WorkloadSpec
 
 
@@ -71,16 +71,16 @@ def load_workloads(manifest: Mapping[str, object]) -> dict[str, WorkloadSpec]:
     return workloads
 
 
-def _predicate(spec: WorkloadSpec, table: pa.Table) -> pa.Array:
+def _predicate(spec: WorkloadSpec, table: pa.Table) -> pa.Array | pa.ChunkedArray:
     assert spec.column is not None
     assert spec.operator is not None
     values = table[spec.column]
     comparator = {
-        "eq": pc.equal,
-        "gt": pc.greater,
-        "gte": pc.greater_equal,
-        "lt": pc.less,
-        "lte": pc.less_equal,
+        "eq": equal,
+        "gt": greater,
+        "gte": greater_equal,
+        "lt": less,
+        "lte": less_equal,
     }[spec.operator]
     return comparator(values, spec.value)
 
