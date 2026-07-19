@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import re
 import tarfile
@@ -103,6 +104,27 @@ def _path_files(path: Path, run_root: Path) -> set[Path]:
     return files
 
 
+def _archive_relative_references(value: object, run_id: str) -> object:
+    prefix = f".data/{run_id}/"
+    if isinstance(value, str):
+        return value.removeprefix(prefix) if value.startswith(prefix) else value
+    if isinstance(value, list):
+        return [_archive_relative_references(item, run_id) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _archive_relative_references(item, run_id)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _archive_document(document: dict, run_id: str) -> bytes | None:
+    normalized = _archive_relative_references(document, run_id)
+    if normalized == document:
+        return None
+    return (json.dumps(normalized, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
     if run_dir.is_symlink():
         raise ValueError("release run directory must not be a symlink")
@@ -138,7 +160,11 @@ def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
 
 
 def _write_archive(
-    archive_path: Path, files: list[Path], run_dir: Path, run_id: str
+    archive_path: Path,
+    files: list[Path],
+    run_dir: Path,
+    run_id: str,
+    replacements: dict[Path, bytes],
 ) -> None:
     temporary: Path | None = None
     try:
@@ -158,12 +184,20 @@ def _write_archive(
                     for path in files:
                         relative = path.relative_to(run_dir)
                         info = tarfile.TarInfo(f"{run_id}/{relative.as_posix()}")
-                        info.size = path.stat().st_size
+                        replacement = replacements.get(path)
+                        info.size = (
+                            len(replacement)
+                            if replacement is not None
+                            else path.stat().st_size
+                        )
                         info.mode = 0o644
                         info.mtime = info.uid = info.gid = 0
                         info.uname = info.gname = ""
-                        with path.open("rb") as source:
-                            archive.addfile(info, source)
+                        if replacement is not None:
+                            archive.addfile(info, io.BytesIO(replacement))
+                        else:
+                            with path.open("rb") as source:
+                                archive.addfile(info, source)
         temporary.chmod(0o644)
         temporary.replace(archive_path)
     except Exception:
@@ -186,6 +220,8 @@ def package_run(run_dir: Path, output: Path, platform: str) -> Path:
     run_dir = run_dir.resolve()
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
+    # LLM lifecycle contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED ->
+    # BENCHMARKED -> REPORTED; UNSUPPORTED and FAILED are terminal and unrankable.
     if manifest["state"] != ExecutionState.REPORTED:
         raise ValueError("release packaging requires reported evidence")
     if results["state"] != ExecutionState.REPORTED:
@@ -194,11 +230,19 @@ def package_run(run_dir: Path, output: Path, platform: str) -> Path:
         raise ValueError("release manifest and results dataset mismatch")
 
     files = _release_files(run_dir, manifest, results)
+    replacements = {}
+    for path, document in (
+        (run_dir / "manifest.json", manifest),
+        (run_dir / "results.json", results),
+    ):
+        replacement = _archive_document(document, results["run_id"])
+        if replacement is not None:
+            replacements[path] = replacement
 
     output.mkdir(parents=True, exist_ok=True)
     name = f"data-format-lab-{results['profile']}-{_safe_slug(platform)}-{results['run_id']}"
     archive_path = output / f"{name}.tar.zst"
-    _write_archive(archive_path, files, run_dir, results["run_id"])
+    _write_archive(archive_path, files, run_dir, results["run_id"], replacements)
     digest = _sha256(archive_path)
     archive_path.with_suffix(archive_path.suffix + ".sha256").write_text(
         f"{digest}  {archive_path.name}\n", encoding="ascii"
