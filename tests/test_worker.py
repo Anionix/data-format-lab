@@ -56,6 +56,19 @@ def test_worker_accepts_reordered_results_on_later_scans(tmp_path, monkeypatch) 
     assert adapter.scan_count == 3
 
 
+def test_worker_rejects_reordered_head_results_on_later_scans(
+    tmp_path, monkeypatch
+) -> None:
+    adapter = ReorderedScanAdapter()
+    run_dir = _prepare_csv_run(tmp_path, adapter)
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"csv": adapter})
+    monkeypatch.setenv("FORMAT_BENCH_WARMUPS", "1")
+    monkeypatch.setenv("FORMAT_BENCH_ITERATIONS", "1")
+
+    with pytest.raises(ValueError, match="normalized operation result mismatch"):
+        worker.run_fair_worker(run_dir, "csv", "head_10")
+
+
 def test_worker_rejects_changed_normalized_evidence_on_later_scan(
     tmp_path, monkeypatch
 ) -> None:

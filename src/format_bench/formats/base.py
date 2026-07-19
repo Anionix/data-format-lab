@@ -11,7 +11,7 @@ import zstandard as zstd
 from format_bench.model import Comparability, Lane
 
 if TYPE_CHECKING:
-    from format_bench.fair import FairOperation
+    from format_bench.fair import Operation
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class FormatAdapter(Protocol):
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict: ...
 
-    def scan(self, path: Path, manifest: dict, operation: FairOperation) -> pa.Table: ...
+    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table: ...
 
 
 def write_artifact(path: Path, writer: Callable[[], None]) -> Artifact:

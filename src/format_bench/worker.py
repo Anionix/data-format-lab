@@ -40,19 +40,20 @@ def run_fair_worker(run_dir: Path, format_name: str, operation: Operation) -> di
     artifact = _relative(run_dir, entry["artifact"])
     source = read_csv(_relative(run_dir, run_manifest["input"]["source"]), dataset_manifest)
     expected_table = apply_arrow(source, operation, dataset_manifest)
-    expected = result_evidence(expected_table)
+    expected = result_evidence(expected_table, operation, dataset_manifest)
+
     def invoke() -> pa.Table:
         return adapter.scan(artifact, dataset_manifest, operation)
 
     def validate(actual: pa.Table) -> None:
-        actual_evidence = result_evidence(actual)
+        actual_evidence = result_evidence(actual, operation, dataset_manifest)
         if actual_evidence != expected:
             raise ValueError(
                 f"normalized operation result mismatch: {actual_evidence} != {expected}"
             )
 
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
-    # A scan advances benchmark evidence only after normalized validation succeeds.
+    # A scan advances only after workload-aware normalized validation succeeds.
     measured = measure_callable(
         invoke,
         expected_rows(operation, dataset_manifest),
