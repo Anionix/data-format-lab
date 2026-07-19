@@ -19,6 +19,7 @@ if __name__ == "__main__":
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
+ISSUE_MAP = ROOT / "docs/audits/2026-07-19/issue-map.json"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
 GITHUB_PLAN_DIGEST = "c5c40d0c81a021e4d242b30c7fe5d7dd70cd86069bd07c80499b3b863f922ac3"
 TRIAGE_DIGEST = "a2837f8456b0511d2b5620be00cb6d26b4f3ff4fde471525c3292a0ff810cd3a"
@@ -445,6 +446,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=("validate", "plan", "apply", "verify"))
     parser.add_argument("--registry", type=Path, default=REGISTRY)
     parser.add_argument("--report", type=Path, default=REPORT)
+    parser.add_argument("--issue-map", type=Path, default=ISSUE_MAP)
     parser.add_argument("--write-report", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -490,12 +492,17 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 import audit_project
 
-                audit_project.read_project(registry, items, live)
+                project = audit_project.read_project(registry, items, live)
+                audit_project.verify_hierarchy(registry, items, live, client)
+                mapping = audit_project.issue_map(registry, items, live, project)
+                audit_project.write_issue_map(args.issue_map, mapping)
                 next_state = audit_github.verify(registry, items, live, sync_state)
                 updated = audit_github.synchronized_registry(
                     registry, items, live, next_state
                 )
                 validate_registry(updated)
+                mapping = audit_project.issue_map(updated, items, live, project)
+                audit_project.write_issue_map(args.issue_map, mapping)
                 write_registry(args.registry, updated)
                 print(
                     f"next sync state: "
