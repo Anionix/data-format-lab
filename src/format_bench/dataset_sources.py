@@ -92,15 +92,28 @@ def _retail_rows(raw: bytes) -> Iterable[Mapping[str, object]]:
 
 
 def _geonames_rows(raw: bytes) -> Iterable[Mapping[str, object]]:
+    records: list[tuple[int, tuple[str, ...]]] = []
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         member = next(name for name in archive.namelist() if name.endswith("cities500.txt"))
         data = io.TextIOWrapper(archive.open(member), encoding="utf-8", newline="")
         with data:
-            for line in data:
-                values = line.rstrip("\n").split("\t")
+            for line_number, line in enumerate(data, start=1):
+                values = tuple(line.rstrip("\r\n").split("\t"))
                 if len(values) != len(_GEONAMES_COLUMNS):
-                    raise ValueError(f"GeoNames row has {len(values)} fields, expected 19")
-                yield dict(zip(_GEONAMES_COLUMNS, values, strict=True))
+                    raise ValueError(
+                        f"GeoNames row {line_number} has {len(values)} fields, expected 19"
+                    )
+                try:
+                    geonameid = int(values[0])
+                except ValueError as error:
+                    raise ValueError(
+                        f"GeoNames row {line_number} has invalid geonameid {values[0]!r}"
+                    ) from error
+                records.append((geonameid, values))
+
+    records.sort()
+    for _, values in records:
+        yield dict(zip(_GEONAMES_COLUMNS, values, strict=True))
 
 
 def _owid_rows(raw: bytes) -> Iterable[Mapping[str, object]]:
@@ -157,6 +170,8 @@ def materialize_official(
         rows = _nyc_rows(manifest)
     else:
         raise ValueError(f"no official normalizer for {dataset_id} ({source_format})")
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # This materializer advances only DISCOVERED -> ENCODED; parse failures remain FAILED.
     row_count = _write_rows(output, manifest, rows)
     (destination / "materialization.json").write_text(
         json.dumps({"dataset_id": dataset_id, "rows": row_count, "source_format": source_format}, indent=2) + "\n",
