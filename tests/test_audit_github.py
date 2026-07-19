@@ -176,3 +176,138 @@ def test_sync_lifecycle_rejects_skips_and_reverse_transitions() -> None:
             pass
         else:
             raise AssertionError(f"accepted illegal transition: {current} -> {target}")
+
+
+def test_project_contract_checks_identity_items_and_field_types(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = _module("audit_tracker")
+    github = _module("audit_github")
+    project = _module("audit_project")
+    registry = _registry()
+    items = tracker.validate_registry(registry)
+    specs = github.desired_issues(registry, items)
+    live_issues = {
+        spec.key: github.LiveIssue(
+            number, spec.title, spec.body, frozenset(spec.labels), spec.milestone
+        )
+        for number, spec in enumerate(specs, start=238)
+    }
+    live = github.LiveState({}, {}, live_issues, github.LiveIssue(236, "", "", frozenset(), None))
+    configured = registry["github"]["project"]["fields"]
+    fields = [
+        {
+            "name": field["name"],
+            **(
+                {"options": [{"name": option} for option in field["options"]]}
+                if "options" in field
+                else {}
+            ),
+        }
+        for field in configured
+    ]
+    graph_fields = [
+        {
+            "name": field["name"],
+            "__typename": (
+                "ProjectV2SingleSelectField"
+                if field["type"] == "SINGLE_SELECT"
+                else "ProjectV2Field"
+            ),
+            **({"dataType": field["type"]} if field["type"] != "SINGLE_SELECT" else {}),
+        }
+        for field in configured
+    ]
+    project_items = [
+        {
+            "audit ID": spec.key,
+            "content": {
+                "type": "Issue", "repository": registry["repository"],
+                "number": live_issues[spec.key].number,
+            },
+        }
+        for spec in specs
+    ] + [{
+        "audit ID": "EXISTING-236",
+        "content": {"type": "Issue", "repository": registry["repository"], "number": 236},
+    }]
+
+    def fake_gh(args: list[str]) -> object:
+        if args[:2] == ["project", "list"]:
+            return {"projects": [{"title": registry["github"]["project"]["title"], "number": 15}]}
+        if args[:2] == ["project", "view"]:
+            config = registry["github"]["project"]
+            return {
+                "public": True, "title": config["title"],
+                "shortDescription": config["description"], "url": config["url"],
+            }
+        if args[:2] == ["project", "field-list"]:
+            return {"fields": fields, "totalCount": 19}
+        if args[:2] == ["project", "item-list"]:
+            return {"items": project_items}
+        return {
+            "data": {"user": {"projectV2": {
+                "repositories": {"nodes": [{"nameWithOwner": registry["repository"]}]},
+                "fields": {"nodes": graph_fields},
+            }}}
+        }
+
+    monkeypatch.setattr(project, "_gh", fake_gh)
+    evidence = project.read_project(registry, items, live)
+    assert (evidence.number, evidence.item_count, evidence.field_count) == (15, 102, 19)
+
+    project_items[0]["content"]["number"] = 999
+    with pytest.raises(tracker.AuditError, match="item content differs"):
+        project.read_project(registry, items, live)
+    project_items[0]["content"]["number"] = live_issues[specs[0].key].number
+
+    score = next(field for field in graph_fields if field["name"] == "Audit Score")
+    score["dataType"] = "TEXT"
+    with pytest.raises(tracker.AuditError, match="field type differs"):
+        project.read_project(registry, items, live)
+
+    score["dataType"] = "NUMBER"
+    status = next(field for field in fields if field["name"] == "Status")
+    status["options"].append({"name": "Unexpected"})
+    with pytest.raises(tracker.AuditError, match="field options differ"):
+        project.read_project(registry, items, live)
+
+    status["options"].pop()
+    missing = live_issues.pop(specs[-1].key)
+    live_issues["DFL-AUDIT-UNEXPECTED"] = missing
+    with pytest.raises(tracker.AuditError, match="marker IDs differ"):
+        project.read_project(registry, items, live)
+
+
+def test_verify_cli_gates_transition_on_project_readback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = _module("audit_tracker")
+    github = _module("audit_github")
+    project = _module("audit_project")
+    registry = _registry()
+    items = tracker.validate_registry(registry)
+    live = github.LiveState({}, {}, {}, None)
+    calls: list[str] = []
+
+    monkeypatch.setattr(tracker, "load_registry", lambda _path: registry)
+    monkeypatch.setattr(tracker, "validate_registry", lambda _registry: items)
+    monkeypatch.setattr(tracker, "render_report", lambda _registry, _items: "report\n")
+    monkeypatch.setattr(tracker, "write_registry", lambda *_args: None)
+    monkeypatch.setattr(Path, "read_text", lambda _path: "report\n")
+    monkeypatch.setattr(github, "GitHubRest", lambda: object())
+    monkeypatch.setattr(github, "read_live", lambda *_args: live)
+    monkeypatch.setattr(
+        project, "read_project", lambda *_args: calls.append("project")
+    )
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda *_args: calls.append("transition") or "VERIFIED",
+    )
+    monkeypatch.setattr(
+        github, "synchronized_registry", lambda *_args: registry
+    )
+
+    assert tracker.main(["verify"]) == 0
+    assert calls == ["project", "transition"]
