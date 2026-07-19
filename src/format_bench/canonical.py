@@ -59,17 +59,27 @@ def _normalize_row(row: dict, column_names: list[str]) -> dict:
     return normalized
 
 
-def canonical_hash(table: pa.Table) -> str:
-    rows = [_normalize_row(row, table.column_names) for row in table.to_pylist()]
-    sort_column = "full_name" if "full_name" in table.column_names else table.column_names[0]
-    rows.sort(
-        key=lambda row: (
-            row[sort_column] or "",
-            json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+def _hash_rows(rows: list[dict], *, order_sensitive: bool) -> str:
+    if not order_sensitive and rows:
+        sort_column = "full_name" if "full_name" in rows[0] else next(iter(rows[0]), "")
+        rows.sort(
+            key=lambda row: (
+                row[sort_column] or "",
+                json.dumps(row, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+            )
         )
-    )
     payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def canonical_hash(table: pa.Table) -> str:
+    rows = [_normalize_row(row, table.column_names) for row in table.to_pylist()]
+    return _hash_rows(rows, order_sensitive=True)
+
+
+def order_insensitive_hash(table: pa.Table) -> str:
+    rows = [_normalize_row(row, table.column_names) for row in table.to_pylist()]
+    return _hash_rows(rows, order_sensitive=False)
 
 
 def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int]:
@@ -90,6 +100,8 @@ def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int
     }
 
 
+# LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+# Conformance must preserve source row order before advancing to ROUNDTRIP_VERIFIED.
 def verify_table(table: pa.Table, manifest: dict) -> dict:
     expected_schema = arrow_schema(manifest)
     if table.schema != expected_schema:

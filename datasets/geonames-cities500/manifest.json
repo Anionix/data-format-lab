@@ -22,7 +22,7 @@
     "normalization": "strict 19-field UTF-8 tab rows, blanks to NULL, sort by geonameid and full row"
   },
   "source_sha256": "5e51bb451042c690aa9730c316d66d8b3322500d43304f35a4f61da3771b17da",
-  "canonical_hash": "0789a602673f18ea4e943102b8cc3c79194d95ab2e2c72fdbe9e959b6c2672dd",
+  "canonical_hash": "297366e35baefc2997ac46802d4481ababfed04d9fa9b87482d2f53d4281bd44",
   "rows": 234934,
   "columns": [
     {"name": "geonameid", "arrow_type": "int64", "nullable": true},

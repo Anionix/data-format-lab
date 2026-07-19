@@ -23,7 +23,7 @@
     "normalization": "concatenate both sheets, preserve typed values, normalize to UTF-8 CSV"
   },
   "source_sha256": "a6e6437b10eb69cb61567fc91cc9d664ed8db5e87c3ce2a6f5c5edd89061969f",
-  "canonical_hash": "c49be5027f400ed541b1f3e240bc0de8854bfe5b0a03b867b174ba124daf4e86",
+  "canonical_hash": "12ecd5386a2da5a1b773c7f7d6b7ed60cd0e7b87ba7dce4120d22cee1bb69b9b",
   "rows": 1067371,
   "columns": [
     {"name": "Invoice", "arrow_type": "string", "nullable": true},

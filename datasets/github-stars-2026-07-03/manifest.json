@@ -10,7 +10,7 @@
     "compressed_sha256": "7ec5d63fef91c2655fc5ff3ee89d719689ee0c33081f02669224be96e1d2b9c2"
   },
   "source_sha256": "39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e",
-  "canonical_hash": "1bf35022cce6d752f7959907b6a60d4024123e045a270f4aa286acbefbe4ca39",
+  "canonical_hash": "2b276e537c8204e6631ece22f6e402322db47d610ce8ac5b30d07d0fe4020e8f",
   "rows": 2331,
   "columns": [
     {"name": "group", "arrow_type": "string", "nullable": true},
