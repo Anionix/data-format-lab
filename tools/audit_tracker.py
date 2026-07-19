@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
+AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
 SCORE_BANDS = {"1-3": 43, "4-5": 42, "6-7": 36, "8-10": 53}
 TOP_LEVEL_FIELDS = {
     "schema_version", "audit_date", "repository", "audited_commit", "source_digest",
@@ -161,6 +162,8 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
         raise AuditError("schema_version must be audit_registry/v1")
     for key in ("audit_date", "repository", "audited_commit", "method"):
         _text(registry, key, "registry")
+    if registry.get("audited_commit") != AUDITED_COMMIT:
+        raise AuditError("audited_commit differs from the immutable audit source")
     github = _mapping(registry.get("github"), "github")
     sync_state = _text(github, "sync_state", "github")
     if sync_state not in {"PLANNED", "APPLIED", "VERIFIED"}:
@@ -221,8 +224,11 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
             raise AuditError(f"{item.id}: at least one classification label is required")
         if expected == "ISSUE" and (sync_state == "PLANNED") != (item.issue_number is None):
             raise AuditError(f"{item.id}: issue_number does not match GitHub sync state")
-        if expected != "ISSUE" and item.issue_number is not None:
-            raise AuditError(f"{item.id}: non-actionable item cannot have issue_number")
+        if expected != "ISSUE" and any(
+            value is not None and value != ()
+            for value in (item.priority, item.milestone, item.labels, item.issue_number)
+        ):
+            raise AuditError(f"{item.id}: non-actionable item has issue-only metadata")
     if sum(item.disposition == "ISSUE" for item in items) != 85:
         raise AuditError("exactly 85 actionable findings are required")
     _assert_acyclic(items)

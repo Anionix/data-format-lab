@@ -97,6 +97,20 @@ def test_registry_rejects_invalid_actionable_metadata(field: str, value: str) ->
         tracker.validate_registry(registry)
 
 
+def test_registry_pins_audited_commit_and_non_actionable_metadata() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["audited_commit"] = "0" * 40
+    with pytest.raises(tracker.AuditError, match="audited_commit"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    monitor = next(item for item in registry["items"] if item["disposition"] == "MONITOR")
+    monitor["priority"] = "P0"
+    with pytest.raises(tracker.AuditError, match="issue-only metadata"):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
     tracker = _tracker()
     registry = _registry()
