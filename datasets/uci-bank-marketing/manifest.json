@@ -23,7 +23,7 @@
     "normalization": "preserve semicolon CSV fields and literal unknown values"
   },
   "source_sha256": "d150e4f0a38425adf18ce7b10d8f5da264e74be2d5e6a2b143dfcdc3e72fd74e",
-  "canonical_hash": "9d23f569048f34002516d2c4e2f0844ee7858756c1464cfbf171130d89d66904",
+  "canonical_hash": "58a0b6fabde241e7bd0b1aa0b519da6117cb53717eaf7f350fac5225826d8196",
   "rows": 41188,
   "columns": [
     {"name": "age", "arrow_type": "int64", "nullable": true},

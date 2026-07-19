@@ -25,6 +25,13 @@ def test_result_evidence_includes_type_and_nullability() -> None:
     assert result_evidence(nullable)["schema"] != result_evidence(required)["schema"]
 
 
+def test_result_evidence_remains_order_insensitive() -> None:
+    table = pa.table({"value": [1, 2, 3]})
+    reversed_table = table.take(pa.array([2, 1, 0]))
+
+    assert result_evidence(table) == result_evidence(reversed_table)
+
+
 @pytest.mark.parametrize(
     "adapter",
     [

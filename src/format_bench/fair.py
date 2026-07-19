@@ -6,7 +6,7 @@ from enum import StrEnum
 import pyarrow as pa
 import pyarrow.dataset as ds
 
-from .canonical import canonical_hash
+from .canonical import order_insensitive_hash
 from .workloads import apply_workload, expected_workload_rows, load_workloads
 
 
@@ -111,5 +111,5 @@ def result_evidence(table: pa.Table) -> dict:
             {"name": field.name, "type": str(field.type), "nullable": field.nullable}
             for field in table.schema
         ],
-        "normalized_hash": canonical_hash(table),
+        "normalized_hash": order_insensitive_hash(table),
     }

@@ -16,7 +16,7 @@ def test_stars_manifest_fixes_the_public_contract() -> None:
         "39cc70109d9dddf947257584e15f2f9a6bc97dcdf0a7bf939c26cccbcda0e22e"
     )
     assert manifest["canonical_hash"] == (
-        "1bf35022cce6d752f7959907b6a60d4024123e045a270f4aa286acbefbe4ca39"
+        "2b276e537c8204e6631ece22f6e402322db47d610ce8ac5b30d07d0fe4020e8f"
     )
     assert manifest["expected_counts"] == {
         "rows": 2331,

@@ -23,7 +23,7 @@
     "normalization": "preserve country/year rows and codebook names"
   },
   "source_sha256": "c1548589b10924ca69a62b98f5bfcda284f2ad5616c4350e2388b287d6366281",
-  "canonical_hash": "bbbe4efc2298dad6517626cabb802974f9521ba5bb6fe4ee44876b9141f4dac9",
+  "canonical_hash": "83bcaa3d47a038223ffb3232d47dc28d808464109aa1689f16f113970f2c07c0",
   "rows": 23377,
   "columns": [
     {"name": "country", "arrow_type": "string", "nullable": true},
