@@ -285,6 +285,10 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     synced_numbers = [item.issue_number for item in items if item.issue_number is not None]
     if sync_state != "PLANNED" and len(set(synced_numbers)) != 85:
         raise AuditError("synced issue numbers must be present and unique")
+    if sync_state == "VERIFIED" and not (
+        project["views_verified"] and github["saved_views_verified"]
+    ):
+        raise AuditError("VERIFIED sync requires verified project and saved views")
     _assert_graph_acyclic({item.id: item.dependencies for item in items}, "item")
     triage_keys = (
         "id", "severity", "disposition", "workstream", "priority", "owner",

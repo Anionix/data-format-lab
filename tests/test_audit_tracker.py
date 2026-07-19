@@ -148,6 +148,12 @@ def test_registry_pins_github_plan_and_synced_issue_numbers() -> None:
     with pytest.raises(tracker.AuditError, match="present and unique"):
         tracker.validate_registry(registry)
 
+    for number, issue in enumerate(issues, start=300):
+        issue["issue_number"] = number
+    registry["github"]["sync_state"] = "VERIFIED"
+    with pytest.raises(tracker.AuditError, match="verified project and saved views"):
+        tracker.validate_registry(registry)
+
 
 def test_registry_pins_item_workstream_assignments() -> None:
     tracker = _tracker()
