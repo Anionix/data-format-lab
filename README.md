@@ -85,6 +85,8 @@ The default fair protocol uses 10 fresh processes per format and operation. Each
 
 ## Published evidence
 
+The [strict audit registry](docs/audits/2026-07-19/report.md) records the immutable 174-item review, live GitHub synchronization, Project readback, and [issue map](docs/audits/2026-07-19/issue-map.json). Original scores are preserved; follow-up bugs remain separate Issues.
+
 Release assets are the distribution boundary for the frozen dataset, raw results, checksums, and binary artifacts. Git contains only schemas, manifests, a small fixture, generated Markdown summaries, and code.
 
 Start with the [`v0.1.0` evidence summary](reports/v0.1.0/README.md), then open the platform report or raw Release asset for the measurement details.
