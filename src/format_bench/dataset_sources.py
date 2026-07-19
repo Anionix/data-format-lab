@@ -10,6 +10,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from pathlib import Path
 
+from .contracts import normalized_columns
 from .nyc_snapshot import CaptureState, fail_active_capture, finalize_capture, nyc_rows
 
 
@@ -30,11 +31,14 @@ def _text(value: object) -> str:
 
 
 def _columns(manifest: Mapping[str, object]) -> tuple[str, ...]:
-    return tuple(str(column["name"]) for column in manifest["columns"])
+    return tuple(column["name"] for column in normalized_columns(manifest.get("columns")))
 
 
 def _types(manifest: Mapping[str, object]) -> dict[str, str]:
-    return {str(column["name"]): str(column["arrow_type"]) for column in manifest["columns"]}
+    return {
+        column["name"]: column["arrow_type"]
+        for column in normalized_columns(manifest.get("columns"))
+    }
 
 
 def _write_rows(destination: Path, manifest: Mapping[str, object], rows: Iterable[Mapping[str, object]]) -> int:

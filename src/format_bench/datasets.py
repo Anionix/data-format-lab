@@ -8,27 +8,19 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TypedDict
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import zstandard as zstd
 
 from .model import WorkloadSpec
+from .contracts import normalized_columns, normalized_workload_entry
 from .dataset_sources import materialize_official
+from .workloads import validated_expected_counts
 
 
 API_VERSION = "2026-03-10"
 _GITHUB_LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
-_SUPPORTED_ARROW_TYPES = frozenset({"string", "float64", "int64", "bool"})
-
-
-class NormalizedColumn(TypedDict):
-    name: str
-    arrow_type: str
-    nullable: bool
-
-
 def _validate_json_value(value: object, path: str) -> None:
     if value is None or isinstance(value, (str, bool, int)):
         return
@@ -62,33 +54,6 @@ def _validate_source_format(value: object) -> None:
     _validate_json_value(dict(value), "manifest source_format")
 
 
-def normalized_columns(value: object) -> list[NormalizedColumn]:
-    if not isinstance(value, list) or not value:
-        raise ValueError("manifest columns must be a non-empty list")
-    names: set[str] = set()
-    normalized: list[NormalizedColumn] = []
-    for index, column in enumerate(value):
-        path = f"manifest columns[{index}]"
-        if not isinstance(column, Mapping):
-            raise ValueError(f"{path} must be an object")
-        name = column.get("name")
-        arrow_type = column.get("arrow_type")
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"{path}.name must be a non-empty string")
-        if name in names:
-            raise ValueError(f"duplicate manifest column: {name}")
-        if arrow_type not in _SUPPORTED_ARROW_TYPES:
-            raise ValueError(f"unsupported arrow type for column {name}")
-        nullable = column.get("nullable", True)
-        if not isinstance(nullable, bool):
-            raise ValueError(f"{path}.nullable must be a boolean")
-        names.add(name)
-        normalized.append(
-            NormalizedColumn(name=name, arrow_type=arrow_type, nullable=nullable)
-        )
-    return normalized
-
-
 def _validate_columns(value: object) -> set[str]:
     return {column["name"] for column in normalized_columns(value)}
 
@@ -99,12 +64,9 @@ def _validate_workloads(value: object, columns: set[str]) -> None:
     if not value:
         raise ValueError("manifest workloads must not be empty")
     for operation, payload in value.items():
-        if not isinstance(operation, str) or not operation.strip():
-            raise ValueError("workload names must be non-empty strings")
-        if not isinstance(payload, Mapping):
-            raise ValueError(f"workload {operation} must be an object")
+        operation, normalized_payload = normalized_workload_entry(operation, payload)
         try:
-            spec = WorkloadSpec.from_mapping(operation, payload)
+            spec = WorkloadSpec.from_mapping(operation, normalized_payload)
         except (TypeError, ValueError, KeyError) as error:
             raise ValueError(f"invalid workload {operation}: {error}") from error
         references = (*spec.columns, *([spec.column] if spec.column else []))
@@ -125,6 +87,7 @@ def validate_manifest(manifest: Mapping[str, object]) -> dict:
     columns = _validate_columns(manifest["columns"]) if "columns" in manifest else set()
     if "workloads" in manifest:
         _validate_workloads(manifest["workloads"], columns)
+    validated_expected_counts(manifest)
     return dict(manifest)
 
 
