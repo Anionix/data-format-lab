@@ -73,6 +73,10 @@ def test_issue_plan_converges_to_no_op() -> None:
     github_config = registry["github"]
     github_config["project"]["views_verified"] = True
     github_config["saved_views_verified"] = True
+    ui_readback = github_config.pop("ui_readback")
+    with pytest.raises(tracker.AuditError, match="ui_readback"):
+        github.verify(registry, items, live, "APPLIED")
+    github_config["ui_readback"] = ui_readback
     assert github.verify(registry, items, live, "APPLIED") == "VERIFIED"
 
     first_key = specs[16].key
