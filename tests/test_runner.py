@@ -33,6 +33,34 @@ def test_measure_callable_validates_result_count() -> None:
         measure_callable(lambda: 2, expected=3, warmups=0, iterations=1)
 
 
+def test_measure_callable_excludes_validation_from_timing(monkeypatch) -> None:
+    ticks = iter(
+        [
+            0,
+            1_000_000,
+            1_001_000_000,
+            2_001_000_000,
+            2_002_000_000,
+            3_002_000_000,
+        ]
+    )
+    monkeypatch.setattr(runner.time, "perf_counter_ns", lambda: next(ticks))
+
+    def validate(_value: int) -> None:
+        runner.time.perf_counter_ns()
+
+    measured = measure_callable(
+        lambda: 3,
+        expected=3,
+        warmups=0,
+        iterations=1,
+        validate=validate,
+    )
+
+    assert measured["first_open_ms"] == 1.0
+    assert measured["samples_ms"] == [1.0]
+
+
 def test_parallel_worker_counts_include_environment_cap(monkeypatch) -> None:
     monkeypatch.setenv("FORMAT_BENCH_MAX_WORKERS", "8")
 
