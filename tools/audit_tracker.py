@@ -17,6 +17,12 @@ REGISTRY = ROOT / "docs/audits/2026-07-19/audit.json"
 REPORT = ROOT / "docs/audits/2026-07-19/report.md"
 SOURCE_DIGEST = "b701ddb9c10681c2ded72a5f65e4221321aa0df099a3042da4fd59e7c25994a0"
 AUDITED_COMMIT = "52748f552bf2f5e7922725ea2e8f85bea291bce0"
+AUDIT_DATE = "2026-07-19"
+REPOSITORY = "Anionix/data-format-lab"
+P0_IDS = {139, 148, 151, 154, 155, 161, 162}
+P1_IDS = {17, 53, 54, 95, 102, *range(163, 170), *range(171, 175)}
+HUMAN_IDS = {145, *range(152, 156), 161, 162}
+MIXED_IDS = {139, 144, *range(148, 152), 157, 159}
 SCORE_BANDS = {"1-3": 43, "4-5": 42, "6-7": 36, "8-10": 53}
 TOP_LEVEL_FIELDS = {
     "schema_version", "audit_date", "repository", "audited_commit", "source_digest",
@@ -162,6 +168,8 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
         raise AuditError("schema_version must be audit_registry/v1")
     for key in ("audit_date", "repository", "audited_commit", "method"):
         _text(registry, key, "registry")
+    if (registry.get("audit_date"), registry.get("repository")) != (AUDIT_DATE, REPOSITORY):
+        raise AuditError("audit identity differs from the immutable audit source")
     if registry.get("audited_commit") != AUDITED_COMMIT:
         raise AuditError("audited_commit differs from the immutable audit source")
     github = _mapping(registry.get("github"), "github")
@@ -200,6 +208,7 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
         raise AuditError("exactly 15 unique workstreams are required")
     _assert_graph_acyclic(workstream_graph, "workstream")
     for item in items:
+        number = int(item.id.rsplit("-", 1)[1])
         expected = "ISSUE" if item.score <= 5 else "MONITOR" if item.score <= 7 else "REGRESSION_GUARD"
         expected_severity = (
             "HIGH" if item.score <= 3 else "MEDIUM" if item.score <= 5
@@ -215,6 +224,15 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
             raise AuditError(f"{item.id}: actionable fields are incomplete")
         if expected == "ISSUE" and item.priority not in {"P0", "P1", "P2", "P3"}:
             raise AuditError(f"{item.id}: priority is invalid")
+        canonical_priority = (
+            "P0" if number in P0_IDS else "P1" if number in P1_IDS
+            else "P3" if item.score == 5 else "P2"
+        )
+        if expected == "ISSUE" and item.priority != canonical_priority:
+            raise AuditError(f"{item.id}: priority differs from the audit plan")
+        canonical_owner = "Human" if number in HUMAN_IDS else "Mixed" if number in MIXED_IDS else "Agent"
+        if expected == "ISSUE" and item.owner != canonical_owner:
+            raise AuditError(f"{item.id}: owner differs from the audit plan")
         if expected == "ISSUE" and item.milestone != workstream_milestones[item.workstream]:
             raise AuditError(f"{item.id}: milestone does not match workstream")
         expected_readiness = "ready-for-agent" if item.owner == "Agent" else "ready-for-human"

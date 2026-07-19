@@ -111,6 +111,27 @@ def test_registry_pins_audited_commit_and_non_actionable_metadata() -> None:
         tracker.validate_registry(registry)
 
 
+def test_registry_pins_audit_identity_and_triage_assignments() -> None:
+    tracker = _tracker()
+    registry = _registry()
+    registry["repository"] = "example/data-format-lab"
+    with pytest.raises(tracker.AuditError, match="audit identity"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    issue = next(item for item in registry["items"] if item["id"] == "DFL-AUDIT-139")
+    issue["priority"] = "P2"
+    with pytest.raises(tracker.AuditError, match="priority differs"):
+        tracker.validate_registry(registry)
+
+    registry = _registry()
+    issue = next(item for item in registry["items"] if item["id"] == "DFL-AUDIT-145")
+    issue["owner"] = "Agent"
+    issue["readiness_label"] = "ready-for-agent"
+    with pytest.raises(tracker.AuditError, match="owner differs"):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
     tracker = _tracker()
     registry = _registry()
