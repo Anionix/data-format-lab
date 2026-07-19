@@ -191,5 +191,5 @@ jobs:
         run: |
           nix develop ${RUST_OVERLAY_SOURCE:+--override-input} ${RUST_OVERLAY_SOURCE:+rust-overlay} ${RUST_OVERLAY_SOURCE:+path:$RUST_OVERLAY_SOURCE} --command bash -euo pipefail -c '
             ty version
-            ty check src/format_bench
+            ty check
           '

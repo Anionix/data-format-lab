@@ -56,6 +56,14 @@ uv run --frozen format-bench run --profile prompt --dataset github-stars-2026-07
 uv run --frozen format-bench run --profile equivalence --dataset github-stars-2026-07-03 --fixture --pair csv-tsv
 ```
 
+The repository-level `ty` configuration is authoritative for source roots and intentional optional imports. Reproduce its pinned observation lane with:
+
+```bash
+nix develop --command uv sync --frozen --reinstall-package format-bench
+nix develop --command ty version
+nix develop --command uv run --frozen ty check
+```
+
 The fixture command is a non-rankable smoke test. For the full published dataset:
 
 ```bash
