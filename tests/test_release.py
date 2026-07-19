@@ -221,29 +221,48 @@ def test_release_closes_aggregate_archive_references(tmp_path: Path) -> None:
         "run_id": run_id,
         **aggregate_evidence,
     }
-    (run / "manifest.json").write_text(json.dumps(manifest))
-    (run / "results.json").write_text(json.dumps(results))
-    (run / "report.md").write_text("# report\n")
+    manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
+    results_bytes = (json.dumps(results, indent=2, sort_keys=True) + "\n").encode()
+    report_bytes = (
+        "# report\n\n"
+        "## Evidence Digests\n\n"
+        "| File | SHA-256 |\n"
+        "| --- | --- |\n"
+        f"| Manifest SHA-256 | {hashlib.sha256(manifest_bytes).hexdigest()} |\n"
+        f"| Results SHA-256 | {hashlib.sha256(results_bytes).hexdigest()} |\n"
+    ).encode()
+    source_evidence = {
+        "manifest.json": manifest_bytes,
+        "results.json": results_bytes,
+        "report.md": report_bytes,
+    }
+    for name, payload in source_evidence.items():
+        (run / name).write_bytes(payload)
     (run / "input" / "manifest.json").write_text("{}\n")
     (claim / "manifest.json").write_text("{}\n")
     (claim / "results.json").write_text("{}\n")
 
     archive = package_run(run, tmp_path / "output", "macos-arm64")
+    repeated = package_run(run, tmp_path / "repeated", "macos-arm64")
 
     names = set(_archive_names(archive))
+    archived_documents = {}
     for document_name in ("manifest.json", "results.json"):
-        document = json.loads(_archive_member(archive, f"{run_id}/{document_name}"))
+        archived_bytes = _archive_member(archive, f"{run_id}/{document_name}")
+        archived_documents[document_name] = archived_bytes
+        document = json.loads(archived_bytes)
         archived_source = document["datasets"][0]["evidence"][0]["source"]
         for key in ("manifest_path", "results_path"):
             assert archived_source[key] == source[key].removeprefix(f".data/{run_id}/")
             assert f"{run_id}/{archived_source[key]}" in names
 
-    assert (
-        json.loads((run / "results.json").read_text())["datasets"][0]["evidence"][0][
-            "source"
-        ]
-        == source
-    )
+    archived_report = _archive_member(archive, f"{run_id}/report.md").decode()
+    for name, payload in archived_documents.items():
+        label = name.removesuffix(".json").title()
+        assert f"| {label} SHA-256 | {hashlib.sha256(payload).hexdigest()} |" in archived_report
+    assert archive.read_bytes() == repeated.read_bytes()
+    for name, payload in source_evidence.items():
+        assert (run / name).read_bytes() == payload
 
 
 def test_release_aggregate_closes_nested_manifest_artifact_references(

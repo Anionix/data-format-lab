@@ -245,6 +245,17 @@ def _archive_document(document: dict, run_id: str) -> bytes | None:
     return (json.dumps(normalized, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _archive_report(report: str, digests: dict[str, str]) -> bytes | None:
+    rewritten = report
+    for name, digest in digests.items():
+        label = f"{name.removesuffix('.json').title()} SHA-256"
+        pattern = rf"(?m)^(\| {re.escape(label)} \| )[0-9a-f]{{64}}( \|)$"
+        rewritten = re.sub(pattern, rf"\g<1>{digest}\g<2>", rewritten)
+    if rewritten == report:
+        return None
+    return rewritten.encode("utf-8")
+
+
 def _release_files(run_dir: Path, manifest: dict, results: dict) -> list[Path]:
     if run_dir.is_symlink():
         raise ValueError("release run directory must not be a symlink")
@@ -354,11 +365,10 @@ def package_run(
     if manifest["dataset_id"] != results["dataset_id"]:
         raise ValueError("release manifest and results dataset mismatch")
 
-    # LLM lifecycle contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED ->
-    # BENCHMARKED -> REPORTED. Only REPORTED evidence is packaged; UNSUPPORTED
-    # and FAILED artifacts remain terminal, non-rankable exceptions.
+    # LLM contract: BENCHMARKED -> REPORTED publishes only REPORTED run evidence;
+    # UNSUPPORTED and FAILED remain terminal and unrankable.
     files = _release_files(run_dir, manifest, results)
-    replacements = {}
+    replacements: dict[Path, bytes] = {}
     for path, document in (
         (run_dir / "manifest.json", manifest),
         (run_dir / "results.json", results),
@@ -366,6 +376,23 @@ def package_run(
         replacement = _archive_document(document, results["run_id"])
         if replacement is not None:
             replacements[path] = replacement
+    archived_document_digests = {
+        name: hashlib.sha256(replacements[path]).hexdigest()
+        if path in replacements
+        else _sha256(path)
+        for name, path in (
+            ("manifest.json", run_dir / "manifest.json"),
+            ("results.json", run_dir / "results.json"),
+        )
+    }
+    # LLM contract: REPORTED source evidence -> REPORTED archive evidence only
+    # after rewritten JSON references and report digests agree; source bytes stay immutable.
+    report_path = run_dir / "report.md"
+    report_replacement = _archive_report(
+        report_path.read_text(encoding="utf-8"), archived_document_digests
+    )
+    if report_replacement is not None:
+        replacements[report_path] = report_replacement
     aggregate_artifacts = _aggregate_artifact_files(run_dir, results, source_root)
 
     output.mkdir(parents=True, exist_ok=True)
