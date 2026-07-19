@@ -86,6 +86,17 @@ def test_registry_requires_canonical_readiness_and_sync_state() -> None:
         tracker.validate_registry(registry)
 
 
+@pytest.mark.parametrize(("field", "value"), [("priority", "P9"), ("owner", "Agnet")])
+def test_registry_rejects_invalid_actionable_metadata(field: str, value: str) -> None:
+    tracker = _tracker()
+    registry = _registry()
+    issue = next(item for item in registry["items"] if item["disposition"] == "ISSUE")
+    issue[field] = value
+
+    with pytest.raises(tracker.AuditError, match=field):
+        tracker.validate_registry(registry)
+
+
 def test_registry_rejects_workstream_cycles_and_duplicates() -> None:
     tracker = _tracker()
     registry = _registry()

@@ -180,13 +180,14 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
 
     workstreams = _sequence(registry.get("workstreams"), "workstreams")
     workstream_graph: dict[str, tuple[str, ...]] = {}
+    workstream_milestones: dict[str, str] = {}
     for value in workstreams:
         workstream = _mapping(value, "workstream")
         if set(workstream) != {"key", "title", "blocked_by", "milestone"}:
             raise AuditError("workstream fields differ from audit_registry/v1")
         key = _text(workstream, "key", "workstream")
         _text(workstream, "title", "workstream")
-        _text(workstream, "milestone", "workstream")
+        workstream_milestones[key] = _text(workstream, "milestone", "workstream")
         blocked_by = _sequence(workstream.get("blocked_by"), "workstream.blocked_by")
         if not all(isinstance(blocker, str) for blocker in blocked_by):
             raise AuditError("workstream.blocked_by must contain strings")
@@ -205,8 +206,14 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
             raise AuditError(f"{item.id}: invalid disposition or workstream")
         if item.severity != expected_severity:
             raise AuditError(f"{item.id}: severity does not match original_score")
+        if item.owner not in {"Agent", "Human", "Mixed"}:
+            raise AuditError(f"{item.id}: owner is invalid")
         if expected == "ISSUE" and None in (item.priority, item.milestone):
             raise AuditError(f"{item.id}: actionable fields are incomplete")
+        if expected == "ISSUE" and item.priority not in {"P0", "P1", "P2", "P3"}:
+            raise AuditError(f"{item.id}: priority is invalid")
+        if expected == "ISSUE" and item.milestone != workstream_milestones[item.workstream]:
+            raise AuditError(f"{item.id}: milestone does not match workstream")
         expected_readiness = "ready-for-agent" if item.owner == "Agent" else "ready-for-human"
         if expected == "ISSUE" and item.readiness_label != expected_readiness:
             raise AuditError(f"{item.id}: canonical readiness label is missing")
