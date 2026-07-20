@@ -3,11 +3,41 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import NotRequired, TypedDict, cast
 
 import pytest
 
 
 ROOT = Path(__file__).parents[1]
+
+
+class _ProjectFieldFixture(TypedDict):
+    name: str
+    type: str
+    options: NotRequired[list[str]]
+
+
+class _ProjectFixture(TypedDict):
+    title: str
+    description: str
+    url: str
+    views_verified: bool
+    fields: list[_ProjectFieldFixture]
+
+
+class _GitHubFixture(TypedDict):
+    sync_state: str
+    project: _ProjectFixture
+    saved_views_verified: bool
+    ui_readback: NotRequired[dict[str, object]]
+    labels: list[dict[str, object]]
+    milestones: list[dict[str, object]]
+
+
+class _RegistryFixture(TypedDict):
+    repository: str
+    github: _GitHubFixture
+    items: list[dict[str, object]]
 
 
 def _module(name: str) -> ModuleType:
@@ -20,8 +50,9 @@ def _module(name: str) -> ModuleType:
     return module
 
 
-def _registry() -> dict[str, object]:
-    return json.loads((ROOT / "docs/audits/2026-07-19/audit.json").read_text())
+def _registry() -> _RegistryFixture:
+    raw = json.loads((ROOT / "docs/audits/2026-07-19/audit.json").read_text())
+    return cast(_RegistryFixture, raw)
 
 
 def test_desired_issue_contract_and_foundation_plan() -> None:
@@ -56,9 +87,9 @@ def test_issue_plan_converges_to_no_op() -> None:
     items = tracker.validate_registry(registry)
     specs = github.desired_issues(registry, items)
     config = registry["github"]
-    labels = {item["name"]: item for item in config["labels"]}
+    labels = {cast(str, item["name"]): item for item in config["labels"]}
     milestones = {
-        item["title"]: {**item, "number": number}
+        cast(str, item["title"]): {**item, "number": number}
         for number, item in enumerate(config["milestones"], start=1)
     }
     existing_labels = frozenset({"audit:2026-07-19", "priority:p1", "bug", "ready-for-agent"})
@@ -277,11 +308,12 @@ def test_project_contract_checks_identity_items_and_field_types(
 
     score["dataType"] = "NUMBER"
     status = next(field for field in fields if field["name"] == "Status")
-    status["options"].append({"name": "Unexpected"})
+    status_options = cast(list[dict[str, str]], status["options"])
+    status_options.append({"name": "Unexpected"})
     with pytest.raises(tracker.AuditError, match="field options differ"):
         project.read_project(registry, items, live)
 
-    status["options"].pop()
+    status_options.pop()
     missing = live_issues.pop(specs[-1].key)
     live_issues["DFL-AUDIT-UNEXPECTED"] = missing
     with pytest.raises(tracker.AuditError, match="marker IDs differ"):

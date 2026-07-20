@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -16,7 +17,9 @@ DATASET = Path("datasets/github-stars-2026-07-03")
     [("snappy", None), ("gzip", None), ("zstd", None), ("zstd", 19)],
 )
 def test_parquet_variants_roundtrip_the_same_table(
-    tmp_path: Path, compression: str, level: int | None
+    tmp_path: Path,
+    compression: Literal["snappy", "gzip", "zstd"],
+    level: int | None,
 ) -> None:
     manifest = json.loads((DATASET / "manifest.json").read_text())
     table = read_csv(DATASET / "fixture.csv", manifest)

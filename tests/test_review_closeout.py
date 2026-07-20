@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "tools"))
 
@@ -111,7 +112,7 @@ def test_issue_marker_is_idempotency_key() -> None:
 def test_issue_payload_exposes_priority_mapping() -> None:
     payload = issue_payload(ReviewThread(230, "PRRT_1", "P1 Badge"), "Anionix/data-format-lab")
     assert payload["labels"] == ["bug", "priority:p1", "ready-for-agent"]
-    assert "priority:p1" in payload["body"]
+    assert "priority:p1" in cast(str, payload["body"])
 
 
 def test_run_is_read_only_below_batch_threshold() -> None:

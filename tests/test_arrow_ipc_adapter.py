@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import pyarrow as pa
@@ -42,7 +43,9 @@ def test_arrow_ipc_roundtrip_and_scan(fixture_contract, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("compression", ["none", "lz4", "zstd"])
 def test_arrow_ipc_compression_variants_preserve_contract(
-    fixture_contract, tmp_path: Path, compression: str
+    fixture_contract,
+    tmp_path: Path,
+    compression: Literal["none", "lz4", "zstd"],
 ) -> None:
     manifest, table = fixture_contract
     adapter = ArrowIpcAdapter(compression)
