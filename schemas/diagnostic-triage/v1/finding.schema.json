@@ -23,7 +23,7 @@
   ],
   "properties": {
     "schema_version": { "const": "diagnostic-triage.finding/v1" },
-    "finding_id": { "type": "string", "format": "uuid" },
+    "finding_id": { "$ref": "#/$defs/uuid" },
     "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "tool": {
       "type": "object",
@@ -64,7 +64,7 @@
       "type": "array",
       "uniqueItems": true,
       "maxItems": 64,
-      "items": { "type": "string", "format": "uuid" }
+      "items": { "$ref": "#/$defs/uuid" }
     },
     "fix": {
       "type": "object",
@@ -73,7 +73,7 @@
       "properties": {
         "applicability": { "enum": ["SAFE", "UNSAFE", "MANUAL", "NONE"] },
         "tool_native": { "type": "boolean" },
-        "patch_evidence_id": { "type": "string", "format": "uuid" }
+        "patch_evidence_id": { "$ref": "#/$defs/uuid" }
       },
       "allOf": [
         {
@@ -124,6 +124,11 @@
     }
   ],
   "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
     "relativePath": {
       "type": "string",
       "minLength": 1,

@@ -28,6 +28,7 @@
               ruff
               pyright
               ty
+              check-jsonschema
               gh
               rustToolchain
               cargo-fuzz
