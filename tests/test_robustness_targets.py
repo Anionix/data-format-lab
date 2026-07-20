@@ -7,7 +7,11 @@ import pytest
 
 import format_bench.robustness.worker as worker
 from format_bench.canonical import canonical_hash, query_counts, read_csv
+from format_bench.fair import Operation
+from format_bench.formats.base import Artifact, FormatDescription
 from format_bench.model import (
+    Comparability,
+    Lane,
     ObservedOutcome,
     RobustnessExpectation,
     RobustnessVerdict,
@@ -116,8 +120,26 @@ def test_read_robustness_attributes_input_errors_to_target_boundary(
     tmp_path: Path,
 ) -> None:
     class RejectingAdapter:
-        def read(self, path, manifest):
+        def describe(self) -> FormatDescription:
+            return FormatDescription(
+                name="custom",
+                lane=Lane.ROBUSTNESS,
+                comparability=Comparability.UNAVAILABLE,
+                extension=".bin",
+                settings={},
+            )
+
+        def encode(self, table: pa.Table, path: Path) -> Artifact:
+            raise NotImplementedError
+
+        def read(self, path: Path, manifest: dict) -> pa.Table:
             raise ValueError("malformed artifact")
+
+        def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+            raise NotImplementedError
+
+        def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+            raise NotImplementedError
 
     artifact = tmp_path / "artifact.bin"
     artifact.write_bytes(b"broken")

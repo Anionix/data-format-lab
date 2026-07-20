@@ -9,6 +9,7 @@ import pytest
 
 from format_bench.model import ObservedOutcome, RobustnessVerdict
 from format_bench.robustness.runner import (
+    CaseResult,
     DEFAULT_OUTPUT_RETENTION_BYTES,
     _process,
     run_case,
@@ -31,7 +32,7 @@ def _run(
     code: str,
     expectation: str = "MUST_NOT_CRASH",
     output_budget_bytes: int | None = None,
-) -> dict:
+) -> CaseResult:
     _request(tmp_path, expectation)
     return run_case(
         tmp_path, "request.json", "evidence/case-1", 0.2,
@@ -155,7 +156,9 @@ def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: 
         "import json; print(json.dumps({'observed':'REJECTED','details':{'message':'x'*10000}}))",
     )
     assert large_details["details"]["truncated"] is True
-    assert large_details["details"]["original_size_bytes"] > 4096
+    original_size_bytes = large_details["details"]["original_size_bytes"]
+    assert isinstance(original_size_bytes, int)
+    assert original_size_bytes > 4096
     valid = _run(tmp_path / "valid", "import json; print(json.dumps({'observed':'REJECTED'}))", "MUST_ROUNDTRIP")
     assert valid["verdict"] is RobustnessVerdict.FAIL
 

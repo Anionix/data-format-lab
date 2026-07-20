@@ -27,7 +27,7 @@ class MeasurementConfig:
     fresh_workers: int = 1
     warmups: int = 5
     iterations: int = 30
-    timeout_seconds: int = 120
+    timeout_seconds: float = 120
     seed: int = 20260703
 
 
