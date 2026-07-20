@@ -160,37 +160,42 @@ class WorkloadSpec:
 
     @classmethod
     def from_mapping(cls, operation: str, payload: Mapping[str, object]) -> "WorkloadSpec":
+        raw_kind = payload.get("kind")
+        if not isinstance(raw_kind, str):
+            raise ValueError(f"invalid workload kind for {operation}")
         try:
-            kind = WorkloadKind(str(payload["kind"]))
-        except (KeyError, ValueError) as error:
+            kind = WorkloadKind(raw_kind)
+        except ValueError as error:
             raise ValueError(f"invalid workload kind for {operation}") from error
         raw_columns = payload.get("columns", ())
         if not isinstance(raw_columns, (list, tuple)):
             raise ValueError(f"workload columns for {operation} must be a list")
-        typed_columns = cast(list[object] | tuple[object, ...], raw_columns)
-        columns = tuple(str(item) for item in typed_columns)
+        untyped_columns = cast(list[object] | tuple[object, ...], raw_columns)
+        if not all(isinstance(item, str) and item for item in untyped_columns):
+            raise ValueError(f"workload columns for {operation} must contain strings")
+        columns = tuple(cast(list[str] | tuple[str, ...], untyped_columns))
         column = payload.get("column")
         operator = payload.get("operator")
+        if column is not None and not isinstance(column, str):
+            raise ValueError("workload column must be a string")
+        if operator is not None and not isinstance(operator, str):
+            raise ValueError("workload operator must be a string")
         expected = payload.get("expected_rows")
         limit = payload.get("limit")
+
         def optional_int(value: object, field: str) -> int | None:
             if value is None:
                 return None
-            if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            if isinstance(value, bool) or not isinstance(value, int):
                 raise ValueError(f"workload {field} must be an integer")
-            if isinstance(value, float) and not value.is_integer():
-                raise ValueError(f"workload {field} must be an integer")
-            try:
-                return int(value)
-            except (TypeError, ValueError) as error:
-                raise ValueError(f"workload {field} must be an integer") from error
+            return value
 
         spec = cls(
             operation=operation,
             kind=kind,
             columns=columns,
-            column=str(column) if column is not None else None,
-            operator=str(operator) if operator is not None else None,
+            column=column,
+            operator=operator,
             value=payload.get("value"),
             limit=optional_int(limit, "limit"),
             expected_rows=optional_int(expected, "expected_rows"),

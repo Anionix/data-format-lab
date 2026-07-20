@@ -4,6 +4,7 @@ import pyarrow as pa
 import pytest
 
 from format_bench.fair import FairOperation, operations_for
+from format_bench.datasets import validate_manifest
 from format_bench.workloads import apply_workload, expected_workload_rows, load_workloads
 
 
@@ -49,6 +50,47 @@ def test_manifest_workload_is_not_tied_to_stars_columns() -> None:
 def test_manifest_rejects_non_object_workloads() -> None:
     with pytest.raises(ValueError, match="must be an object"):
         load_workloads({"workloads": []})
+
+
+def test_manifest_rejects_non_string_workload_keys() -> None:
+    with pytest.raises(ValueError, match="names must be non-empty strings"):
+        load_workloads({"workloads": {1: {"kind": "read_all"}}})
+
+
+def test_expected_rows_rejects_non_integer_counts() -> None:
+    workload = load_workloads({"workloads": {"read": {"kind": "read_all"}}})["read"]
+    with pytest.raises(ValueError, match="non-negative integer"):
+        expected_workload_rows(
+            "read", {"rows": 1, "expected_counts": {"read": "1"}}, workload
+        )
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        {"expected_counts": {"other": "bad"}},
+        {"columns": [{"name": "id", "arrow_type": "int64", 1: "bad"}]},
+    ],
+)
+def test_manifest_rejects_malformed_boundary_mappings(manifest: dict) -> None:
+    with pytest.raises(ValueError):
+        validate_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"kind": "projection", "columns": [7]},
+        {"kind": "head", "limit": "10"},
+        {"kind": "read_all", "expected_rows": "3"},
+        {"kind": "filter", "column": 7, "operator": "eq", "value": 1},
+    ],
+)
+def test_workload_rejects_coerced_boundary_values(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        load_workloads({"workloads": {"unsafe": payload}})
 
 
 def test_operations_for_uses_dataset_declared_names() -> None:

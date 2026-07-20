@@ -5,6 +5,7 @@ from collections.abc import Mapping
 import pyarrow as pa
 
 from .arrow_compute import equal, greater, greater_equal, less, less_equal
+from .contracts import normalized_workload_entry
 from .model import WorkloadKind, WorkloadSpec
 
 
@@ -61,14 +62,29 @@ def load_workloads(manifest: Mapping[str, object]) -> dict[str, WorkloadSpec]:
         return _legacy_workloads()
     if not isinstance(raw, Mapping):
         raise ValueError("manifest workloads must be an object")
-    workloads = {
-        str(operation): WorkloadSpec.from_mapping(str(operation), payload)
-        for operation, payload in raw.items()
-        if isinstance(payload, Mapping)
-    }
-    if len(workloads) != len(raw):
-        raise ValueError("each workload must be an object")
+    workloads: dict[str, WorkloadSpec] = {}
+    for operation, payload in raw.items():
+        operation, normalized_payload = normalized_workload_entry(operation, payload)
+        workloads[operation] = WorkloadSpec.from_mapping(operation, normalized_payload)
     return workloads
+
+
+def _nonnegative_int(value: object, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{context} must be a non-negative integer")
+    return value
+
+
+def validated_expected_counts(manifest: Mapping[str, object]) -> dict[str, int]:
+    raw = manifest.get("expected_counts")
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping) or not all(isinstance(key, str) for key in raw):
+        raise ValueError("manifest expected_counts must be an object with string keys")
+    return {
+        str(key): _nonnegative_int(value, f"expected count {key}")
+        for key, value in raw.items()
+    }
 
 
 def _predicate(spec: WorkloadSpec, table: pa.Table) -> pa.Array | pa.ChunkedArray:
@@ -100,16 +116,16 @@ def expected_workload_rows(
 ) -> int:
     if spec.expected_rows is not None:
         return spec.expected_rows
-    expected_counts = manifest.get("expected_counts", {})
-    if isinstance(expected_counts, Mapping) and operation in expected_counts:
-        return int(expected_counts[operation])
+    expected_counts = validated_expected_counts(manifest)
+    if operation in expected_counts:
+        return _nonnegative_int(expected_counts[operation], f"expected count {operation}")
     legacy_aliases = {
         "filter_ai_llm": "group_ai_llm",
         "filter_repo_stars_gt_100000": "repo_stars_gt_100000",
         "exact_match": "full_name_anomalyco_opencode",
     }
     alias = legacy_aliases.get(operation)
-    if isinstance(expected_counts, Mapping) and alias in expected_counts:
-        return int(expected_counts[alias])
-    rows = int(manifest["rows"])
+    if alias is not None and alias in expected_counts:
+        return _nonnegative_int(expected_counts[alias], f"expected count {alias}")
+    rows = _nonnegative_int(manifest.get("rows"), "manifest rows")
     return min(spec.limit or rows, rows) if spec.kind is WorkloadKind.HEAD else rows

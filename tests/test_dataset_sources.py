@@ -91,3 +91,29 @@ def test_geonames_materialization_rejects_non_19_field_rows(
             _archive(malformed),
             tmp_path / f"invalid-{field_count}",
         )
+
+
+def test_materialization_rejects_non_object_columns(tmp_path: Path) -> None:
+    manifest = _manifest()
+    manifest["columns"] = ["not-an-object"]
+
+    with pytest.raises(ValueError, match=r"columns\[0\] must be an object"):
+        materialize_official(
+            "geonames-cities500",
+            manifest,
+            _archive(_row("1", "London")),
+            tmp_path / "invalid-columns",
+        )
+
+
+def test_materialization_rejects_non_string_column_values(tmp_path: Path) -> None:
+    manifest = _manifest()
+    manifest["columns"] = [{"name": 1, "arrow_type": []}]
+
+    with pytest.raises(ValueError, match="name must be a non-empty string"):
+        materialize_official(
+            "geonames-cities500",
+            manifest,
+            _archive(_row("1", "London")),
+            tmp_path / "invalid-column-values",
+        )
