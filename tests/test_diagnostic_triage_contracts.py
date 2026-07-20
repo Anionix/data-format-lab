@@ -1,6 +1,7 @@
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -61,7 +62,7 @@ def _valid_finding() -> dict[str, object]:
 
 
 def _check_schema(*paths: Path, schema: Path | None = None) -> subprocess.CompletedProcess[str]:
-    args = ["check-jsonschema", "--disable-formats", "*"]
+    args = [sys.executable, "-m", "check_jsonschema", "--disable-formats", "*"]
     args.extend(["--schemafile", str(schema)] if schema else ["--check-metaschema"])
     args.extend(str(path) for path in paths)
     return subprocess.run(args, text=True, capture_output=True, check=False, timeout=10)

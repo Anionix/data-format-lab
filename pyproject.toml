@@ -27,7 +27,10 @@ format-bench = "format_bench.cli:main"
 research = ["pyfastlanes==0.1.3.post9"]
 
 [dependency-groups]
-dev = ["pytest==9.0.3"]
+dev = [
+  "check-jsonschema==0.37.4",
+  "pytest==9.0.3",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/format_bench"]
