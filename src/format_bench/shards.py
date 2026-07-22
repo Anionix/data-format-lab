@@ -133,9 +133,10 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
         active_state = state in {
             ExecutionState.ROUNDTRIP_VERIFIED,
             ExecutionState.BENCHMARKED,
+            ExecutionState.REPORTED,
         }
-        # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED advances active evidence
-        # without changing artifact identity; pre-verification states cannot advance.
+        # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED advances
+        # active evidence without changing identity; pre-artifact states are rejected.
         if not terminal_without_artifact and not active_state:
             raise ValueError(f"{name}.state is not verified for shard identity")
         identity_state = state if terminal_without_artifact else None
