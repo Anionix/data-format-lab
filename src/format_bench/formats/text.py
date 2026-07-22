@@ -7,11 +7,13 @@ import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.json as pajson
 
-from format_bench.canonical import arrow_schema, read_csv, verify_table
+from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, ParserRejection, parse_artifact, write_artifact
+
+ARROW_PARSER_ERRORS = (pa.ArrowException, OSError, ValueError)
 
 
 class CsvAdapter:
@@ -28,7 +30,21 @@ class CsvAdapter:
         return write_artifact(path, lambda: pacsv.write_csv(table, path))
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
-        return read_csv(path, manifest)
+        schema = arrow_schema(manifest)
+        options = pacsv.ConvertOptions(
+            column_types={field.name: field.type for field in schema},
+            null_values=[""],
+            strings_can_be_null=True,
+        )
+        table = parse_artifact(
+            lambda: pacsv.read_csv(path, convert_options=options).select(schema.names),
+            ARROW_PARSER_ERRORS,
+        )
+        for field in schema:
+            if not field.nullable and table[field.name].null_count:
+                error = ValueError(f"non-nullable column contains NULL: {field.name}")
+                raise ParserRejection(error) from error
+        return parse_artifact(lambda: table.cast(schema), ARROW_PARSER_ERRORS)
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
@@ -93,7 +109,10 @@ class ObjectJsonlAdapter:
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
         options = pajson.ParseOptions(explicit_schema=arrow_schema(manifest))
-        return pajson.read_json(path, parse_options=options).select(arrow_schema(manifest).names)
+        table = parse_artifact(
+            lambda: pajson.read_json(path, parse_options=options), ARROW_PARSER_ERRORS
+        )
+        return table.select(arrow_schema(manifest).names)
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)

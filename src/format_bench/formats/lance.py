@@ -15,7 +15,7 @@ from format_bench.fair import Operation, columns_for, lance_filter, limit_for
 from format_bench.model import Comparability, Lane
 from format_bench.runner import stats_ms
 
-from .base import Artifact, FormatDescription
+from .base import Artifact, FormatDescription, parse_artifact
 
 
 def _logical_size(path: Path) -> int:
@@ -76,7 +76,10 @@ class LanceAdapter:
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
         schema = arrow_schema(manifest)
-        return lance.dataset(path).to_table(columns=schema.names).cast(schema)
+        return parse_artifact(
+            lambda: lance.dataset(path).to_table(columns=schema.names).cast(schema),
+            (pa.ArrowException, OSError, RuntimeError, ValueError),
+        )
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)

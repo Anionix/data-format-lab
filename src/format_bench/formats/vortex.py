@@ -9,7 +9,7 @@ from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, arrow_filter, columns_for, limit_for
 from format_bench.model import Comparability, Lane
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, parse_artifact, write_artifact
 
 
 class VortexAdapter:
@@ -41,8 +41,14 @@ class VortexAdapter:
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
         schema = arrow_schema(manifest)
-        table = vortex.open(str(path)).to_dataset().to_table().select(schema.names)
-        return table if table.schema == schema else table.cast(schema)
+
+        def read_native() -> pa.Table:
+            table = vortex.open(str(path)).to_dataset().to_table().select(schema.names)
+            return table if table.schema == schema else table.cast(schema)
+
+        return parse_artifact(
+            read_native, (pa.ArrowException, OSError, RuntimeError, ValueError)
+        )
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)

@@ -10,7 +10,7 @@ from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, arrow_filter, columns_for, limit_for
 from format_bench.model import Comparability, Lane
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, parse_artifact, write_artifact
 
 ParquetCompression = Literal["snappy", "gzip", "zstd"]
 
@@ -61,7 +61,11 @@ class ParquetAdapter:
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
         schema = arrow_schema(manifest)
-        return pq.read_table(path, schema=schema).select(schema.names)
+        table = parse_artifact(
+            lambda: pq.read_table(path, schema=schema),
+            (pa.ArrowException, OSError, ValueError),
+        )
+        return table.select(schema.names)
 
     def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
         return verify_table(self.read(path, manifest), manifest)
