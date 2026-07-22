@@ -186,3 +186,15 @@ def test_nyc_capture_records_consumer_failure_after_yield(
     assert evidence["status"] == "FAILED"
     assert evidence["lifecycle_status"] == "FAILED"
     assert evidence["failure_reason"].endswith("write failed")
+    assert evidence["revision"]["before"] == "123"
+    assert evidence["revision"]["metadata_before_sha256"] == hashlib.sha256(
+        _metadata(123)
+    ).hexdigest()
+    assert evidence["raw_pages"][0]["status"] == "VALIDATED"
+    assert evidence["raw_pages"][0]["sha256"] == hashlib.sha256(page).hexdigest()
+    assert evidence["raw_pages"][0]["first_cursor"] == "row-opaque"
+    assert evidence["raw_pages"][0]["last_cursor"] == "row-opaque"
+    assert evidence["revision"]["after"] is None
+    assert evidence["revision"]["matched"] is False
+    assert (output / evidence["raw_pages"][0]["path"]).read_bytes() == page
+    assert not (output / "source.csv.partial").exists()
