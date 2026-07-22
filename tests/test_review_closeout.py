@@ -340,6 +340,38 @@ def test_p1_bypasses_threshold_without_releasing_p2() -> None:
     assert result["created_issue_numbers"] == [1]
 
 
+def test_below_threshold_validates_skipped_owner_issue_before_p1_creation() -> None:
+    client = FakeClient(2)
+    payload = cast(dict[str, Any], client.payload)
+    payload["data"]["repository"]["pullRequests"]["nodes"][0]["reviewThreads"]["nodes"][0]["comments"]["nodes"][0]["body"] = "P1 Badge"
+    client.create_issue("", issue_payload(ReviewThread(2, "thread-2", "P2 Badge"), "Anionix/data-format-lab"))
+    client.created.clear()
+    labels = cast(list[dict[str, str]], client.issues[0]["labels"])
+    labels[:] = [{"name": "lifecycle:tracked"} if item["name"] == "lifecycle:closeout-pending" else item for item in labels]
+
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab")
+
+    assert (client.created, client.replies, client.resolves) == ([], [], [])
+
+
+def test_below_threshold_does_not_release_valid_skipped_owner_issue() -> None:
+    client = FakeClient(2)
+    payload = cast(dict[str, Any], client.payload)
+    payload["data"]["repository"]["pullRequests"]["nodes"][0]["reviewThreads"]["nodes"][0]["comments"]["nodes"][0]["body"] = "P1 Badge"
+    client.create_issue("", issue_payload(ReviewThread(2, "thread-2", "P2 Badge"), "Anionix/data-format-lab"))
+    client.created.clear()
+
+    result = run(client, "Anionix/data-format-lab")
+
+    assert result["created_issue_numbers"] == [2]
+    assert client.resolves == ["thread-1"]
+    assert len(client.replies) == 1
+    assert {item["name"] for item in cast(list[dict[str, str]], client.issues[0]["labels"])} >= {
+        "lifecycle:closeout-pending",
+    }
+
+
 def test_nested_connections_are_paginated_to_exhaustion() -> None:
     client = FakeClient()
     initial = {"data": {"repository": {"pullRequests": {

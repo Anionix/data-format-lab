@@ -385,12 +385,23 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
     )
     issues_path = f"repos/{repository}/issues?state=all&per_page=100"
     tracked = tracked_issues(client.rest(issues_path), repository)
-    recovery = tuple(ReviewThread(pr, thread_id, "") for (pr, thread_id), issue in tracked.items() if "lifecycle:closeout-pending" in issue.labels)
+    current_by_key = {(thread.pull_request, thread.thread_id): thread for thread in current}
+    recovery = tuple(ReviewThread(pr, thread_id, "") for (pr, thread_id), issue in tracked.items()
+                     if "lifecycle:closeout-pending" in issue.labels and (pr, thread_id) not in current_by_key)
     work = {(thread.pull_request, thread.thread_id): thread for thread in recovery + eligible}
     if not work:
         return result
+    for key, thread in current_by_key.items():
+        issue = tracked.get(key)
+        if issue is None:
+            continue
+        _validate_issue(issue, "closeout-pending", review_priority(thread.body))
+        if "lifecycle:source-closed" in issue.labels:
+            raise ReviewCloseoutError("source-closed issue has an open thread")
     eligible_keys = {(thread.pull_request, thread.thread_id) for thread in eligible}
     for key, thread in work.items():
+        if key in current_by_key:
+            continue
         issue = tracked.get(key)
         if issue is not None:
             _validate_issue(issue, "closeout-pending", review_priority(thread.body) if key in eligible_keys else None)
