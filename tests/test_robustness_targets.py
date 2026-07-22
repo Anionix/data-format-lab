@@ -200,6 +200,47 @@ def test_worker_reports_value_mismatch_when_verification_returns_false(
     assert run_request(Path("request.json"))["observed"] is ObservedOutcome.VALUE_MISMATCH
 
 
+@pytest.mark.parametrize(
+    ("error", "observed", "error_type"),
+    [
+        (
+            ParserRejection(ValueError("malformed round-trip artifact")),
+            ObservedOutcome.REJECTED,
+            "ValueError",
+        ),
+        (TypeError("adapter defect"), ObservedOutcome.HARNESS_FAILED, "TypeError"),
+    ],
+)
+def test_worker_classifies_roundtrip_read_parser_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    observed: ObservedOutcome,
+    error_type: str,
+) -> None:
+    class FailingReader:
+        def read(self, path, manifest):
+            raise error
+
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "artifact.bin").write_bytes(b"data")
+    (tmp_path / "request.json").write_text(json.dumps({
+        "case_id": "roundtrip-read-error",
+        "target": "broken",
+        "expectation": "MUST_ROUNDTRIP",
+        "manifest": "manifest.json",
+        "artifact": "artifact.bin",
+    }))
+    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": FailingReader()})
+    monkeypatch.chdir(tmp_path)
+
+    result = run_request(Path("request.json"))
+
+    assert result["observed"] is observed
+    assert result["details"]["error_type"] == error_type
+    assert result["details"]["message"] == str(error)
+
+
 def test_worker_reports_raised_builtin_verification_as_value_mismatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

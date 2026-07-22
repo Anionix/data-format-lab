@@ -58,9 +58,12 @@ def target_map() -> dict[str, RobustnessTarget]:
 
 
 def read_target(adapter: FormatAdapter, path: Path, manifest: dict) -> pa.Table:
-    # Adapter exceptions remain harness failures unless the adapter explicitly
-    # raises TargetExecutionError at a target boundary.
-    return adapter.read(path, manifest)
+    # LLM contract: ADAPTER_READ -> PARSED | TARGET_REJECTED; undeclared
+    # adapter exceptions remain harness failures.
+    try:
+        return adapter.read(path, manifest)
+    except ParserRejection as error:
+        raise TargetExecutionError(error.cause) from error
 
 
 def _csv_header(path: Path) -> list[str]:
