@@ -9,14 +9,36 @@ import subprocess
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-MARKER = "data-format-lab-review-closeout:v1"
+MARKER = "review-closeout:v2"
 MARKERS = (
     re.compile(r"<!-- " + re.escape(MARKER) + r" pr=(\d+) thread=([^ ]+) -->"),
+    re.compile(r"<!-- data-format-lab-review-closeout:v1 pr=(\d+) thread=([^ ]+) -->"),
     re.compile(r"<!-- review-followup:v1 source=PR-(\d+) thread=([^ ]+) -->"),
 )
-PRIORITY_RE = re.compile(r"\bP([0-3])\b")
+PRIORITY_RE = re.compile(r"(?:!\[|^|\n)P([0-3]) Badge\b")
+THREAD_PAGE_QUERY = """
+query($node:ID!, $after:String) {
+  node(id:$node) { ... on PullRequest {
+    reviewThreads(first:100, after:$after) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id isResolved isOutdated comments(first:100) {
+        pageInfo { hasNextPage endCursor } nodes { body }
+      } }
+    }
+  } }
+}
+"""
+COMMENT_PAGE_QUERY = """
+query($node:ID!, $after:String) {
+  node(id:$node) { ... on PullRequestReviewThread {
+    comments(first:100, after:$after) {
+      pageInfo { hasNextPage endCursor } nodes { body }
+    }
+  } }
+}
+"""
 
-# LLM contract: REVIEW_DISCOVERED -> ISSUE_TRACKED -> HUMAN_CLOSED.
+# LLM contract: REVIEW_DISCOVERED -> CLASSIFIED -> ISSUE_TRACKED -> HUMAN_CLOSED.
 # The scheduled workflow never advances the final state automatically.
 
 
@@ -84,16 +106,38 @@ def _text(value: object, context: str) -> str:
     return value
 
 
+def _connection_nodes(
+    client: GitHubClient | None, initial: dict[str, object], node_id: str, field: str, query: str,
+) -> tuple[object, ...]:
+    connection = initial
+    result: list[object] = []
+    seen: set[str] = set()
+    while True:
+        page_info = _obj(connection.get("pageInfo"), f"{field}.pageInfo")
+        result.extend(_list(connection.get("nodes"), f"{field}.nodes"))
+        if page_info.get("hasNextPage") is not True:
+            return tuple(result)
+        cursor = _text(page_info.get("endCursor"), f"{field}.endCursor")
+        if client is None or cursor in seen:
+            raise ReviewCloseoutError(f"{field} pagination cannot advance")
+        seen.add(cursor)
+        response = _obj(client.graphql(query, {"node": node_id, "after": cursor}), f"{field} response")
+        data = _obj(response.get("data"), f"{field} data")
+        connection = _obj(_obj(data.get("node"), f"{field} node").get(field), field)
+
+
 def review_priority(body: str) -> str:
     priorities = [int(value) for value in PRIORITY_RE.findall(body)]
-    return f"P{min(priorities)}" if priorities else "P2"
+    return f"P{min(priorities)}" if priorities else "UNCLASSIFIED"
 
 
 def batch_ready(merged_with_threads: int, minimum: int = 10) -> bool:
     return merged_with_threads >= minimum
 
 
-def _parse_page(payload: object) -> tuple[int, str | None, bool, tuple[ReviewThread, ...]]:
+def _parse_page(
+    payload: object, client: GitHubClient | None = None,
+) -> tuple[int, str | None, bool, tuple[ReviewThread, ...]]:
     root = _obj(_obj(payload, "GraphQL response").get("data"), "data")
     repository = _obj(root.get("repository"), "repository")
     pull_requests = _obj(repository.get("pullRequests"), "pullRequests")
@@ -109,18 +153,23 @@ def _parse_page(payload: object) -> tuple[int, str | None, bool, tuple[ReviewThr
         number = pr.get("number")
         if type(number) is not int:
             raise ReviewCloseoutError("pull request number must be an integer")
-        threads = _obj(pr.get("reviewThreads"), "reviewThreads")
-        if _obj(threads.get("pageInfo"), "reviewThreads.pageInfo").get("hasNextPage") is True:
-            raise ReviewCloseoutError(f"PR #{number} has more than 100 review threads")
-        nodes = _list(threads.get("nodes"), "reviewThreads.nodes")
-        merged += bool(nodes)
-        for raw_thread in nodes:
+        pr_id = _text(pr.get("id"), "pull request id")
+        threads = _connection_nodes(
+            client, _obj(pr.get("reviewThreads"), "reviewThreads"), pr_id,
+            "reviewThreads", THREAD_PAGE_QUERY,
+        )
+        merged += bool(threads)
+        for raw_thread in threads:
             thread = _obj(raw_thread, "review thread")
             if thread.get("isResolved") or thread.get("isOutdated"):
                 continue
-            comments = _list(_obj(thread.get("comments"), "comments").get("nodes"), "comments.nodes")
+            thread_id = _text(thread.get("id"), "thread.id")
+            comments = _connection_nodes(
+                client, _obj(thread.get("comments"), "comments"), thread_id,
+                "comments", COMMENT_PAGE_QUERY,
+            )
             body = "\n".join(_text(_obj(comment, "review comment").get("body"), "body") for comment in comments)
-            current.append(ReviewThread(number, _text(thread.get("id"), "thread.id"), body))
+            current.append(ReviewThread(number, thread_id, body))
     if has_next and not cursor:
         raise ReviewCloseoutError("merged pull request page has no end cursor")
     return merged, cursor, has_next, tuple(current)
@@ -133,9 +182,11 @@ def merged_review_threads(client: GitHubClient, repository: str) -> tuple[int, t
       repository(owner:$owner, name:$name) {
         pullRequests(first:100, after:$after, states:MERGED, orderBy:{field:UPDATED_AT, direction:DESC}) {
           pageInfo { hasNextPage endCursor }
-          nodes { number reviewThreads(first:100) {
-            pageInfo { hasNextPage }
-            nodes { id isResolved isOutdated comments(first:20) { nodes { body } } }
+          nodes { id number reviewThreads(first:100) {
+            pageInfo { hasNextPage endCursor }
+            nodes { id isResolved isOutdated comments(first:20) {
+              pageInfo { hasNextPage endCursor } nodes { body }
+            } }
           } }
         }
       }
@@ -144,26 +195,38 @@ def merged_review_threads(client: GitHubClient, repository: str) -> tuple[int, t
     cursor: str | None = None
     merged = 0
     current: list[ReviewThread] = []
+    seen: set[str] = set()
     while True:
         page_merged, cursor, has_next, page_current = _parse_page(
-            client.graphql(query, {"owner": owner, "name": name, "after": cursor})
+            client.graphql(query, {"owner": owner, "name": name, "after": cursor}), client
         )
         merged += page_merged
         current.extend(page_current)
         if not has_next:
             return merged, tuple(current)
+        if cursor is None or cursor in seen:
+            raise ReviewCloseoutError("merged pull request pagination cannot advance")
+        seen.add(cursor)
 
 
 def marked_issue_bodies(payload: object) -> frozenset[tuple[int, str]]:
-    found: set[tuple[int, str]] = set()
+    found: dict[tuple[int, str], int] = {}
     for page in _list(payload, "issues pages"):
         for raw_issue in _list(page, "issues page"):
             issue = _obj(raw_issue, "issue")
             body = issue.get("body")
             if "pull_request" in issue or not isinstance(body, str):
                 continue
-            for pattern in MARKERS:
-                found.update((int(match.group(1)), match.group(2)) for match in pattern.finditer(body))
+            keys = {(int(match.group(1)), match.group(2)) for pattern in MARKERS for match in pattern.finditer(body)}
+            if not keys:
+                continue
+            number = issue.get("number")
+            if type(number) is not int:
+                raise ReviewCloseoutError("tracked issue number must be an integer")
+            for key in keys:
+                if key in found and found[key] != number:
+                    raise ReviewCloseoutError(f"multiple issues track PR #{key[0]} thread {key[1]}")
+                found[key] = number
     return frozenset(found)
 
 
@@ -176,13 +239,15 @@ def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
             "## Review follow-up\n\n"
             f"A scheduled sweep found a current unresolved review thread on "
             f"[PR #{thread.pull_request}](https://github.com/{repository}/pull/{thread.pull_request}).\n\n"
-            f"**Review priority:** `{priority}`  \n**Canonical label:** `priority:{priority.lower()}`  \n"
-            f"**Thread ID:** `{thread.thread_id}`\n\n"
+            "### Classification\n\n"
+            f"- Priority: `{priority}`\n- Failure domain: `unclassified`\n"
+            f"- Source: `review`\n- Lifecycle: `tracked`\n- Thread ID: `{thread.thread_id}`\n\n"
             "Reply to the source thread, resolve or mark it outdated after the fix, "
             "and use a new non-stacked PR from the latest `origin/main`.\n\n"
             f"{marker}"
         ),
-        "labels": ["bug", f"priority:{priority.lower()}", "ready-for-agent"],
+        "labels": ["bug", f"priority:{priority.lower()}", "bug-class:unclassified",
+                   "source:review", "lifecycle:tracked", "needs-triage"],
     }
 
 
@@ -192,13 +257,16 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
         "schema_version": "review_closeout/v1", "repository": repository,
         "merged_pull_requests_with_threads": merged, "minimum": minimum,
         "candidate_count": len(current), "created_issue_numbers": [],
-        "status": "NOOP_BELOW_BATCH_THRESHOLD",
+        "status": "NOOP_NO_CURRENT_THREADS" if not current else "NOOP_BELOW_BATCH_THRESHOLD",
     }
-    if not batch_ready(merged, minimum):
+    eligible = current if batch_ready(merged, minimum) else tuple(
+        thread for thread in current if review_priority(thread.body) in {"P0", "P1"}
+    )
+    if not eligible:
         return result
-    marked = marked_issue_bodies(client.rest(f"repos/{repository}/issues?state=all&per_page=100"))
+    marked = set(marked_issue_bodies(client.rest(f"repos/{repository}/issues?state=all&per_page=100")))
     created: list[int] = []
-    for thread in current:
+    for thread in eligible:
         if (thread.pull_request, thread.thread_id) in marked:
             continue
         issue = _obj(client.create_issue(f"repos/{repository}/issues", issue_payload(thread, repository)), "created issue")
@@ -206,6 +274,7 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
         if type(number) is not int:
             raise ReviewCloseoutError("created issue number must be an integer")
         created.append(number)
+        marked.add((thread.pull_request, thread.thread_id))
     result["created_issue_numbers"] = created
     result["status"] = "ISSUES_CREATED" if created else "NOOP_ALREADY_TRACKED"
     return result
