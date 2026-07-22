@@ -54,6 +54,12 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _persist_capture(destination: Path, evidence: dict[str, object]) -> None:
+    (destination / "capture.json").write_text(
+        json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def _write_capture(
     destination: Path,
     evidence: dict[str, object],
@@ -73,7 +79,7 @@ def _write_capture(
         evidence["finished_at"] = datetime.now(timezone.utc).isoformat()
     if error is not None:
         evidence["failure_reason"] = f"{type(error).__name__}: {error}"
-    (destination / "capture.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    _persist_capture(destination, evidence)
 
 
 def finalize_capture(destination: Path, status: CaptureState, error: BaseException | None = None) -> None:
@@ -219,6 +225,8 @@ def nyc_rows(manifest: Mapping[str, object], destination: Path) -> Iterator[Mapp
             emitted += len(rows)
             if emitted > target:
                 raise ValueError("NYC source returned more rows than requested")
+            # LLM contract: PAGE_VALIDATED -> EVIDENCE_PERSISTED -> ROWS_YIELDED.
+            _persist_capture(destination, evidence)
             for row in rows:
                 row.pop(cursor)
                 yield row
