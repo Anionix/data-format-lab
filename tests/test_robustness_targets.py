@@ -8,7 +8,7 @@ import pytest
 import format_bench.robustness.worker as worker
 from format_bench.canonical import canonical_hash, query_counts, read_csv
 from format_bench.fair import Operation
-from format_bench.formats.base import Artifact, FormatDescription
+from format_bench.formats.base import Artifact, FormatDescription, ParserRejection
 from format_bench.model import (
     Comparability,
     Lane,
@@ -26,8 +26,11 @@ from format_bench.robustness import (
     target_map,
 )
 from format_bench.robustness.worker import run_request
-from format_bench.robustness.targets import TargetExecutionError
-from format_bench.robustness.targets import RobustnessTarget, read_robustness
+from format_bench.robustness.targets import (
+    RobustnessTarget,
+    TargetExecutionError,
+    read_robustness,
+)
 
 
 DATASET = Path("datasets/github-stars-2026-07-03")
@@ -116,7 +119,7 @@ def test_malformed_column_cases_are_rejected_by_worker(
     assert result["observed"] is ObservedOutcome.REJECTED
 
 
-def test_read_robustness_attributes_input_errors_to_target_boundary(
+def test_read_robustness_attributes_parser_rejection_to_target_boundary(
     tmp_path: Path,
 ) -> None:
     class RejectingAdapter:
@@ -133,7 +136,7 @@ def test_read_robustness_attributes_input_errors_to_target_boundary(
             raise NotImplementedError
 
         def read(self, path: Path, manifest: dict) -> pa.Table:
-            raise ValueError("malformed artifact")
+            raise ParserRejection(ValueError("malformed artifact"))
 
         def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
             raise NotImplementedError
@@ -143,11 +146,33 @@ def test_read_robustness_attributes_input_errors_to_target_boundary(
 
     artifact = tmp_path / "artifact.bin"
     artifact.write_bytes(b"broken")
-    manifest = _fixture()[0]
     target = RobustnessTarget("custom", RejectingAdapter())
 
     with pytest.raises(TargetExecutionError, match="malformed artifact"):
-        read_robustness(target, artifact, manifest)
+        read_robustness(target, artifact, _fixture()[0])
+
+
+def test_parquet_data_page_rejection_crosses_parser_boundary(tmp_path: Path) -> None:
+    manifest, table = _fixture()
+    path = tmp_path / "artifact.parquet"
+    encode_valid(target_map()["parquet_zstd19"], table, path)
+    mutated = bytearray(path.read_bytes())
+    mutated[4] ^= 0xFF
+    path.write_bytes(mutated)
+    with pytest.raises(TargetExecutionError) as caught:
+        read_robustness(target_map()["parquet_zstd19"], path, manifest)
+    assert isinstance(caught.value.cause, OSError)
+
+
+def test_lance_wrong_type_rejection_crosses_parser_boundary(tmp_path: Path) -> None:
+    manifest, table = _fixture()
+    index = table.schema.get_field_index("description")
+    malformed = table.set_column(index, "description", pa.array([[1]] * table.num_rows))
+    path = tmp_path / "artifact.lance"
+    encode_valid(target_map()["lance_base"], malformed, path)
+    with pytest.raises(TargetExecutionError) as caught:
+        read_robustness(target_map()["lance_base"], path, manifest)
+    assert isinstance(caught.value.cause, pa.ArrowException)
 
 
 def test_worker_reports_value_mismatch_when_verification_returns_false(
@@ -259,33 +284,40 @@ def test_worker_does_not_attribute_lab_setup_errors_to_target(
     ) is RobustnessVerdict.INCOMPLETE
 
 
+@pytest.mark.parametrize(
+    "error_type",
+    [pa.ArrowInvalid, OSError, RuntimeError, ValueError, NameError, TypeError],
+)
 @pytest.mark.parametrize("expectation", ["MUST_REJECT", "MUST_NOT_CRASH"])
-def test_worker_does_not_attribute_adapter_type_error_to_rejection(
+def test_worker_does_not_attribute_core_adapter_defects_to_rejection(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    error_type: type[Exception],
     expectation: str,
 ) -> None:
-    class RejectingAdapter:
-        def read(self, path, manifest):
-            raise TypeError("target rejected artifact")
+    manifest, table = _fixture()
+    target = worker.target_map()["parquet_default"]
+    encode_valid(target, table, tmp_path / "artifact.parquet")
 
-    (tmp_path / "manifest.json").write_text("{}")
-    (tmp_path / "artifact.bin").write_bytes(b"data")
+    def fail_adapter(_path: Path, _manifest: dict) -> pa.Table:
+        raise error_type("adapter defect")
+
+    monkeypatch.setattr(target.adapter, "read", fail_adapter)
+    monkeypatch.setattr(worker, "target_map", lambda: {target.name: target})
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
     (tmp_path / "request.json").write_text(json.dumps({
-        "case_id": "target-type-error",
-        "target": "broken",
+        "case_id": "adapter-defect",
+        "target": target.name,
         "manifest": "manifest.json",
-        "artifact": "artifact.bin",
+        "artifact": "artifact.parquet",
         "expectation": expectation,
     }))
-    monkeypatch.setattr(worker, "adapter_map", lambda: {"broken": RejectingAdapter()})
-    monkeypatch.setattr(worker, "target_map", lambda: {})
     monkeypatch.chdir(tmp_path)
 
     result = run_request(Path("request.json"))
 
     assert result["observed"] is ObservedOutcome.HARNESS_FAILED
-    assert result["details"]["error_type"] == "TypeError"
+    assert result["details"]["error_type"] == error_type.__name__
     assert robustness_verdict(
         RobustnessExpectation(expectation), result["observed"]
     ) is RobustnessVerdict.INCOMPLETE

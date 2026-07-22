@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
 
 import pyarrow as pa
 import zstandard as zstd
@@ -12,6 +12,28 @@ from format_bench.model import Comparability, Lane
 
 if TYPE_CHECKING:
     from format_bench.fair import Operation
+
+T = TypeVar("T")
+
+
+class ParserRejection(Exception):
+    """A native parser rejected the supplied artifact."""
+
+    def __init__(self, cause: Exception) -> None:
+        self.cause = cause
+        super().__init__(str(cause))
+
+
+def parse_artifact(reader: Callable[[], T], errors: tuple[type[Exception], ...]) -> T:
+    # LLM contract: PARSER_CALLED -> PARSED | PARSER_REJECTED.
+    try:
+        return reader()
+    except errors as error:
+        if isinstance(error, OSError) and (
+            type(error) is not OSError or error.errno is not None
+        ):
+            raise
+        raise ParserRejection(error) from error
 
 
 @dataclass(frozen=True)

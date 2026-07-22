@@ -12,7 +12,12 @@ import vortex
 import zstandard as zstd
 
 from format_bench.canonical import arrow_schema
-from format_bench.formats.base import Artifact, FormatAdapter
+from format_bench.formats.base import (
+    Artifact,
+    FormatAdapter,
+    ParserRejection,
+    parse_artifact,
+)
 from format_bench.model import TargetTier
 from format_bench.registry import adapter_map
 
@@ -58,18 +63,29 @@ def read_target(adapter: FormatAdapter, path: Path, manifest: dict) -> pa.Table:
     return adapter.read(path, manifest)
 
 
+def _csv_header(path: Path) -> list[str]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return next(csv.reader(handle), [])
+
+
 def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.Table:
-    expected = arrow_schema(manifest).names
+    schema = arrow_schema(manifest)
+    expected = schema.names
+    # LLM contract: PARSER_RAISED -> TARGET_REJECTED; undeclared errors -> HARNESS_FAILED.
     try:
         if target.name == "csv":
-            with path.open(encoding="utf-8", newline="") as handle:
-                physical = next(csv.reader(handle), [])
+            physical = parse_artifact(
+                lambda: _csv_header(path), (csv.Error, OSError, UnicodeError)
+            )
             if physical != expected:
                 raise TargetExecutionError(
                     ValueError(f"CSV header mismatch: expected {expected}, got {physical}")
                 )
         elif target.name == "object_jsonl":
-            lines = path.read_text(encoding="utf-8").splitlines()
+            lines = parse_artifact(
+                lambda: path.read_text(encoding="utf-8").splitlines(),
+                (OSError, UnicodeError),
+            )
             for line_number, line in enumerate(lines, 1):
                 try:
                     value = json.loads(line)
@@ -80,19 +96,28 @@ def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.
                         ValueError(f"JSONL object shape mismatch at line {line_number}")
                     )
         elif target.name.startswith("parquet_"):
-            physical = pq.ParquetFile(path).schema_arrow.names
+            physical = parse_artifact(
+                lambda: pq.ParquetFile(path).schema_arrow.names,
+                (pa.ArrowException, OSError, ValueError),
+            )
             if physical != expected:
                 raise TargetExecutionError(
                     ValueError(f"Parquet schema mismatch: expected {expected}, got {physical}")
                 )
         elif target.name == "lance_base":
-            physical = lance.dataset(path).schema.names
+            physical = parse_artifact(
+                lambda: lance.dataset(path).schema.names,
+                (pa.ArrowException, OSError, RuntimeError, ValueError),
+            )
             if physical != expected:
                 raise TargetExecutionError(
                     ValueError(f"Lance schema mismatch: expected {expected}, got {physical}")
                 )
         elif target.name.startswith("vortex_"):
-            physical = vortex.open(str(path)).to_dataset().schema.names
+            physical = parse_artifact(
+                lambda: vortex.open(str(path)).to_dataset().schema.names,
+                (pa.ArrowException, OSError, RuntimeError, ValueError),
+            )
             if physical != expected:
                 raise TargetExecutionError(
                     ValueError(f"Vortex schema mismatch: expected {expected}, got {physical}")
@@ -100,12 +125,8 @@ def read_robustness(target: RobustnessTarget, path: Path, manifest: dict) -> pa.
         return read_target(target.adapter, path, manifest)
     except TargetExecutionError:
         raise
-    except (ImportError, ModuleNotFoundError):
-        raise
-    except Exception as error:
-        # The robustness worker has crossed the explicit target boundary: malformed
-        # input is a target rejection, while setup failures remain HARNESS_FAILED.
-        raise TargetExecutionError(error) from error
+    except ParserRejection as error:
+        raise TargetExecutionError(error.cause) from error
 
 
 def encode_valid(target: RobustnessTarget, table: pa.Table, path: Path) -> Artifact:
