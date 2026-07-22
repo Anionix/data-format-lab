@@ -144,6 +144,57 @@ def test_run_job_stops_after_first_failed_fresh_attempt(
     assert result_holder == [{"status": "FAILED", "reason": "fixture timeout"}]
 
 
+def test_run_job_joins_running_fresh_attempts_after_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    barrier = threading.Barrier(2)
+    release_running = threading.Event()
+    failure_ready = threading.Event()
+    running_finished = threading.Event()
+    roles = iter(("failure", "running"))
+    roles_lock = threading.Lock()
+
+    def fake_run_fresh_process(job, config, cwd):
+        with roles_lock:
+            role = next(roles)
+        barrier.wait(timeout=2)
+        if role == "failure":
+            failure_ready.set()
+            return {"status": "FAILED", "reason": "first failure"}
+        release_running.wait(timeout=2)
+        running_finished.set()
+        return {"status": "FAILED", "reason": "later failure"}
+
+    monkeypatch.setattr(runner, "_run_fresh_process", fake_run_fresh_process)
+    job = Job("fixture/read", ("fixture",), 7)
+    result_holder: list[dict] = []
+    returned = threading.Event()
+
+    def invoke() -> None:
+        result_holder.append(
+            run_job(
+                job,
+                MeasurementConfig(fresh_processes=2, fresh_workers=2),
+                tmp_path,
+            )
+        )
+        returned.set()
+
+    thread = threading.Thread(target=invoke)
+    thread.start()
+    try:
+        assert failure_ready.wait(timeout=2)
+        assert not returned.wait(timeout=0.1)
+        assert not running_finished.is_set()
+    finally:
+        release_running.set()
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert running_finished.is_set()
+    assert result_holder == [{"status": "FAILED", "reason": "first failure"}]
+
+
 def test_run_job_classifies_invalid_worker_output_as_failure(tmp_path: Path) -> None:
     job = Job("fixture/read", (sys.executable, "-c", "print('not json')"), 7)
     result = run_job(job, MeasurementConfig(fresh_processes=1), tmp_path)

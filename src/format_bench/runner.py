@@ -194,7 +194,7 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
             if process.get("status") == "FAILED":
                 for pending in futures:
                     pending.cancel()
-                executor.shutdown(wait=False, cancel_futures=True)
+                executor.shutdown(wait=True, cancel_futures=True)
                 shutdown = True
                 return process
             completed[future_indexes[future]] = process
