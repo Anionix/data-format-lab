@@ -75,6 +75,7 @@ def test_desired_issue_contract_and_foundation_plan() -> None:
     plan = github.build_plan(registry, items, github.LiveState({}, {}, {}, existing))
     assert len(plan) == 10
     assert {mutation.key.split(":", 1)[0] for mutation in plan} == {"label", "milestone"}
+    assert github.label_spec({"name": "live", "color": "ABCDEF", "description": None}).description == ""
 
 
 def test_issue_plan_converges_to_no_op() -> None:

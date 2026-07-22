@@ -1,0 +1,48 @@
+{
+  "schema_version": "review-closeout-labels/v1",
+  "primary_source": "https://docs.github.com/en/rest/issues/labels",
+  "repositories": [
+    "Anionix/data-format-lab",
+    "Anionix/diagnostic-triage"
+  ],
+  "required_existing": [
+    "bug",
+    "needs-triage",
+    "priority:p0",
+    "priority:p1",
+    "priority:p2",
+    "priority:p3"
+  ],
+  "managed_labels": [
+    {
+      "name": "priority:unclassified",
+      "color": "BFDADC",
+      "description": "Priority has not yet been classified"
+    },
+    {
+      "name": "bug-class:unclassified",
+      "color": "6F42C1",
+      "description": "Failure domain has not yet been classified"
+    },
+    {
+      "name": "source:review",
+      "color": "6F42C1",
+      "description": "Defect discovered in pull-request review"
+    },
+    {
+      "name": "lifecycle:tracked",
+      "color": "1D76DB",
+      "description": "Defect is tracked in a canonical issue"
+    },
+    {
+      "name": "lifecycle:closeout-pending",
+      "color": "D4C5F9",
+      "description": "Review source ownership transfer has not completed"
+    },
+    {
+      "name": "lifecycle:source-closed",
+      "color": "0E8A16",
+      "description": "Review source thread is linked, resolved, and read back"
+    }
+  ]
+}
