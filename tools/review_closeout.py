@@ -305,6 +305,19 @@ def tracked_issues(payload: object, repository: str) -> dict[tuple[int, str], Tr
     return found
 
 
+def _read_tracked_issue(
+    client: GitHubClient, repository: str, key: tuple[int, str], number: int
+) -> TrackedIssue:
+    payload = _list(
+        client.rest(f"repos/{repository}/issues/{number}"),
+        f"issue #{number} targeted readback",
+    )
+    found = tracked_issues([payload], repository)
+    if set(found) != {key} or found[key].number != number:
+        raise ReviewCloseoutError(f"issue #{number} targeted identity mismatch")
+    return found[key]
+
+
 def _validate_issue(issue: TrackedIssue, lifecycle: str, priority: str | None = None) -> None:
     lifecycles = {label for label in issue.labels if label.startswith("lifecycle:")}
     expected = {f"lifecycle:{lifecycle}"} | ({"lifecycle:source-closed"} if "lifecycle:source-closed" in issue.labels else set[str]())
@@ -314,6 +327,20 @@ def _validate_issue(issue: TrackedIssue, lifecycle: str, priority: str | None = 
         "bug-class:unclassified" in issue.labels and "needs-triage" not in issue.labels
     ):
         raise ReviewCloseoutError(f"issue #{issue.number} is not an open classified bug")
+
+
+def _read_valid_pending_issue(
+    client: GitHubClient,
+    repository: str,
+    key: tuple[int, str],
+    expected: TrackedIssue,
+    priority: str,
+) -> TrackedIssue:
+    current = _read_tracked_issue(client, repository, key, expected.number)
+    if current.url != expected.url:
+        raise ReviewCloseoutError(f"PR #{key[0]} targeted issue URL mismatch")
+    _validate_issue(current, "closeout-pending", priority)
+    return current
 
 
 def _validate_link(body: str, issue: TrackedIssue) -> None:
@@ -376,46 +403,60 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
         if type(number) is not int:
             raise ReviewCloseoutError("created issue number must be an integer")
         created.append(number)
-    if created:
-        tracked = tracked_issues(client.rest(issues_path), repository)
-    priorities: dict[tuple[int, str], str] = {}
+        readback = _read_tracked_issue(client, repository, key, number)
+        if readback.url != _text(issue.get("html_url"), "created issue URL"):
+            raise ReviewCloseoutError(f"issue #{number} targeted URL mismatch")
+        _validate_issue(readback, "closeout-pending", review_priority(thread.body))
+        tracked[key] = readback
     # LLM contract: DISCOVERED -> CLASSIFIED -> TRACKED -> (REPLIED -> RESOLVED | OUTDATED) -> READBACK_CONFIRMED.
     for key, thread in work.items():
         issue = tracked.get(key)
         if issue is None:
             raise ReviewCloseoutError(f"PR #{thread.pull_request} thread has no tracked issue")
+        current_issue = _read_tracked_issue(client, repository, key, issue.number)
+        if current_issue.url != issue.url:
+            raise ReviewCloseoutError(f"PR #{key[0]} targeted issue URL mismatch")
+        issue = current_issue
         is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
-        priorities[key] = review_priority(body)
-        _validate_issue(issue, "closeout-pending", priorities[key])
+        priority = review_priority(body)
+        if "lifecycle:source-closed" in issue.labels and "lifecycle:closeout-pending" not in issue.labels:
+            _validate_issue(issue, "source-closed", priority)
+            if not (is_resolved or is_outdated):
+                raise ReviewCloseoutError("source-closed issue has an open thread")
+            if not is_outdated or REPLY_RE.search(reply_body):
+                _validate_link(reply_body, issue)
+            continue
+        _validate_issue(issue, "closeout-pending", priority)
         if "lifecycle:source-closed" in issue.labels and not (is_resolved or is_outdated):
             raise ReviewCloseoutError("source-closed issue has an open thread")
         if not is_outdated and REPLY_RE.search(reply_body) is None:
             if is_resolved:
                 raise ReviewCloseoutError(f"thread {thread.thread_id} closed before source reply")
+            issue = _read_valid_pending_issue(client, repository, key, issue, priority)
             reply = f"Tracked as bug #{issue.number}: {issue.url}\n\n<!-- review-closeout-reply:v1 issue={issue.number} url={issue.url} -->"
             client.reply_thread(thread.thread_id, reply)
             is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
         if not is_outdated or REPLY_RE.search(reply_body):
             _validate_link(reply_body, issue)
         if not is_resolved and not is_outdated:
+            issue = _read_valid_pending_issue(client, repository, key, issue, priority)
             client.resolve_thread(thread.thread_id)
             is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
             _validate_link(reply_body, issue)
-        if not (is_resolved or is_outdated) or review_priority(body) != priorities[key]:
+        if not (is_resolved or is_outdated) or review_priority(body) != priority:
             raise ReviewCloseoutError(f"thread {thread.thread_id} state changed during closeout")
-        client.add_issue_label(f"repos/{repository}/issues/{issue.number}", "lifecycle:source-closed")
-    final_issues = tracked_issues(client.rest(issues_path), repository)
-    for key in work:
-        final = final_issues.get(key)
-        if final is None or final.number != tracked[key].number or final.url != tracked[key].url or "lifecycle:source-closed" not in final.labels:
+        issue = _read_valid_pending_issue(client, repository, key, issue, priority)
+        if "lifecycle:source-closed" not in issue.labels:
+            client.add_issue_label(f"repos/{repository}/issues/{issue.number}", "lifecycle:source-closed")
+        final = _read_tracked_issue(client, repository, key, issue.number)
+        if final.url != issue.url or "lifecycle:source-closed" not in final.labels:
             raise ReviewCloseoutError(f"PR #{key[0]} thread lost its tracked issue")
-        _validate_issue(final, "closeout-pending", priorities[key])
+        _validate_issue(final, "closeout-pending", priority)
         client.remove_issue_label(f"repos/{repository}/issues/{final.number}", "lifecycle:closeout-pending")
-    terminal_issues = tracked_issues(client.rest(issues_path), repository)
-    for key in work:
-        if (terminal := terminal_issues.get(key)) is None or terminal.number != tracked[key].number or terminal.url != tracked[key].url:
+        terminal = _read_tracked_issue(client, repository, key, issue.number)
+        if terminal.url != issue.url:
             raise ReviewCloseoutError(f"PR #{key[0]} terminal issue identity mismatch")
-        _validate_issue(terminal, "source-closed", priorities[key])
+        _validate_issue(terminal, "source-closed", priority)
     result["created_issue_numbers"] = created
     result["status"] = "THREADS_CLOSED"
     return result

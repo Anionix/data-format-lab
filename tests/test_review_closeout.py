@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 
@@ -21,6 +21,11 @@ from review_closeout import (
 )
 
 OWNER_LABELS = [{"name": "bug"}, {"name": "source:review"}]
+FailureMode = Literal[
+    "add-lifecycle", "closed-readback", "invalid-after-reply", "invalid-before-reply",
+    "lifecycle", "outdated", "reply", "resolve", "spoof", "stale-collection",
+    "stale-pending-collection", "stale-source-closed-collection",
+]
 
 
 class FakeClient:
@@ -28,11 +33,14 @@ class FakeClient:
         self.actor = "Anionix"
         self.graphql_calls = 0
         self.rest_calls = 0
+        self.rest_paths: list[str] = []
         self.created: list[dict[str, object]] = []
         self.issues: list[dict[str, object]] = []
         self.replies: list[str] = []
         self.resolves: list[str] = []
-        self.failure_mode: str | None = None
+        self.label_adds: list[tuple[str, str]] = []
+        self.label_removes: list[tuple[str, str]] = []
+        self.failure_mode: FailureMode | None = None
         self.pages: list[object] = []
         self.payload = {
             "data": {
@@ -64,11 +72,34 @@ class FakeClient:
     def graphql(self, query: str, fields: dict[str, str | None]) -> object:
         self.graphql_calls += 1
         if "query($node:ID!)" in query:
+            if self.failure_mode == "invalid-before-reply":
+                self.issues[0]["state"] = "closed"
             return {"data": {"node": self._thread(cast(str, fields["node"]))}}
         return self.pages.pop(0) if self.pages else self.payload
 
     def rest(self, path: str) -> object:
         self.rest_calls += 1
+        self.rest_paths.append(path)
+        if "/issues/" in path:
+            number = int(path.rsplit("/", 1)[1])
+            issue = next(issue for issue in self.issues if issue["number"] == number)
+            if self.failure_mode == "closed-readback":
+                return [{**issue, "state": "closed"}]
+            return [issue]
+        if self.failure_mode == "stale-collection" and self.created:
+            return [self.issues[:1]]
+        if self.failure_mode == "stale-source-closed-collection":
+            return [[{
+                **issue,
+                "labels": [item for item in cast(list[dict[str, str]], issue["labels"])
+                           if item["name"] != "lifecycle:source-closed"],
+            } for issue in self.issues]]
+        if self.failure_mode == "stale-pending-collection":
+            return [[{
+                **issue,
+                "labels": [*cast(list[dict[str, str]], issue["labels"]),
+                           {"name": "lifecycle:closeout-pending"}],
+            } for issue in self.issues]]
         return [self.issues]
 
     def current_user(self) -> str:
@@ -88,19 +119,26 @@ class FakeClient:
         return issue
 
     def add_issue_label(self, path: str, label: str) -> object:
+        self.label_adds.append((path, label))
         cast(list[dict[str, str]], next(issue for issue in self.issues if path.endswith(f"/{issue['number']}"))["labels"]).append({"name": label})
+        if self.failure_mode == "add-lifecycle":
+            self.failure_mode = "stale-source-closed-collection"
+            raise ReviewCloseoutError("add label response lost")
 
     def remove_issue_label(self, path: str, label: str) -> object:
+        self.label_removes.append((path, label))
         issue = next(issue for issue in self.issues if path.endswith(f"/{issue['number']}"))
         issue["labels"] = [item for item in cast(list[dict[str, str]], issue["labels"]) if item["name"] != label]
         if self.failure_mode == "lifecycle":
             assert self.rest_calls >= 3
-            self.failure_mode = None
+            self.failure_mode = "stale-pending-collection"
             raise ReviewCloseoutError("label response lost")
 
     def reply_thread(self, thread_id: str, body: str) -> object:
         self.replies.append(body)
         self._thread(thread_id)["comments"]["nodes"].append({"body": body, "author": {"login": "Anionix"}})
+        if self.failure_mode == "invalid-after-reply":
+            self.issues[0]["state"] = "closed"
         if self.failure_mode == "reply":
             self.failure_mode = None
             raise ReviewCloseoutError("reply response lost")
@@ -213,6 +251,23 @@ def test_run_creates_one_issue_per_current_thread_after_threshold() -> None:
     assert len(client.created) == 10
 
 
+def test_run_uses_targeted_issue_readback_after_writes() -> None:
+    client = FakeClient(2)
+    client.failure_mode = "stale-collection"
+    result = run(client, "Anionix/data-format-lab", minimum=1)
+    assert result["status"] == "THREADS_CLOSED"
+    assert sum("?state=all" in path for path in client.rest_paths) == 1
+    assert {path.rsplit("/", 1)[-1] for path in client.rest_paths if "/issues/" in path} == {"1", "2"}
+
+
+def test_invalid_targeted_readback_stops_before_next_creation() -> None:
+    client = FakeClient(2)
+    client.failure_mode = "closed-readback"
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert len(client.created) == 1
+
+
 def test_existing_issue_classification_must_match_source() -> None:
     client = FakeClient(2)
     client.create_issue("", issue_payload(ReviewThread(1, "thread-1", "P3 Badge"), "Anionix/data-format-lab"))
@@ -246,11 +301,35 @@ def test_partial_mutations_resume_monotonically() -> None:
     client.rest_calls, client.failure_mode = 1, "lifecycle"
     with pytest.raises(ReviewCloseoutError, match="label response lost"):
         run(client, "Anionix/data-format-lab", minimum=1)
-    assert (run(client, "Anionix/data-format-lab", minimum=1)["status"], len(client.replies), len(client.resolves)) == ("NOOP_NO_CURRENT_THREADS", 1, 1)
+    assert (run(client, "Anionix/data-format-lab", minimum=1)["status"], len(client.replies), len(client.resolves)) == ("THREADS_CLOSED", 1, 1)
+    assert len(client.label_removes) == 1
     for mode, expected in (("spoof", (1, 1)), ("outdated", (0, 0))):
         client = FakeClient(1)
         client.failure_mode = mode
         assert (run(client, "Anionix/data-format-lab", minimum=1)["status"], len(client.replies), len(client.resolves)) == ("THREADS_CLOSED", *expected)
+
+    client = FakeClient(1)
+    client.failure_mode = "add-lifecycle"
+    with pytest.raises(ReviewCloseoutError, match="add label response lost"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert run(client, "Anionix/data-format-lab", minimum=1)["status"] == "THREADS_CLOSED"
+    assert len(client.label_adds) == 1
+
+
+def test_reply_revalidates_issue_before_resolution() -> None:
+    client = FakeClient(1)
+    client.failure_mode = "invalid-after-reply"
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert (len(client.replies), len(client.resolves)) == (1, 0)
+
+
+def test_reply_revalidates_issue_after_thread_read() -> None:
+    client = FakeClient(1)
+    client.failure_mode = "invalid-before-reply"
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert (len(client.replies), len(client.resolves)) == (0, 0)
 
 
 def test_p1_bypasses_threshold_without_releasing_p2() -> None:
