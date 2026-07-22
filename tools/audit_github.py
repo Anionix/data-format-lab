@@ -8,9 +8,9 @@ import subprocess
 import time
 from dataclasses import dataclass
 from typing import Literal, cast
-from urllib.parse import quote
 
 from audit_tracker import AuditError, AuditItem, validate_ui_readback
+from github_labels import LabelSpec, plan_labels
 
 MARKER = "data-format-lab-audit:v1"
 MARKER_RE = re.compile(r"<!-- data-format-lab-audit:v1 id=([^ ]+) -->")
@@ -148,6 +148,9 @@ def _flatten_pages(value: object, context: str) -> list[dict[str, object]]:
     ]
 
 
+object_map, object_list, object_text, flatten_pages = _obj, _list, _text, _flatten_pages
+
+
 def desired_issues(registry: dict[str, object], items: list[AuditItem]) -> tuple[IssueSpec, ...]:
     github = _obj(registry["github"], "github")
     audit_label = cast(str, github["audit_label"])
@@ -245,28 +248,35 @@ def _same_fields(
     return all(desired.get(field) == current.get(field) for field in fields)
 
 
+def label_spec(value: object) -> LabelSpec:
+    raw = _obj(value, "label")
+    name, color = (_text(raw, key, "label") for key in ("name", "color"))
+    description = raw.get("description")
+    if description is None:
+        description = ""
+    if not isinstance(description, str):
+        raise AuditError("label.description must be a string or null")
+    if not name or re.fullmatch(r"[0-9A-Fa-f]{6}", color) is None or len(description) > 100:
+        raise AuditError(f"invalid label specification: {name}")
+    return LabelSpec(name, color.lower(), description)
+
+
 def build_plan(registry: dict[str, object], items: list[AuditItem], live: LiveState) -> tuple[Mutation, ...]:
     github = _obj(registry["github"], "github")
     repository = cast(str, registry["repository"])
     foundation: list[Mutation] = []
-    for raw in _list(github["labels"], "github.labels"):
-        label = _obj(raw, "label")
-        name = _text(label, "name", "label")
-        current = live.labels.get(name)
-        if current is None:
-            foundation.append(Mutation("POST", f"repos/{repository}/labels", f"label:{name}", label))
-        elif not _same_fields(label, current, ("name", "color", "description")):
-            label_update = {
-                "new_name": name,
-                "color": label["color"],
-                "description": label["description"],
-            }
-            foundation.append(Mutation(
-                "PATCH",
-                f"repos/{repository}/labels/{quote(name, safe='')}",
-                f"label:{name}",
-                label_update,
-            ))
+    try:
+        label_plan = plan_labels(
+            repository,
+            tuple(label_spec(raw) for raw in _list(github["labels"], "github.labels")),
+            tuple(label_spec(label) for label in live.labels.values()),
+        )
+    except ValueError as error:
+        raise AuditError(str(error)) from error
+    foundation.extend(
+        Mutation(item.method, item.path, f"label:{item.key}", item.payload)
+        for item in label_plan
+    )
     for raw in _list(github["milestones"], "github.milestones"):
         milestone = _obj(raw, "milestone")
         title = _text(milestone, "title", "milestone")
