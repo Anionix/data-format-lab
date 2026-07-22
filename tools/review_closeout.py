@@ -369,6 +369,35 @@ def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
     }
 
 
+def _repository_labels(payload: object) -> frozenset[str]:
+    labels: set[str] = set()
+    for page_number, page in enumerate(_list(payload, "repository label pages"), start=1):
+        for raw_label in _list(page, f"repository label page {page_number}"):
+            name = _text(_obj(raw_label, "repository label").get("name"),
+                         "repository label name")
+            if not name:
+                raise ReviewCloseoutError("repository label name cannot be empty")
+            canonical = name.casefold()
+            if canonical in labels:
+                raise ReviewCloseoutError(f"repository label pagination repeated {name}")
+            labels.add(canonical)
+    return frozenset(labels)
+
+
+def _preflight_issue_labels(
+    client: GitHubClient, repository: str, threads: tuple[ReviewThread, ...]
+) -> None:
+    required = {"lifecycle:source-closed"}
+    for thread in threads:
+        required.update(
+            _text(label, "issue payload label")
+            for label in _list(issue_payload(thread, repository).get("labels"), "issue payload labels")
+        )
+    available = _repository_labels(client.rest(f"repos/{repository}/labels?per_page=100"))
+    if missing := sorted(required - available):
+        raise ReviewCloseoutError(f"missing required labels: {', '.join(missing)}")
+
+
 def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, object]:
     actor = client.current_user()
     if actor.casefold() != repository.split("/", 1)[0].casefold():
@@ -405,6 +434,8 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
         issue = tracked.get(key)
         if issue is not None:
             _validate_issue(issue, "closeout-pending", review_priority(thread.body) if key in eligible_keys else None)
+    # LLM contract: LABELS_DECLARED -> PAGES_VALIDATED -> MUTATIONS_ALLOWED.
+    _preflight_issue_labels(client, repository, tuple(work.values()))
     created: list[int] = []
     for key, thread in work.items():
         if key not in eligible_keys or key in tracked:

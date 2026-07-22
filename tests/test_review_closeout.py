@@ -21,6 +21,13 @@ from review_closeout import (
 )
 
 OWNER_LABELS = [{"name": "bug"}, {"name": "source:review"}]
+REPOSITORY_LABELS = [
+    {"name": name} for name in (
+        "bug", "needs-triage", "priority:p0", "priority:p1", "priority:p2",
+        "priority:p3", "priority:unclassified", "bug-class:unclassified",
+        "source:review", "lifecycle:closeout-pending", "lifecycle:source-closed",
+    )
+]
 FailureMode = Literal[
     "add-lifecycle", "closed-readback", "invalid-after-reply", "invalid-before-reply",
     "lifecycle", "outdated", "reply", "resolve", "spoof", "stale-collection",
@@ -42,6 +49,7 @@ class FakeClient:
         self.label_removes: list[tuple[str, str]] = []
         self.failure_mode: FailureMode | None = None
         self.pages: list[object] = []
+        self.label_pages: list[object] = [REPOSITORY_LABELS]
         self.payload = {
             "data": {
                 "repository": {
@@ -80,6 +88,8 @@ class FakeClient:
     def rest(self, path: str) -> object:
         self.rest_calls += 1
         self.rest_paths.append(path)
+        if "/labels?" in path:
+            return self.label_pages
         if "/issues/" in path:
             number = int(path.rsplit("/", 1)[1])
             issue = next(issue for issue in self.issues if issue["number"] == number)
@@ -249,6 +259,31 @@ def test_run_creates_one_issue_per_current_thread_after_threshold() -> None:
     result = run(client, "Anionix/data-format-lab")
     assert result["status"] == "THREADS_CLOSED"
     assert len(client.created) == 10
+
+
+def test_label_preflight_reads_all_pages_before_mutation() -> None:
+    client = FakeClient(1)
+    client.label_pages = [REPOSITORY_LABELS[:5], REPOSITORY_LABELS[5:]]
+    assert run(client, "Anionix/data-format-lab", minimum=1)["status"] == "THREADS_CLOSED"
+    assert "repos/Anionix/data-format-lab/labels?per_page=100" in client.rest_paths
+
+
+def test_label_preflight_fails_closed() -> None:
+    cases = (
+        ([[label for label in REPOSITORY_LABELS if label["name"] != "source:review"]],
+         "missing required labels: source:review"),
+        ([[{"name": 7}]], "repository label name must be a string"),
+        ([[{"name": ""}]], "repository label name cannot be empty"),
+        ([[*REPOSITORY_LABELS, {"name": "SOURCE:REVIEW"}]],
+         "repository label pagination repeated SOURCE:REVIEW"),
+    )
+    for pages, message in cases:
+        client = FakeClient(1)
+        client.label_pages = cast(list[object], pages)
+        with pytest.raises(ReviewCloseoutError, match=message):
+            run(client, "Anionix/data-format-lab", minimum=1)
+        assert (client.created, client.replies, client.resolves,
+                client.label_adds, client.label_removes) == ([], [], [], [], [])
 
 
 def test_run_uses_targeted_issue_readback_after_writes() -> None:
