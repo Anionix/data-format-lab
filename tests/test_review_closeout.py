@@ -15,15 +15,20 @@ from review_closeout import (
     batch_ready,
     _parse_page,
     issue_payload,
-    marked_issue_bodies,
     review_priority,
     run,
+    tracked_issues,
 )
+
+OWNER_LABELS = [{"name": "bug"}, {"name": "source:review"}]
 
 
 class FakeClient:
     def __init__(self, merged_count: int = 0) -> None:
+        self.actor = "Anionix"
+        self.graphql_calls = 0
         self.created: list[dict[str, object]] = []
+        self.issues: list[dict[str, object]] = []
         self.pages: list[object] = []
         self.payload = {
             "data": {
@@ -52,14 +57,22 @@ class FakeClient:
         }
 
     def graphql(self, query: str, fields: dict[str, str | None]) -> object:
+        self.graphql_calls += 1
         return self.pages.pop(0) if self.pages else self.payload
 
     def rest(self, path: str) -> object:
-        return [[]]
+        return [self.issues]
+
+    def current_user(self) -> str:
+        return self.actor
 
     def create_issue(self, path: str, payload: dict[str, object]) -> object:
         self.created.append(payload)
-        return {"number": len(self.created)}
+        labels = cast(list[str], payload["labels"])
+        issue = {**payload, "number": len(self.issues) + 1, "html_url": f"https://example.test/{len(self.issues) + 1}", "author_association": "OWNER",
+                 "state": "open", "labels": [{"name": label} for label in labels]}
+        self.issues.append(issue)
+        return issue
 
 
 def test_review_priority_defaults_and_preserves_badge() -> None:
@@ -109,21 +122,31 @@ def test_current_threads_excludes_resolved_and_outdated() -> None:
 
 
 def test_issue_marker_is_idempotency_key() -> None:
-    body = f"<!-- {MARKER} pr=230 thread=PRRT_1 -->"
-    legacy = "<!-- review-followup:v1 source=PR-229 thread=PRRT_2 -->"
+    body = f"<!-- {MARKER} repo=Anionix/data-format-lab pr=230 thread=PRRT_1 -->"
+    legacy = "<!-- review-closeout:v2 pr=229 thread=PRRT_2 -->"
     pages = [[
-        {"number": 1, "body": body},
-        {"number": 2, "body": legacy},
+        {"number": 1, "html_url": "u1", "state": "open", "labels": OWNER_LABELS, "author_association": "OWNER", "body": body},
+        {"number": 2, "html_url": "u2", "state": "open", "labels": OWNER_LABELS, "author_association": "OWNER", "body": legacy},
+        {"number": 3, "html_url": "u3", "state": "open", "labels": OWNER_LABELS, "author_association": "COLLABORATOR", "body": body},
+        {"number": 4, "html_url": "u4", "state": "open", "labels": [], "user": {"login": "attacker"}, "body": f"<!-- review-closeout:v2 pr={'9' * 4301} thread=T -->"},
         {"body": None},
         {"pull_request": {"url": "ignored"}, "body": body},
     ]]
-    assert marked_issue_bodies(pages) == frozenset({(229, "PRRT_2"), (230, "PRRT_1")})
+    assert set(tracked_issues(pages, "Anionix/data-format-lab")) == {(229, "PRRT_2"), (230, "PRRT_1")}
+    assert set(tracked_issues(pages, "anionix/data-format-lab")) == {(229, "PRRT_2"), (230, "PRRT_1")}
+    pages[0][0]["body"] = body.replace("data-format-lab", "diagnostic-triage")
+    with pytest.raises(ReviewCloseoutError, match="repository marker mismatch"):
+        tracked_issues(pages, "Anionix/data-format-lab")
 
 
 def test_duplicate_marker_owners_fail_closed() -> None:
-    body = f"<!-- {MARKER} pr=230 thread=PRRT_1 -->"
+    body = f"<!-- {MARKER} repo=Anionix/data-format-lab pr=230 thread=PRRT_1 -->"
     with pytest.raises(ReviewCloseoutError, match="multiple issues track"):
-        marked_issue_bodies([[{"number": 1, "body": body}], [{"number": 2, "body": body}]])
+        tracked_issues([[{"number": 1, "html_url": "u1", "state": "open", "labels": OWNER_LABELS, "author_association": "OWNER", "body": body}],
+                        [{"number": 2, "html_url": "u2", "state": "open", "labels": OWNER_LABELS, "author_association": "OWNER", "body": body}]], "Anionix/data-format-lab")
+    with pytest.raises(ReviewCloseoutError, match="multiple review threads"):
+        tracked_issues([[{"number": 1, "html_url": "u1", "state": "open", "labels": OWNER_LABELS, "author_association": "OWNER",
+                          "body": body + "\n<!-- review-closeout:v2 pr=231 thread=PRRT_2 -->"}]], "Anionix/data-format-lab")
 
 
 def test_issue_payload_exposes_priority_mapping() -> None:
@@ -131,6 +154,7 @@ def test_issue_payload_exposes_priority_mapping() -> None:
     assert payload["labels"] == ["bug", "priority:p1", "bug-class:unclassified",
                                  "source:review", "lifecycle:tracked", "needs-triage"]
     assert "Failure domain: `unclassified`" in cast(str, payload["body"])
+    assert f"<!-- {MARKER} repo=Anionix/data-format-lab pr=230 thread=PRRT_1 -->" in cast(str, payload["body"])
 
 
 def test_run_is_read_only_below_batch_threshold() -> None:
@@ -146,6 +170,27 @@ def test_run_creates_one_issue_per_current_thread_after_threshold() -> None:
     result = run(client, "Anionix/data-format-lab")
     assert result["status"] == "ISSUES_CREATED"
     assert len(client.created) == 10
+
+
+def test_existing_issue_classification_must_match_source() -> None:
+    client = FakeClient(2)
+    client.create_issue("", issue_payload(ReviewThread(1, "thread-1", "P3 Badge"), "Anionix/data-format-lab"))
+    client.created.clear()
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert client.created == []
+    cast(list[dict[str, str]], client.issues[0]["labels"])[:] = [{"name": name} for name in ("bug", "priority:p2", "bug-class:unclassified", "lifecycle:tracked", "needs-triage")]
+    with pytest.raises(ReviewCloseoutError, match="not an open classified bug"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+
+
+def test_non_owner_writer_fails_before_mutation() -> None:
+    client = FakeClient(1)
+    client.actor = "rotated-writer"
+    with pytest.raises(ReviewCloseoutError, match="repository owner"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert client.created == []
+    assert client.graphql_calls == 0
 
 
 def test_p1_bypasses_threshold_without_releasing_p2() -> None:

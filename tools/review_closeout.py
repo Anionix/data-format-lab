@@ -9,13 +9,15 @@ import subprocess
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-MARKER = "review-closeout:v2"
+MARKER = "review-closeout:v3"
 MARKERS = (
-    re.compile(r"<!-- " + re.escape(MARKER) + r" pr=(\d+) thread=([^ ]+) -->"),
-    re.compile(r"<!-- data-format-lab-review-closeout:v1 pr=(\d+) thread=([^ ]+) -->"),
-    re.compile(r"<!-- review-followup:v1 source=PR-(\d+) thread=([^ ]+) -->"),
+    re.compile(r"<!-- review-closeout:v2 pr=([0-9]{1,10}) thread=([^ ]+) -->"),
+    re.compile(r"<!-- data-format-lab-review-closeout:v1 pr=([0-9]{1,10}) thread=([^ ]+) -->"),
+    re.compile(r"<!-- review-followup:v1 source=PR-([0-9]{1,10}) thread=([^ ]+) -->"),
 )
+MARKER_RE = re.compile(r"<!-- " + re.escape(MARKER) + r" repo=([^ ]+) pr=([0-9]{1,10}) thread=([^ ]+) -->")
 PRIORITY_RE = re.compile(r"(?:!\[|^|\n)P([0-3]) Badge\b")
+AXES = ("priority:", "bug-class:", "source:", "lifecycle:")
 THREAD_PAGE_QUERY = """
 query($node:ID!, $after:String) {
   node(id:$node) { ... on PullRequest {
@@ -53,10 +55,19 @@ class ReviewThread:
     body: str
 
 
+@dataclass(frozen=True)
+class TrackedIssue:
+    number: int
+    url: str
+    state: str
+    labels: frozenset[str]
+
+
 class GitHubClient(Protocol):
     def graphql(self, query: str, fields: dict[str, str | None]) -> object: ...
     def rest(self, path: str) -> object: ...
     def create_issue(self, path: str, payload: dict[str, object]) -> object: ...
+    def current_user(self) -> str: ...
 
 
 class GhClient:
@@ -84,6 +95,9 @@ class GhClient:
     def create_issue(self, path: str, payload: dict[str, object]) -> object:
         return self._call([path, "--method", "POST", "--input", "-"], payload)
 
+    def current_user(self) -> str:
+        return _text(_obj(self._call(["user"]), "viewer").get("login"), "viewer.login")
+
 
 def _obj(value: object, context: str) -> dict[str, object]:
     if not isinstance(value, dict):
@@ -104,6 +118,12 @@ def _text(value: object, context: str) -> str:
     if not isinstance(value, str):
         raise ReviewCloseoutError(f"{context} must be a string")
     return value
+
+
+def _classified(labels: frozenset[str]) -> bool:
+    return {"bug", "source:review"} <= labels and all(
+        sum(label.startswith(prefix) for label in labels) == 1 for prefix in AXES
+    )
 
 
 def _connection_nodes(
@@ -209,30 +229,55 @@ def merged_review_threads(client: GitHubClient, repository: str) -> tuple[int, t
         seen.add(cursor)
 
 
-def marked_issue_bodies(payload: object) -> frozenset[tuple[int, str]]:
-    found: dict[tuple[int, str], int] = {}
+def tracked_issues(payload: object, repository: str) -> dict[tuple[int, str], TrackedIssue]:
+    found: dict[tuple[int, str], TrackedIssue] = {}
     for page in _list(payload, "issues pages"):
         for raw_issue in _list(page, "issues page"):
             issue = _obj(raw_issue, "issue")
             body = issue.get("body")
             if "pull_request" in issue or not isinstance(body, str):
                 continue
-            keys = {(int(match.group(1)), match.group(2)) for pattern in MARKERS for match in pattern.finditer(body)}
+            legacy = tuple(match for pattern in MARKERS for match in pattern.finditer(body))
+            scoped = tuple(MARKER_RE.finditer(body))
+            if not legacy and not scoped:
+                continue
+            labels = frozenset(_text(_obj(label, "issue label").get("name"), "label name")
+                               for label in _list(issue.get("labels"), "issue labels"))
+            if issue.get("author_association") != "OWNER":
+                continue
+            # Ownership requires the repository owner; marker text and mutable labels are not provenance.
+            keys = {(int(match.group(1)), match.group(2)) for match in legacy}
+            for match in scoped:
+                if match.group(1).casefold() != repository.casefold():
+                    raise ReviewCloseoutError("tracked issue repository marker mismatch")
+                keys.add((int(match.group(2)), match.group(3)))
+            if len(keys) > 1:
+                raise ReviewCloseoutError("one issue cannot own multiple review threads")
             if not keys:
                 continue
             number = issue.get("number")
             if type(number) is not int:
                 raise ReviewCloseoutError("tracked issue number must be an integer")
+            tracked = TrackedIssue(number, _text(issue.get("html_url"), "tracked issue URL"),
+                                   _text(issue.get("state"), "tracked issue state"), labels)
             for key in keys:
-                if key in found and found[key] != number:
+                if key in found and found[key] != tracked:
                     raise ReviewCloseoutError(f"multiple issues track PR #{key[0]} thread {key[1]}")
-                found[key] = number
-    return frozenset(found)
+                found[key] = tracked
+    return found
+
+
+def _validate_issue(issue: TrackedIssue, priority: str) -> None:
+    required = {"bug", "source:review", "lifecycle:tracked", f"priority:{priority.lower()}"}
+    if issue.state != "open" or not required <= issue.labels or not _classified(issue.labels) or (
+        "bug-class:unclassified" in issue.labels and "needs-triage" not in issue.labels
+    ):
+        raise ReviewCloseoutError(f"issue #{issue.number} is not an open classified bug")
 
 
 def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
     priority = review_priority(thread.body)
-    marker = f"<!-- {MARKER} pr={thread.pull_request} thread={thread.thread_id} -->"
+    marker = f"<!-- {MARKER} repo={repository} pr={thread.pull_request} thread={thread.thread_id} -->"
     return {
         "title": f"[{priority} review follow-up] PR #{thread.pull_request} thread",
         "body": (
@@ -252,6 +297,9 @@ def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
 
 
 def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, object]:
+    actor = client.current_user()
+    if actor.casefold() != repository.split("/", 1)[0].casefold():
+        raise ReviewCloseoutError("review closeout must run as the repository owner")
     merged, current = merged_review_threads(client, repository)
     result: dict[str, object] = {
         "schema_version": "review_closeout/v1", "repository": repository,
@@ -264,7 +312,13 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
     )
     if not eligible:
         return result
-    marked = set(marked_issue_bodies(client.rest(f"repos/{repository}/issues?state=all&per_page=100")))
+    issues_path = f"repos/{repository}/issues?state=all&per_page=100"
+    tracked = tracked_issues(client.rest(issues_path), repository)
+    marked = set(tracked)
+    for thread in eligible:
+        issue = tracked.get((thread.pull_request, thread.thread_id))
+        if issue is not None:
+            _validate_issue(issue, review_priority(thread.body))
     created: list[int] = []
     for thread in eligible:
         if (thread.pull_request, thread.thread_id) in marked:
@@ -275,6 +329,13 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
             raise ReviewCloseoutError("created issue number must be an integer")
         created.append(number)
         marked.add((thread.pull_request, thread.thread_id))
+    if created:
+        tracked = tracked_issues(client.rest(issues_path), repository)
+    for thread in eligible:
+        issue = tracked.get((thread.pull_request, thread.thread_id))
+        if issue is None:
+            raise ReviewCloseoutError(f"PR #{thread.pull_request} thread has no tracked issue")
+        _validate_issue(issue, review_priority(thread.body))
     result["created_issue_numbers"] = created
     result["status"] = "ISSUES_CREATED" if created else "NOOP_ALREADY_TRACKED"
     return result
