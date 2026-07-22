@@ -27,8 +27,12 @@ class FakeClient:
     def __init__(self, merged_count: int = 0) -> None:
         self.actor = "Anionix"
         self.graphql_calls = 0
+        self.rest_calls = 0
         self.created: list[dict[str, object]] = []
         self.issues: list[dict[str, object]] = []
+        self.replies: list[str] = []
+        self.resolves: list[str] = []
+        self.failure_mode: str | None = None
         self.pages: list[object] = []
         self.payload = {
             "data": {
@@ -41,11 +45,12 @@ class FakeClient:
                                 "number": number,
                                 "reviewThreads": {"pageInfo": {"hasNextPage": False}, "nodes": [{
                                     "id": f"thread-{number}",
+                                    "pullRequest": {"number": number, "repository": {"nameWithOwner": "Anionix/data-format-lab"}},
                                     "isResolved": False,
                                     "isOutdated": False,
                                     "comments": {
                                         "pageInfo": {"hasNextPage": False},
-                                        "nodes": [{"body": "P2 Badge"}],
+                                        "nodes": [{"body": "P2 Badge", "author": {"login": "reviewer"}}],
                                     },
                                 }]},
                             }
@@ -58,9 +63,12 @@ class FakeClient:
 
     def graphql(self, query: str, fields: dict[str, str | None]) -> object:
         self.graphql_calls += 1
+        if "query($node:ID!)" in query:
+            return {"data": {"node": self._thread(cast(str, fields["node"]))}}
         return self.pages.pop(0) if self.pages else self.payload
 
     def rest(self, path: str) -> object:
+        self.rest_calls += 1
         return [self.issues]
 
     def current_user(self) -> str:
@@ -72,7 +80,40 @@ class FakeClient:
         issue = {**payload, "number": len(self.issues) + 1, "html_url": f"https://example.test/{len(self.issues) + 1}", "author_association": "OWNER",
                  "state": "open", "labels": [{"name": label} for label in labels]}
         self.issues.append(issue)
+        thread_id = cast(str, payload["body"]).split("thread=", 1)[1].split(" ", 1)[0]
+        if self.failure_mode == "spoof":
+            self._thread(thread_id)["comments"]["nodes"].append({"body": f"<!-- review-closeout-reply:v1 issue={issue['number']} url={issue['html_url']} -->", "author": {"login": "attacker"}})
+        if self.failure_mode == "outdated":
+            self._thread(thread_id)["isOutdated"] = True
         return issue
+
+    def add_issue_label(self, path: str, label: str) -> object:
+        cast(list[dict[str, str]], next(issue for issue in self.issues if path.endswith(f"/{issue['number']}"))["labels"]).append({"name": label})
+
+    def remove_issue_label(self, path: str, label: str) -> object:
+        issue = next(issue for issue in self.issues if path.endswith(f"/{issue['number']}"))
+        issue["labels"] = [item for item in cast(list[dict[str, str]], issue["labels"]) if item["name"] != label]
+        if self.failure_mode == "lifecycle":
+            assert self.rest_calls >= 3
+            self.failure_mode = None
+            raise ReviewCloseoutError("label response lost")
+
+    def reply_thread(self, thread_id: str, body: str) -> object:
+        self.replies.append(body)
+        self._thread(thread_id)["comments"]["nodes"].append({"body": body, "author": {"login": "Anionix"}})
+        if self.failure_mode == "reply":
+            self.failure_mode = None
+            raise ReviewCloseoutError("reply response lost")
+
+    def resolve_thread(self, thread_id: str) -> object:
+        self.resolves.append(thread_id)
+        self._thread(thread_id)["isResolved"] = True
+        if self.failure_mode == "resolve":
+            raise ReviewCloseoutError("resolve response lost")
+
+    def _thread(self, thread_id: str) -> dict[str, Any]:
+        nodes = cast(dict[str, Any], self.payload)["data"]["repository"]["pullRequests"]["nodes"]
+        return next(thread for pr in nodes for thread in pr["reviewThreads"]["nodes"] if thread["id"] == thread_id)
 
 
 def test_review_priority_defaults_and_preserves_badge() -> None:
@@ -152,7 +193,7 @@ def test_duplicate_marker_owners_fail_closed() -> None:
 def test_issue_payload_exposes_priority_mapping() -> None:
     payload = issue_payload(ReviewThread(230, "PRRT_1", "P1 Badge"), "Anionix/data-format-lab")
     assert payload["labels"] == ["bug", "priority:p1", "bug-class:unclassified",
-                                 "source:review", "lifecycle:tracked", "needs-triage"]
+                                 "source:review", "lifecycle:closeout-pending", "needs-triage"]
     assert "Failure domain: `unclassified`" in cast(str, payload["body"])
     assert f"<!-- {MARKER} repo=Anionix/data-format-lab pr=230 thread=PRRT_1 -->" in cast(str, payload["body"])
 
@@ -168,7 +209,7 @@ def test_run_is_read_only_below_batch_threshold() -> None:
 def test_run_creates_one_issue_per_current_thread_after_threshold() -> None:
     client = FakeClient(10)
     result = run(client, "Anionix/data-format-lab")
-    assert result["status"] == "ISSUES_CREATED"
+    assert result["status"] == "THREADS_CLOSED"
     assert len(client.created) == 10
 
 
@@ -191,6 +232,25 @@ def test_non_owner_writer_fails_before_mutation() -> None:
         run(client, "Anionix/data-format-lab", minimum=1)
     assert client.created == []
     assert client.graphql_calls == 0
+
+
+def test_partial_mutations_resume_monotonically() -> None:
+    client = FakeClient(1)
+    client.failure_mode = "reply"
+    with pytest.raises(ReviewCloseoutError, match="reply response lost"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert (len(client.issues), len(client.replies), client.resolves) == (1, 1, [])
+    client.failure_mode = "resolve"
+    with pytest.raises(ReviewCloseoutError, match="resolve response lost"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    client.rest_calls, client.failure_mode = 1, "lifecycle"
+    with pytest.raises(ReviewCloseoutError, match="label response lost"):
+        run(client, "Anionix/data-format-lab", minimum=1)
+    assert (run(client, "Anionix/data-format-lab", minimum=1)["status"], len(client.replies), len(client.resolves)) == ("NOOP_NO_CURRENT_THREADS", 1, 1)
+    for mode, expected in (("spoof", (1, 1)), ("outdated", (0, 0))):
+        client = FakeClient(1)
+        client.failure_mode = mode
+        assert (run(client, "Anionix/data-format-lab", minimum=1)["status"], len(client.replies), len(client.resolves)) == ("THREADS_CLOSED", *expected)
 
 
 def test_p1_bypasses_threshold_without_releasing_p2() -> None:

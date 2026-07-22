@@ -17,6 +17,7 @@ MARKERS = (
 )
 MARKER_RE = re.compile(r"<!-- " + re.escape(MARKER) + r" repo=([^ ]+) pr=([0-9]{1,10}) thread=([^ ]+) -->")
 PRIORITY_RE = re.compile(r"(?:!\[|^|\n)P([0-3]) Badge\b")
+REPLY_RE = re.compile(r"<!-- review-closeout-reply:v1 issue=([0-9]{1,10}) url=([^\s]+) -->")
 AXES = ("priority:", "bug-class:", "source:", "lifecycle:")
 THREAD_PAGE_QUERY = """
 query($node:ID!, $after:String) {
@@ -34,15 +35,12 @@ COMMENT_PAGE_QUERY = """
 query($node:ID!, $after:String) {
   node(id:$node) { ... on PullRequestReviewThread {
     comments(first:100, after:$after) {
-      pageInfo { hasNextPage endCursor } nodes { body }
+      pageInfo { hasNextPage endCursor } nodes { body author { login } }
     }
   } }
 }
 """
-
-# LLM contract: REVIEW_DISCOVERED -> CLASSIFIED -> ISSUE_TRACKED -> HUMAN_CLOSED.
-# The scheduled workflow never advances the final state automatically.
-
+THREAD_READ_QUERY = "query($node:ID!){node(id:$node){...on PullRequestReviewThread{id isResolved isOutdated pullRequest{number repository{nameWithOwner}} comments(first:100){pageInfo{hasNextPage endCursor}nodes{body author{login}}}}}}"
 
 class ReviewCloseoutError(RuntimeError):
     """The scheduled review sweep could not produce a trustworthy result."""
@@ -68,6 +66,10 @@ class GitHubClient(Protocol):
     def rest(self, path: str) -> object: ...
     def create_issue(self, path: str, payload: dict[str, object]) -> object: ...
     def current_user(self) -> str: ...
+    def add_issue_label(self, path: str, label: str) -> object: ...
+    def remove_issue_label(self, path: str, label: str) -> object: ...
+    def reply_thread(self, thread_id: str, body: str) -> object: ...
+    def resolve_thread(self, thread_id: str) -> object: ...
 
 
 class GhClient:
@@ -97,6 +99,18 @@ class GhClient:
 
     def current_user(self) -> str:
         return _text(_obj(self._call(["user"]), "viewer").get("login"), "viewer.login")
+
+    def add_issue_label(self, path: str, label: str) -> object:
+        return self._call([f"{path}/labels", "--method", "POST", "--input", "-"], {"labels": [label]})
+
+    def remove_issue_label(self, path: str, label: str) -> object:
+        return self._call([f"{path}/labels/{label}", "--method", "DELETE"])
+
+    def reply_thread(self, thread_id: str, body: str) -> object:
+        return self.graphql("mutation($thread:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$thread,body:$body}){comment{id}}}", {"thread": thread_id, "body": body})
+
+    def resolve_thread(self, thread_id: str) -> object:
+        return self.graphql("mutation($thread:ID!){resolveReviewThread(input:{threadId:$thread}){thread{id}}}", {"thread": thread_id})
 
 
 def _obj(value: object, context: str) -> dict[str, object]:
@@ -135,15 +149,39 @@ def _connection_nodes(
     while True:
         page_info = _obj(connection.get("pageInfo"), f"{field}.pageInfo")
         result.extend(_list(connection.get("nodes"), f"{field}.nodes"))
-        if page_info.get("hasNextPage") is not True:
+        if page_info.get("hasNextPage") is False:
             return tuple(result)
+        if page_info.get("hasNextPage") is not True:
+            raise ReviewCloseoutError(f"{field}.hasNextPage must be a boolean")
         cursor = _text(page_info.get("endCursor"), f"{field}.endCursor")
         if client is None or cursor in seen:
             raise ReviewCloseoutError(f"{field} pagination cannot advance")
         seen.add(cursor)
         response = _obj(client.graphql(query, {"node": node_id, "after": cursor}), f"{field} response")
-        data = _obj(response.get("data"), f"{field} data")
+        data = _obj(response.get("data") if not response.get("errors") else None, f"{field} data")
         connection = _obj(_obj(data.get("node"), f"{field} node").get(field), field)
+
+
+def _read_thread(client: GitHubClient, thread_id: str, repository: str, pull_request: int) -> tuple[bool, bool, str, str]:
+    response = _obj(client.graphql(THREAD_READ_QUERY, {"node": thread_id}), "thread response")
+    data = _obj(response.get("data") if not response.get("errors") else None, "thread data")
+    node = _obj(data.get("node"), "thread node")
+    source = _obj(node.get("pullRequest"), "thread pull request")
+    if node.get("id") != thread_id or type(source.get("number")) is not int or source.get("number") != pull_request or _text(_obj(source.get("repository"), "thread repository").get("nameWithOwner"), "thread repository name").casefold() != repository.casefold():
+        raise ReviewCloseoutError(f"thread {thread_id} readback identity mismatch")
+    comments = _connection_nodes(client, _obj(node.get("comments"), "comments"), thread_id, "comments", COMMENT_PAGE_QUERY)
+    parts: list[tuple[str, bool]] = []
+    for comment in comments:
+        item = _obj(comment, "review comment")
+        body = _text(item.get("body"), "body")
+        author = item.get("author")
+        login = cast(dict[object, object], author).get("login") if isinstance(author, dict) else None
+        is_reply = REPLY_RE.search(body) is not None and isinstance(login, str) and login.casefold() == repository.split("/", 1)[0].casefold()
+        parts.append((body, is_reply))
+    resolved, outdated = node.get("isResolved"), node.get("isOutdated")
+    if type(resolved) is not bool or type(outdated) is not bool:
+        raise ReviewCloseoutError("thread closed states must be booleans")
+    return resolved, outdated, "\n".join(body for body, _ in parts), "\n".join(body for body, is_reply in parts if is_reply)
 
 
 def review_priority(body: str) -> str:
@@ -267,12 +305,20 @@ def tracked_issues(payload: object, repository: str) -> dict[tuple[int, str], Tr
     return found
 
 
-def _validate_issue(issue: TrackedIssue, priority: str) -> None:
-    required = {"bug", "source:review", "lifecycle:tracked", f"priority:{priority.lower()}"}
-    if issue.state != "open" or not required <= issue.labels or not _classified(issue.labels) or (
+def _validate_issue(issue: TrackedIssue, lifecycle: str, priority: str | None = None) -> None:
+    lifecycles = {label for label in issue.labels if label.startswith("lifecycle:")}
+    expected = {f"lifecycle:{lifecycle}"} | ({"lifecycle:source-closed"} if "lifecycle:source-closed" in issue.labels else set[str]())
+    required = {"bug", "source:review", f"lifecycle:{lifecycle}"} | ({f"priority:{priority.lower()}"} if priority else set[str]())
+    normalized = frozenset(issue.labels - {"lifecycle:source-closed"} | {f"lifecycle:{lifecycle}"})
+    if issue.state != "open" or not required <= issue.labels or lifecycles != expected or not _classified(normalized) or (
         "bug-class:unclassified" in issue.labels and "needs-triage" not in issue.labels
     ):
         raise ReviewCloseoutError(f"issue #{issue.number} is not an open classified bug")
+
+
+def _validate_link(body: str, issue: TrackedIssue) -> None:
+    if (links := [(int(number), url) for number, url in REPLY_RE.findall(body)]) != [(issue.number, issue.url)]:
+        raise ReviewCloseoutError(f"thread has {len(links)} non-canonical tracking replies")
 
 
 def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
@@ -286,13 +332,13 @@ def issue_payload(thread: ReviewThread, repository: str) -> dict[str, object]:
             f"[PR #{thread.pull_request}](https://github.com/{repository}/pull/{thread.pull_request}).\n\n"
             "### Classification\n\n"
             f"- Priority: `{priority}`\n- Failure domain: `unclassified`\n"
-            f"- Source: `review`\n- Lifecycle: `tracked`\n- Thread ID: `{thread.thread_id}`\n\n"
-            "Reply to the source thread, resolve or mark it outdated after the fix, "
+            f"- Source: `review`\n- Thread ID: `{thread.thread_id}`\n\n"
+            "Automation owns source-thread closeout; implement the fix "
             "and use a new non-stacked PR from the latest `origin/main`.\n\n"
             f"{marker}"
         ),
         "labels": ["bug", f"priority:{priority.lower()}", "bug-class:unclassified",
-                   "source:review", "lifecycle:tracked", "needs-triage"],
+                   "source:review", "lifecycle:closeout-pending", "needs-triage"],
     }
 
 
@@ -302,7 +348,7 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
         raise ReviewCloseoutError("review closeout must run as the repository owner")
     merged, current = merged_review_threads(client, repository)
     result: dict[str, object] = {
-        "schema_version": "review_closeout/v1", "repository": repository,
+        "schema_version": "review_closeout/v2", "repository": repository,
         "merged_pull_requests_with_threads": merged, "minimum": minimum,
         "candidate_count": len(current), "created_issue_numbers": [],
         "status": "NOOP_NO_CURRENT_THREADS" if not current else "NOOP_BELOW_BATCH_THRESHOLD",
@@ -310,34 +356,68 @@ def run(client: GitHubClient, repository: str, minimum: int = 10) -> dict[str, o
     eligible = current if batch_ready(merged, minimum) else tuple(
         thread for thread in current if review_priority(thread.body) in {"P0", "P1"}
     )
-    if not eligible:
-        return result
     issues_path = f"repos/{repository}/issues?state=all&per_page=100"
     tracked = tracked_issues(client.rest(issues_path), repository)
-    marked = set(tracked)
-    for thread in eligible:
-        issue = tracked.get((thread.pull_request, thread.thread_id))
+    recovery = tuple(ReviewThread(pr, thread_id, "") for (pr, thread_id), issue in tracked.items() if "lifecycle:closeout-pending" in issue.labels)
+    work = {(thread.pull_request, thread.thread_id): thread for thread in recovery + eligible}
+    if not work:
+        return result
+    eligible_keys = {(thread.pull_request, thread.thread_id) for thread in eligible}
+    for key, thread in work.items():
+        issue = tracked.get(key)
         if issue is not None:
-            _validate_issue(issue, review_priority(thread.body))
+            _validate_issue(issue, "closeout-pending", review_priority(thread.body) if key in eligible_keys else None)
     created: list[int] = []
-    for thread in eligible:
-        if (thread.pull_request, thread.thread_id) in marked:
+    for key, thread in work.items():
+        if key not in eligible_keys or key in tracked:
             continue
         issue = _obj(client.create_issue(f"repos/{repository}/issues", issue_payload(thread, repository)), "created issue")
         number = issue.get("number")
         if type(number) is not int:
             raise ReviewCloseoutError("created issue number must be an integer")
         created.append(number)
-        marked.add((thread.pull_request, thread.thread_id))
     if created:
         tracked = tracked_issues(client.rest(issues_path), repository)
-    for thread in eligible:
-        issue = tracked.get((thread.pull_request, thread.thread_id))
+    priorities: dict[tuple[int, str], str] = {}
+    # LLM contract: DISCOVERED -> CLASSIFIED -> TRACKED -> (REPLIED -> RESOLVED | OUTDATED) -> READBACK_CONFIRMED.
+    for key, thread in work.items():
+        issue = tracked.get(key)
         if issue is None:
             raise ReviewCloseoutError(f"PR #{thread.pull_request} thread has no tracked issue")
-        _validate_issue(issue, review_priority(thread.body))
+        is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
+        priorities[key] = review_priority(body)
+        _validate_issue(issue, "closeout-pending", priorities[key])
+        if "lifecycle:source-closed" in issue.labels and not (is_resolved or is_outdated):
+            raise ReviewCloseoutError("source-closed issue has an open thread")
+        if not is_outdated and REPLY_RE.search(reply_body) is None:
+            if is_resolved:
+                raise ReviewCloseoutError(f"thread {thread.thread_id} closed before source reply")
+            reply = f"Tracked as bug #{issue.number}: {issue.url}\n\n<!-- review-closeout-reply:v1 issue={issue.number} url={issue.url} -->"
+            client.reply_thread(thread.thread_id, reply)
+            is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
+        if not is_outdated or REPLY_RE.search(reply_body):
+            _validate_link(reply_body, issue)
+        if not is_resolved and not is_outdated:
+            client.resolve_thread(thread.thread_id)
+            is_resolved, is_outdated, body, reply_body = _read_thread(client, thread.thread_id, repository, thread.pull_request)
+            _validate_link(reply_body, issue)
+        if not (is_resolved or is_outdated) or review_priority(body) != priorities[key]:
+            raise ReviewCloseoutError(f"thread {thread.thread_id} state changed during closeout")
+        client.add_issue_label(f"repos/{repository}/issues/{issue.number}", "lifecycle:source-closed")
+    final_issues = tracked_issues(client.rest(issues_path), repository)
+    for key in work:
+        final = final_issues.get(key)
+        if final is None or final.number != tracked[key].number or final.url != tracked[key].url or "lifecycle:source-closed" not in final.labels:
+            raise ReviewCloseoutError(f"PR #{key[0]} thread lost its tracked issue")
+        _validate_issue(final, "closeout-pending", priorities[key])
+        client.remove_issue_label(f"repos/{repository}/issues/{final.number}", "lifecycle:closeout-pending")
+    terminal_issues = tracked_issues(client.rest(issues_path), repository)
+    for key in work:
+        if (terminal := terminal_issues.get(key)) is None or terminal.number != tracked[key].number or terminal.url != tracked[key].url:
+            raise ReviewCloseoutError(f"PR #{key[0]} terminal issue identity mismatch")
+        _validate_issue(terminal, "source-closed", priorities[key])
     result["created_issue_numbers"] = created
-    result["status"] = "ISSUES_CREATED" if created else "NOOP_ALREADY_TRACKED"
+    result["status"] = "THREADS_CLOSED"
     return result
 
 
