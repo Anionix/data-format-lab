@@ -14,7 +14,7 @@ GitHub Issues in `Anionix/data-format-lab` are the canonical work tracker.
 - After every merge, close every review thread on that PR by resolving it or marking it outdated.
 - The scheduled sweep is the recurring batch trigger; it scans once at least 10 merged PRs with review threads are available.
 - Scan immediately for P0/P1, security, release-blocking, or user-reported concerns.
-- Restrict the actionable set to current unresolved threads: `MERGED` + review thread + `!isResolved` + `!isOutdated`.
+- Restrict discovery to current unresolved threads; `lifecycle:closeout-pending` may re-enter only to finish an idempotent transition.
 - Create a `bug` issue, reply with its URL, then resolve or mark the thread outdated. Fixes use a new non-stacked PR from the latest `origin/main`.
 
 ## Scheduled historical sweep
@@ -23,7 +23,7 @@ GitHub Issues in `Anionix/data-format-lab` are the canonical work tracker.
 - It runs `python3 tools/review_closeout.py --repo Anionix/data-format-lab --min-merged-with-threads 10` from the latest `origin/main`.
 - It exits without mutation until at least 10 merged PRs with review threads exist.
 - Once the threshold is reached, it creates idempotent `bug` follow-up issues for current unresolved threads.
-- The automation must not modify code, create branches, merge PRs, reply to review threads, or resolve/outdate threads. An agent or human must verify the fix, reply with the issue URL, and complete the per-merge closeout.
+- After owner and exact source-identity readback it may reply/resolve once, but succeeds only after canonical reply, exact issue, thread, and lifecycle readback; it never mutates code, branches, PRs, or outdated threads.
 - The Codex schedule is the single recurring trigger. Do not start a second sweep while one is running; the scanner's issue lookup is idempotent but is not a distributed lock.
 - For recovery or an intentional manual run, execute the same command from the repository root after confirming no scheduled sweep is active. The automation name is `Data Format Lab review closeout sweep` and its ID is `data-format-lab-review-closeout-sweep`.
 - The scanner remains reusable locally and in CI-like environments, while recurring scheduling stays in Codex to avoid duplicate triggers.
