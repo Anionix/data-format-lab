@@ -253,6 +253,10 @@ def merge_equivalence_shards(
                 "bounds": _object(
                     equivalence.get("bounds", {}), f"{shard}/equivalence.bounds"
                 ),
+                "multiplicity_control": _object(
+                    equivalence.get("multiplicity_control", {}),
+                    f"{shard}/equivalence.multiplicity_control",
+                ),
             }
         )
         for pair, endpoint in _object_map(

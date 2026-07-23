@@ -76,6 +76,7 @@ def bootstrap_ratio_interval(
     metric: str,
     seed: int = 20260703,
     samples: int = 2000,
+    alpha: float = 0.05,
 ) -> RatioInterval:
     """Estimate an independent ratio interval; samples are not trial-paired."""
     left = tuple(float(value) for value in reference)
@@ -84,6 +85,8 @@ def bootstrap_ratio_interval(
         raise ValueError("ratio samples must be non-empty")
     if samples <= 0:
         raise ValueError("bootstrap samples must be positive")
+    if not math.isfinite(alpha) or not 0 < alpha < 1:
+        raise ValueError("alpha must be finite and between zero and one")
     if any(not math.isfinite(value) or value <= 0 for value in left + right):
         raise ValueError("ratio samples must be finite and positive")
     point = median(right) / median(left)
@@ -94,8 +97,11 @@ def bootstrap_ratio_interval(
         right_median = median(right[rng.randrange(len(right))] for _ in right)
         bootstrapped.append(right_median / left_median)
     bootstrapped.sort()
-    lower_index = max(0, int(0.025 * len(bootstrapped)) - 1)
-    upper_index = min(len(bootstrapped) - 1, int(0.975 * len(bootstrapped)))
+    lower_index = max(0, int((alpha / 2) * len(bootstrapped)) - 1)
+    upper_index = min(
+        len(bootstrapped) - 1,
+        int((1 - alpha / 2) * len(bootstrapped)),
+    )
     return RatioInterval(
         metric, point, bootstrapped[lower_index], bootstrapped[upper_index]
     )

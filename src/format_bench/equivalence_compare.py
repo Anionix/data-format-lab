@@ -22,6 +22,25 @@ class PrimaryEndpoint(TypedDict):
     operation: NotRequired[str]
 
 
+class MultiplicityControl(TypedDict):
+    contract_version: Literal["1"]
+    error_control_target: Literal["FWER"]
+    method: Literal["bonferroni_simultaneous_intervals"]
+    family_id: str
+    family_scope: Literal["registered_pairs"]
+    dimensions: tuple[str, ...]
+    family_alpha: float
+    planned_pairs: tuple[str, ...]
+    planned_comparisons: int
+    comparison_alpha: float
+    secondary_metrics: Literal["descriptive_only"]
+    cross_pair_inference: Literal["simultaneous"]
+    primary_interval_method: Literal["deterministic_exact"]
+    coverage_claim: Literal["none"]
+    status: Literal["PREREGISTERED_NO_COVERAGE"]
+    accepted_risk: str
+
+
 class PairSpec(TypedDict):
     lane: Lane
     allowed_lanes: tuple[Lane, ...]
@@ -43,6 +62,7 @@ PRIMARY_ENDPOINT: PrimaryEndpoint = {
     "scope": "storage",
     "metric": "native_bytes",
 }
+FAMILY_ALPHA = 0.05
 
 
 PAIR_SPECS: dict[str, PairSpec] = {
@@ -119,10 +139,42 @@ PAIR_SPECS: dict[str, PairSpec] = {
 }
 
 
+def multiplicity_control() -> MultiplicityControl:
+    planned_pairs = tuple(PAIR_SPECS)
+    planned_comparisons = sum(
+        len(spec["candidates"]) for spec in PAIR_SPECS.values()
+    )
+    if planned_comparisons < 1:
+        raise ValueError("equivalence registry needs at least one candidate")
+    return {
+        "contract_version": "1",
+        "error_control_target": "FWER",
+        "method": "bonferroni_simultaneous_intervals",
+        "family_id": "equivalence.primary.v2",
+        "family_scope": "registered_pairs",
+        "dimensions": ("pair", "candidate"),
+        "family_alpha": FAMILY_ALPHA,
+        "planned_pairs": planned_pairs,
+        "planned_comparisons": planned_comparisons,
+        "comparison_alpha": FAMILY_ALPHA / planned_comparisons,
+        "secondary_metrics": "descriptive_only",
+        "cross_pair_inference": "simultaneous",
+        "primary_interval_method": "deterministic_exact",
+        "coverage_claim": "none",
+        "status": "PREREGISTERED_NO_COVERAGE",
+        "accepted_risk": (
+            "Bonferroni allocation is preregistered, but one exact observed "
+            "size ratio has no statistical coverage; repeated-encoding size "
+            "uncertainty remains tracked by issue #274."
+        ),
+    }
+
+
 def pair_contract(spec: PairSpec) -> dict[str, object]:
     contract: dict[str, object] = {
         "primary_endpoint": dict(spec["primary_endpoint"]),
         "verdict_basis": "primary_endpoint",
+        "multiplicity_control": multiplicity_control(),
     }
     if "comparison_scope" in spec:
         contract["comparison_scope"] = spec["comparison_scope"]
@@ -192,6 +244,7 @@ def compare_candidate(
     bounds: EquivalenceBounds,
     seed: int,
     primary_endpoint: PrimaryEndpoint,
+    comparison_alpha: float = FAMILY_ALPHA,
     operations: tuple[str, ...] | None = None,
 ) -> dict:
     operation_names = operations or tuple(operation.value for operation in OPERATIONS)
@@ -236,12 +289,28 @@ def compare_candidate(
                 candidate_evidence["warm_process_p50_ms"],
                 metric="p50_ms",
                 seed=seed + offset * 2,
+                alpha=comparison_alpha
+                if primary_endpoint
+                == {
+                    "scope": "operation",
+                    "operation": operation,
+                    "metric": "p50_ms",
+                }
+                else FAMILY_ALPHA,
             ),
             bootstrap_ratio_interval(
                 reference_evidence["warm_process_p95_ms"],
                 candidate_evidence["warm_process_p95_ms"],
                 metric="p95_ms",
                 seed=seed + offset * 2 + 1,
+                alpha=comparison_alpha
+                if primary_endpoint
+                == {
+                    "scope": "operation",
+                    "operation": operation,
+                    "metric": "p95_ms",
+                }
+                else FAMILY_ALPHA,
             ),
         ]
         operation_intervals[operation] = intervals
@@ -260,6 +329,17 @@ def compare_candidate(
             **primary_endpoint,
             **_interval_json(primary),
             "verdict": primary_verdict,
+            "comparison_alpha": comparison_alpha,
+            "interval_method": (
+                "deterministic_exact"
+                if primary_endpoint["scope"] == "storage"
+                else "bootstrap_percentile"
+            ),
+            "coverage_claim": (
+                "none"
+                if primary_endpoint["scope"] == "storage"
+                else "familywise_target"
+            ),
         },
         "failure_reason": None,
         "storage": {
@@ -282,6 +362,7 @@ def pair_evidence(
     reference_name = spec["reference"]
     names = (reference_name, *spec["candidates"])
     formats: dict[str, dict] = {}
+    control = multiplicity_control()
     for candidate_name in spec["candidates"]:
         reference = {
             **entries[reference_name],
@@ -305,6 +386,7 @@ def pair_evidence(
             bounds=bounds,
             seed=seed,
             primary_endpoint=spec["primary_endpoint"],
+            comparison_alpha=control["comparison_alpha"],
             operations=operation_names,
         )
     verdicts = [item["verdict"] for item in formats.values()]

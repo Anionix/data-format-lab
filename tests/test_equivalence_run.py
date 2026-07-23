@@ -33,6 +33,9 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
         assert manifest["equivalence"]["primary_endpoints"] == {
             "csv-tsv": {"scope": "storage", "metric": "native_bytes"}
         }
+        control = manifest["equivalence"]["multiplicity_control"]
+        assert control["method"] == "bonferroni_simultaneous_intervals"
+        assert control["planned_comparisons"] == 7
         return original_run_jobs(*args, **kwargs)
 
     monkeypatch.setattr(equivalence_run, "run_jobs", assert_preregistered)

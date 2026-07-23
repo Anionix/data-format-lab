@@ -66,6 +66,24 @@ def _shard_results(pair: str, name: str) -> dict:
             "primary_endpoints": {
                 pair: {"scope": "storage", "metric": "native_bytes"}
             },
+            "multiplicity_control": {
+                "contract_version": "1",
+                "error_control_target": "FWER",
+                "method": "bonferroni_simultaneous_intervals",
+                "family_id": "fixture.primary.v2",
+                "family_scope": "registered_pairs",
+                "dimensions": ["pair", "candidate"],
+                "family_alpha": 0.05,
+                "planned_pairs": ["arrow-feather", "csv-tsv"],
+                "planned_comparisons": 2,
+                "comparison_alpha": 0.025,
+                "secondary_metrics": "descriptive_only",
+                "cross_pair_inference": "simultaneous",
+                "primary_interval_method": "deterministic_exact",
+                "coverage_claim": "none",
+                "status": "PREREGISTERED_NO_COVERAGE",
+                "accepted_risk": "fixture exact interval",
+            },
             "pairs": {
                 pair: {
                     "primary_endpoint": {
@@ -114,6 +132,9 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
         "arrow-feather",
         "csv-tsv",
     }
+    assert merged["equivalence"]["multiplicity_control"][
+        "planned_comparisons"
+    ] == 2
     assert manifest["state"] == "BENCHMARKED"
     assert not any(path.is_symlink() for path in output.rglob("*"))
 

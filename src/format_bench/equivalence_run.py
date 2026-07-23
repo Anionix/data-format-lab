@@ -9,6 +9,7 @@ from .equivalence import EquivalenceBounds, EquivalenceVerdict
 from .equivalence_compare import (
     EQUIVALENCE_CONTRACT_VERSION,
     PAIR_SPECS,
+    multiplicity_control,
     pair_contract,
     pair_evidence,
 )
@@ -106,6 +107,7 @@ def run_equivalence(
             pair: dict(PAIR_SPECS[pair]["primary_endpoint"])
             for pair in selected_pairs
         },
+        "multiplicity_control": multiplicity_control(),
     }
     # LLM contract: ROUNDTRIP_VERIFIED -> PRIMARY_ENDPOINT_PREREGISTERED ->
     # BENCHMARKED; endpoint identity is durable before the first measurement.
