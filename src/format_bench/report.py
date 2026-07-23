@@ -522,9 +522,11 @@ def _equivalence(results: dict) -> list[str]:
             [
                 pair,
                 item.get("lane", "N/A"),
+                item.get("comparison_scope", "format_pair"),
                 item.get("reference", "N/A"),
                 ", ".join(item.get("candidates", ())) or "N/A",
                 item.get("verdict", "N/A"),
+                item.get("accepted_risk") or "",
                 item.get("failure_reason") or "",
             ]
         )
@@ -560,7 +562,16 @@ def _equivalence(results: dict) -> list[str]:
         "### Pair Verdicts",
         "",
         *_table(
-            ["Pair", "Lane", "Reference", "Candidates", "Verdict", "Failure"],
+            [
+                "Pair",
+                "Lane",
+                "Scope",
+                "Reference",
+                "Candidates",
+                "Verdict",
+                "Accepted risk",
+                "Failure",
+            ],
             rows,
         ),
         "",

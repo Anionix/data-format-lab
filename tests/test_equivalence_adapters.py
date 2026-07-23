@@ -8,6 +8,7 @@ import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
 from format_bench.fair import OPERATIONS, FairOperation, apply_arrow, result_evidence
+from format_bench.formats import arrow_extra
 from format_bench.formats import (
     AvroAdapter,
     CborAdapter,
@@ -56,6 +57,24 @@ def test_text_arrow_equivalence_adapters_roundtrip(
 
     assert artifact.native_bytes == path.stat().st_size
     assert adapter.verify_roundtrip(path, manifest)["passed"] is True
+
+
+def test_orc_projection_reaches_the_reader_boundary(
+    fixture_contract, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest, table = fixture_contract
+    adapter = OrcAdapter()
+    observed: dict[str, object] = {}
+
+    def read_table(*args, **kwargs):
+        observed.update(kwargs)
+        return table.select(kwargs["columns"])
+
+    monkeypatch.setattr(arrow_extra.orc, "read_table", read_table)
+
+    adapter.scan(tmp_path / "artifact.orc", manifest, FairOperation.PROJECT_TWO)
+
+    assert observed["columns"] == ["full_name", "repo_stars"]
 
 
 @pytest.mark.parametrize("adapter", [SqliteAdapter(), DuckDbAdapter()])

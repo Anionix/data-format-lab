@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from .equivalence import (
     EquivalenceBounds,
@@ -18,6 +18,14 @@ class PairSpec(TypedDict):
     allowed_lanes: tuple[Lane, ...]
     reference: str
     candidates: tuple[str, ...]
+    comparison_scope: NotRequired[Literal["configured_system"]]
+    execution_plan: NotRequired[dict[str, "ExecutionPlan"]]
+    accepted_risk: NotRequired[str]
+
+
+class ExecutionPlan(TypedDict):
+    projection_pushdown: bool
+    predicate_pushdown: bool
 
 
 PAIR_SPECS: dict[str, PairSpec] = {
@@ -38,6 +46,21 @@ PAIR_SPECS: dict[str, PairSpec] = {
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "parquet_default",
         "candidates": ("orc_zlib",),
+        "comparison_scope": "configured_system",
+        "execution_plan": {
+            "parquet_default": {
+                "projection_pushdown": True,
+                "predicate_pushdown": True,
+            },
+            "orc_zlib": {
+                "projection_pushdown": True,
+                "predicate_pushdown": False,
+            },
+        },
+        "accepted_risk": (
+            "PyArrow ORC predicate evaluation remains post-read; timing therefore "
+            "compares configured reader systems, not isolated format layouts."
+        ),
     },
     "jsonl-avro": {
         "lane": Lane.EQUIVALENCE,
@@ -58,6 +81,17 @@ PAIR_SPECS: dict[str, PairSpec] = {
         "candidates": ("duckdb_db",),
     },
 }
+
+
+def pair_contract(spec: PairSpec) -> dict[str, object]:
+    contract: dict[str, object] = {}
+    if "comparison_scope" in spec:
+        contract["comparison_scope"] = spec["comparison_scope"]
+    if "execution_plan" in spec:
+        contract["execution_plan"] = spec["execution_plan"]
+    if "accepted_risk" in spec:
+        contract["accepted_risk"] = spec["accepted_risk"]
+    return contract
 
 
 def _interval_json(interval: RatioInterval) -> dict[str, float | str]:
@@ -194,11 +228,14 @@ def pair_evidence(
         verdict = EquivalenceVerdict.INCONCLUSIVE
     else:
         verdict = EquivalenceVerdict.NOT_APPLICABLE
+    # LLM contract: ROUNDTRIP_VERIFIED -> BENCHMARKED records the reader plan
+    # before a configured-system comparison can become reportable evidence.
     return {
         "lane": spec["lane"],
         "reference": reference_name,
         "candidates": spec["candidates"],
         "verdict": verdict,
+        **pair_contract(spec),
         "formats": formats,
         "measured_formats": names,
     }

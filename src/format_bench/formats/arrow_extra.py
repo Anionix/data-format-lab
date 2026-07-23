@@ -7,7 +7,7 @@ import pyarrow.feather as feather
 import pyarrow.orc as orc
 
 from format_bench.canonical import arrow_schema, verify_table
-from format_bench.fair import Operation, apply_arrow
+from format_bench.fair import Operation, apply_arrow, columns_for
 from format_bench.model import Comparability, Lane
 
 from .base import Artifact, FormatDescription, write_artifact
@@ -63,4 +63,5 @@ class OrcAdapter:
         return verify_table(self.read(path, manifest), manifest)
 
     def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
-        return apply_arrow(self.read(path, manifest), operation, manifest)
+        table = orc.read_table(path, columns=columns_for(operation, manifest))
+        return apply_arrow(table, operation, manifest)

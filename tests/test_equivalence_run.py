@@ -42,3 +42,24 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
     assert {key: results["equivalence"][key] for key in expected} == expected
     assert manifest["measurement"]["worker_timeout_seconds"] == 7.5
     assert results["measurement"]["worker_timeout_seconds"] == 7.5
+
+
+def test_unavailable_parquet_orc_still_reports_accepted_risk(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "fixture-run"
+    adapters = [CsvAdapter(), TsvAdapter()]
+    prepare_run(
+        root,
+        "github-stars-2026-07-03",
+        run_dir,
+        fixture=True,
+        selected=adapters,
+    )
+    verify_run(run_dir, {adapter.describe().name: adapter for adapter in adapters})
+
+    result_path = run_equivalence(root, run_dir, pairs=("parquet-orc",))
+
+    pair = json.loads(result_path.read_text())["equivalence"]["pairs"]["parquet-orc"]
+    assert pair["comparison_scope"] == "configured_system"
+    assert pair["execution_plan"]["orc_zlib"]["predicate_pushdown"] is False
+    assert "predicate" in pair["accepted_risk"]

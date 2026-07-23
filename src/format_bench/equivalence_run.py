@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .equivalence import EquivalenceBounds, EquivalenceVerdict
-from .equivalence_compare import PAIR_SPECS, pair_evidence
+from .equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
 from .fair import expected_rows, operations_for
 from .model import Comparability, ExecutionState, transition
 from .runner import (
@@ -101,6 +101,7 @@ def run_equivalence(
         if pair in missing_by_pair:
             pairs_evidence[pair] = {
                 "lane": PAIR_SPECS[pair]["lane"],
+                **pair_contract(PAIR_SPECS[pair]),
                 "verdict": EquivalenceVerdict.NOT_APPLICABLE,
                 "failure_reason": missing_by_pair[pair],
             }
@@ -117,6 +118,7 @@ def run_equivalence(
         if pair_failed:
             pairs_evidence[pair] = {
                 "lane": PAIR_SPECS[pair]["lane"],
+                **pair_contract(PAIR_SPECS[pair]),
                 "verdict": EquivalenceVerdict.NOT_APPLICABLE,
                 "failure_reason": f"benchmark jobs failed: {', '.join(pair_failed)}",
             }
