@@ -28,7 +28,9 @@ def _table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
     ]
-    output.extend("| " + " | ".join(_cell(value) for value in row) + " |" for row in rows)
+    output.extend(
+        "| " + " | ".join(_cell(value) for value in row) + " |" for row in rows
+    )
     return output
 
 
@@ -132,14 +134,18 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         if isinstance(manifest_reference, str)
         else None
     )
-    source_reference = input_info.get("source") if isinstance(input_info, dict) else None
+    source_reference = (
+        input_info.get("source") if isinstance(input_info, dict) else None
+    )
     source_path = (
         _input_path(run_dir, source_reference)
         if isinstance(source_reference, str)
         else None
     )
     actual_source_sha256 = (
-        _sha256(source_path) if source_path is not None and source_path.is_file() else None
+        _sha256(source_path)
+        if source_path is not None and source_path.is_file()
+        else None
     )
     declared_source_sha256 = input_manifest.get("source_sha256")
     if (
@@ -160,7 +166,9 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     format_settings = [
         [
             entry.get("format"),
-            json.dumps(entry.get("settings", {}), sort_keys=True, separators=(",", ":")),
+            json.dumps(
+                entry.get("settings", {}), sort_keys=True, separators=(",", ":")
+            ),
         ]
         for entry in manifest.get("formats", [])
     ]
@@ -258,9 +266,7 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
 
 def _fair(manifest: dict, results: dict) -> list[str]:
     formats = [
-        item
-        for item in manifest["formats"]
-        if item.get("lane", Lane.FAIR) == Lane.FAIR
+        item for item in manifest["formats"] if item.get("lane", Lane.FAIR) == Lane.FAIR
     ]
     rows = [
         [
@@ -278,7 +284,15 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         "## Format Evidence",
         "",
         *_table(
-            ["Format", "Comparability", "State", "Native bytes", "zstd bytes", "Write ms", "Failure"],
+            [
+                "Format",
+                "Comparability",
+                "State",
+                "Native bytes",
+                "zstd bytes",
+                "Write ms",
+                "Failure",
+            ],
             rows,
         ),
     ]
@@ -286,18 +300,22 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         item
         for item in formats
         if item["comparability"] == Comparability.FULL_COMPARABLE
-        and item["state"]
-        in {ExecutionState.BENCHMARKED, ExecutionState.REPORTED}
+        and item["state"] in {ExecutionState.BENCHMARKED, ExecutionState.REPORTED}
     ]
     output.extend(["", "## Storage Ordering", ""])
     if not manifest["rankable"]:
         output.append("Disabled: this run used the non-rankable test fixture.")
     else:
-        ordered = sorted(eligible, key=lambda item: (item["native_bytes"], item["format"]))
+        ordered = sorted(
+            eligible, key=lambda item: (item["native_bytes"], item["format"])
+        )
         output.extend(
             _table(
                 ["Order", "Format", "Native bytes"],
-                [[index, item["format"], item["native_bytes"]] for index, item in enumerate(ordered, 1)],
+                [
+                    [index, item["format"], item["native_bytes"]]
+                    for index, item in enumerate(ordered, 1)
+                ],
             )
         )
     eligible_names = {item["format"] for item in eligible}
@@ -460,6 +478,7 @@ def _robustness(results: dict) -> list[str]:
         [verdict, evidence["summary"].get(verdict.value, 0)]
         for verdict in RobustnessVerdict
     ]
+
     def case_engine(item: dict) -> object:
         engine = item.get("engine")
         if isinstance(engine, str):
@@ -624,7 +643,7 @@ def _equivalence(results: dict) -> list[str]:
                 for operation, operation_evidence in sorted(
                     comparison.get("operations", {}).items()
                 )
-                )
+            )
             for scope, scope_evidence in scopes:
                 for metric in scope_evidence.get("metrics", ()):
                     role = (
@@ -649,7 +668,7 @@ def _equivalence(results: dict) -> list[str]:
                             metric.get("ratio"),
                             metric.get("lower"),
                             metric.get("upper"),
-                            scope_evidence.get("verdict"),
+                            metric.get("verdict", scope_evidence.get("verdict")),
                         ]
                     )
     return [
@@ -733,7 +752,9 @@ def render_report(run_dir: Path) -> Path:
     section = sections[profile]()
     for payload in (manifest, results):
         if payload["state"] == ExecutionState.BENCHMARKED:
-            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+            payload["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
     lines = [
         f"# Data Format Lab: {profile} report",
         "",
@@ -755,7 +776,9 @@ def render_report(run_dir: Path) -> Path:
         (results, run_dir / "results.json"),
     ):
         if payload["state"] == ExecutionState.BENCHMARKED:
-            payload["state"] = transition(ExecutionState.BENCHMARKED, ExecutionState.REPORTED)
+            payload["state"] = transition(
+                ExecutionState.BENCHMARKED, ExecutionState.REPORTED
+            )
         json_path.write_bytes(_json_bytes(payload))
     # LLM contract: transition in memory, then persist after durable report output.
     return path

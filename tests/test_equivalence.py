@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import platform
+import random
+from statistics import median
+
 import pytest
 
 from format_bench.equivalence import (
@@ -57,6 +61,32 @@ def test_bootstrap_ratio_uses_independent_samples_and_is_seeded() -> None:
     assert first.lower <= first.ratio <= first.upper
 
 
+def test_bootstrap_ratio_records_declared_percentile_order_statistics() -> None:
+    reference = [8.0, 9.0, 10.0]
+    candidate = [9.0, 10.0, 12.0]
+    interval = bootstrap_ratio_interval(
+        reference,
+        candidate,
+        metric="p50_ms",
+        seed=7,
+        samples=100,
+        alpha=0.10,
+    )
+
+    rng = random.Random(7)
+    replicates = []
+    for _ in range(100):
+        left = median(reference[rng.randrange(len(reference))] for _ in reference)
+        right = median(candidate[rng.randrange(len(candidate))] for _ in candidate)
+        replicates.append(right / left)
+    replicates.sort()
+    assert interval.bootstrap is not None
+    assert interval.bootstrap.lower_index == 5
+    assert interval.bootstrap.upper_index == 94
+    assert interval.lower == replicates[5]
+    assert interval.upper == replicates[94]
+
+
 def test_bootstrap_ratio_supports_bonferroni_comparison_alpha() -> None:
     pointwise = bootstrap_ratio_interval(
         [8.0, 9.0, 10.0, 11.0, 12.0],
@@ -99,7 +129,12 @@ def test_registered_pair_candidate_family_uses_bonferroni_control() -> None:
 
 
 @pytest.mark.parametrize(
-    ("candidate_native_bytes", "candidate_transport_bytes", "candidate_p95", "expected"),
+    (
+        "candidate_native_bytes",
+        "candidate_transport_bytes",
+        "candidate_p95",
+        "expected",
+    ),
     [
         (101, 200, 2.0, EquivalenceVerdict.PRACTICALLY_EQUIVALENT),
         (120, 100, 1.0, EquivalenceVerdict.MEANINGFUL_DIFFERENCE),
@@ -112,8 +147,8 @@ def test_primary_endpoint_alone_controls_candidate_verdict(
     expected: EquivalenceVerdict,
 ) -> None:
     operation = {
-        "warm_process_p50_ms": [1.0, 1.0],
-        "warm_process_p95_ms": [1.0, 1.0],
+        "warm_process_p50_ms": [1.0] * 10,
+        "warm_process_p95_ms": [1.0] * 10,
     }
     comparison = compare_candidate(
         {
@@ -129,7 +164,7 @@ def test_primary_endpoint_alone_controls_candidate_verdict(
             "operations": {
                 "read_all": {
                     **operation,
-                    "warm_process_p95_ms": [candidate_p95, candidate_p95],
+                    "warm_process_p95_ms": [candidate_p95] * 10,
                 }
             },
         },
@@ -143,11 +178,126 @@ def test_primary_endpoint_alone_controls_candidate_verdict(
     assert comparison["verdict_basis"] == "primary_endpoint"
     assert comparison["primary_endpoint"]["metric"] == "native_bytes"
     if expected is EquivalenceVerdict.PRACTICALLY_EQUIVALENT:
-        assert comparison["storage"]["verdict"] is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
+        assert (
+            comparison["storage"]["verdict"] is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
+        )
         assert (
             comparison["operations"]["read_all"]["verdict"]
             is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
         )
+
+
+def test_incomplete_secondary_timing_does_not_override_storage_verdict() -> None:
+    reference_operation = {
+        "warm_process_p50_ms": [1.0, 1.0],
+        "warm_process_p95_ms": [1.0, 1.0],
+    }
+    candidate_operation = {
+        "warm_process_p50_ms": [2.0, 2.0],
+        "warm_process_p95_ms": [1.0],
+    }
+    comparison = compare_candidate(
+        {
+            "status": "MEASURED",
+            "native_bytes": 100,
+            "transport_zstd_bytes": 100,
+            "operations": {"read_all": reference_operation},
+        },
+        {
+            "status": "MEASURED",
+            "native_bytes": 101,
+            "transport_zstd_bytes": 100,
+            "operations": {"read_all": candidate_operation},
+        },
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=("read_all",),
+    )
+
+    assert comparison["verdict"] is EquivalenceVerdict.PRACTICALLY_EQUIVALENT
+    assert comparison["storage"]["verdict"] is EquivalenceVerdict.PRACTICALLY_EQUIVALENT
+    assert (
+        comparison["operations"]["read_all"]["verdict"]
+        is EquivalenceVerdict.INCONCLUSIVE
+    )
+    assert comparison["operations"]["read_all"]["failure_reason"] == (
+        "fewer than two observations for: p95_ms"
+    )
+    p50 = next(
+        metric
+        for metric in comparison["operations"]["read_all"]["metrics"]
+        if metric["metric"] == "p50_ms"
+    )
+    assert p50["verdict"] is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
+    p95 = next(
+        metric
+        for metric in comparison["operations"]["read_all"]["metrics"]
+        if metric["metric"] == "p95_ms"
+    )
+    assert p95 == {
+        "metric": "p95_ms",
+        "verdict": EquivalenceVerdict.INCONCLUSIVE,
+        "failure_reason": "fewer than two observations",
+        "reference_observations": 2,
+        "candidate_observations": 1,
+    }
+
+
+def test_candidate_comparison_emits_reproducible_bootstrap_evidence() -> None:
+    reference_values = [float(value) for value in range(10, 20)]
+    candidate_values = [float(value) for value in range(11, 21)]
+    comparison = compare_candidate(
+        {
+            "status": "MEASURED",
+            "native_bytes": 100,
+            "transport_zstd_bytes": 100,
+            "operations": {
+                "read_all": {
+                    "warm_process_p50_ms": reference_values,
+                    "warm_process_p95_ms": reference_values,
+                }
+            },
+        },
+        {
+            "status": "MEASURED",
+            "native_bytes": 101,
+            "transport_zstd_bytes": 101,
+            "operations": {
+                "read_all": {
+                    "warm_process_p50_ms": candidate_values,
+                    "warm_process_p95_ms": candidate_values,
+                }
+            },
+        },
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=("read_all",),
+    )
+
+    metrics = comparison["operations"]["read_all"]["metrics"]
+    assert [metric["bootstrap"]["seed"] for metric in metrics] == [7, 8]
+    for metric in metrics:
+        contract = metric["bootstrap"]
+        reproduced = bootstrap_ratio_interval(
+            reference_values,
+            candidate_values,
+            metric=metric["metric"],
+            seed=contract["seed"],
+            samples=contract["samples"],
+            alpha=contract["alpha"],
+        )
+        assert contract["method"] == "independent_percentile_v1"
+        assert contract["resampling_unit"] == "fresh_process"
+        assert contract["reference_observations"] == 10
+        assert contract["candidate_observations"] == 10
+        assert contract["runtime"] == (
+            f"{platform.python_implementation()}-{platform.python_version()}"
+        )
+        assert metric["ratio"] == reproduced.ratio
+        assert metric["lower"] == reproduced.lower
+        assert metric["upper"] == reproduced.upper
 
 
 def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
@@ -186,8 +336,8 @@ def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
 
     samples = {
         f"{name}/read_all": {
-            "warm_process_p50_ms": [1.0, 1.0],
-            "warm_process_p95_ms": [1.0, 1.0],
+            "warm_process_p50_ms": [1.0] * 10,
+            "warm_process_p95_ms": [1.0] * 10,
         }
         for name in ("parquet_default", "orc_zlib")
     }
