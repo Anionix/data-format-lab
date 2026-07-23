@@ -58,7 +58,7 @@ def source_identity(dataset_id: str) -> dict:
             "columns": len(manifest.get("columns", [])),
             "source_sha256": manifest.get("source_sha256"),
             "canonical_hash": manifest.get("canonical_hash"),
-            "compressed_asset": manifest.get("release_asset"),
+            "compressed_asset": manifest.get("asset"),
         },
     }
 
@@ -254,6 +254,8 @@ def reset_generated_output() -> None:
 
 def main() -> None:
     reset_generated_output()
+    aggregate_id = "v0.2.0-rc1-revalidation-20260719"
+    aggregate_dataset_id = "revalidation-20260719"
     dataset_records = []
     result_records = []
     for dataset_id in DATASETS:
@@ -285,10 +287,23 @@ def main() -> None:
                 "evidence": evidence_records,
             }
         )
+    aggregate_input = {
+        "schema_version": "aggregate-input-1",
+        "aggregate_id": aggregate_id,
+        "dataset_id": aggregate_dataset_id,
+        "datasets": [
+            {
+                "dataset_id": item["dataset_id"],
+                "dataset_manifest": item["dataset_manifest"],
+                "source": item["source"],
+            }
+            for item in dataset_records
+        ],
+    }
     aggregate_manifest = {
         "schema_version": "aggregate-1",
-        "aggregate_id": "v0.2.0-rc1-revalidation-20260719",
-        "dataset_id": "revalidation-20260719",
+        "aggregate_id": aggregate_id,
+        "dataset_id": aggregate_dataset_id,
         # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED
         # -> BENCHMARKED -> REPORTED. Incomplete inputs remain explicit below.
         "state": "REPORTED",
@@ -302,15 +317,18 @@ def main() -> None:
     aggregate_results = {
         "schema_version": "aggregate-1",
         "aggregate_id": aggregate_manifest["aggregate_id"],
-        "dataset_id": "revalidation-20260719",
+        "dataset_id": aggregate_dataset_id,
         "profile": "equivalence",
-        "run_id": "revalidation-20260719",
+        "run_id": aggregate_dataset_id,
         "state": "REPORTED",
         "completion_state": "COMPLETE"
         if all(item["state"] == "COMPLETE" for item in result_records)
         else "PARTIAL",
         "datasets": result_records,
     }
+    input_path = OUTPUT / "input" / "manifest.json"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_text(json.dumps(aggregate_input, indent=2, sort_keys=True) + "\n")
     (OUTPUT / "manifest.json").write_text(
         json.dumps(aggregate_manifest, indent=2, sort_keys=True) + "\n"
     )
