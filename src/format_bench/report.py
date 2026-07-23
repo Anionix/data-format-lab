@@ -516,6 +516,32 @@ def _robustness(results: dict) -> list[str]:
 def _equivalence(results: dict) -> list[str]:
     evidence = results.get("equivalence", {})
     pairs = evidence.get("pairs", {})
+    control = evidence.get("multiplicity_control")
+    control_section = (
+        [
+            "### Primary Multiplicity Control",
+            "",
+            *_table(
+                ["Field", "Value"],
+                [
+                    ["Error-control target", control.get("error_control_target")],
+                    ["Method", control.get("method")],
+                    ["Family", control.get("family_id")],
+                    ["Planned comparisons", control.get("planned_comparisons")],
+                    ["Family alpha", control.get("family_alpha")],
+                    ["Comparison alpha", control.get("comparison_alpha")],
+                    ["Primary interval", control.get("primary_interval_method")],
+                    ["Coverage claim", control.get("coverage_claim")],
+                    ["Status", control.get("status")],
+                    ["Accepted risk", control.get("accepted_risk")],
+                    ["Secondary metrics", control.get("secondary_metrics")],
+                ],
+            ),
+            "",
+        ]
+        if isinstance(control, dict)
+        else []
+    )
     rows: list[list[object]] = []
     for pair, item in sorted(pairs.items()):
         endpoint = item.get("primary_endpoint", {})
@@ -545,6 +571,9 @@ def _equivalence(results: dict) -> list[str]:
         )
     metric_rows: list[list[object]] = []
     for pair, item in sorted(pairs.items()):
+        endpoint = item.get("primary_endpoint", {})
+        if not isinstance(endpoint, dict):
+            endpoint = {}
         for format_name, comparison in sorted(item.get("formats", {}).items()):
             scopes = [("storage", comparison.get("storage", {}))]
             scopes.extend(
@@ -552,15 +581,28 @@ def _equivalence(results: dict) -> list[str]:
                 for operation, operation_evidence in sorted(
                     comparison.get("operations", {}).items()
                 )
-            )
+                )
             for scope, scope_evidence in scopes:
                 for metric in scope_evidence.get("metrics", ()):
+                    role = (
+                        "primary"
+                        if endpoint.get("metric") == metric.get("metric")
+                        and (
+                            endpoint.get("scope") == scope == "storage"
+                            or (
+                                endpoint.get("scope") == "operation"
+                                and endpoint.get("operation") == scope
+                            )
+                        )
+                        else "descriptive"
+                    )
                     metric_rows.append(
                         [
                             pair,
                             format_name,
                             scope,
                             metric.get("metric"),
+                            role,
                             metric.get("ratio"),
                             metric.get("lower"),
                             metric.get("upper"),
@@ -572,6 +614,7 @@ def _equivalence(results: dict) -> list[str]:
         "",
         "Contract v2 uses each pair's preregistered primary endpoint; secondary intervals remain descriptive evidence. Legacy v1 keeps its recorded all-metrics verdict.",
         "",
+        *control_section,
         "### Pair Verdicts",
         "",
         *_table(
@@ -592,7 +635,17 @@ def _equivalence(results: dict) -> list[str]:
         "### Ratio Intervals",
         "",
         *_table(
-            ["Pair", "Candidate", "Scope", "Metric", "Ratio", "Lower", "Upper", "Verdict"],
+            [
+                "Pair",
+                "Candidate",
+                "Scope",
+                "Metric",
+                "Role",
+                "Ratio",
+                "Lower",
+                "Upper",
+                "Verdict",
+            ],
             metric_rows,
         ),
         "",

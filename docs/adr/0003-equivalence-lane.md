@@ -22,3 +22,5 @@ SQLite and DuckDB use the separate `engine_container` lane. They are database co
 - No result is a universal format ranking.
 - Contract v2 preregisters `storage/native_bytes` as the sole primary endpoint.
   Other size and timing intervals remain descriptive secondary evidence.
+- Registered pair/candidate primary comparisons share one Bonferroni FWER
+  family; exact size observations claim no statistical coverage.

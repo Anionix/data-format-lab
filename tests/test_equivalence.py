@@ -10,8 +10,13 @@ from format_bench.equivalence import (
     classify_interval,
     classify_metrics,
 )
-from format_bench.equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
-from format_bench.equivalence_compare import compare_candidate
+from format_bench.equivalence_compare import (
+    PAIR_SPECS,
+    compare_candidate,
+    multiplicity_control,
+    pair_contract,
+    pair_evidence,
+)
 from format_bench.formats import OrcAdapter, ParquetAdapter
 
 
@@ -52,11 +57,45 @@ def test_bootstrap_ratio_uses_independent_samples_and_is_seeded() -> None:
     assert first.lower <= first.ratio <= first.upper
 
 
+def test_bootstrap_ratio_supports_bonferroni_comparison_alpha() -> None:
+    pointwise = bootstrap_ratio_interval(
+        [8.0, 9.0, 10.0, 11.0, 12.0],
+        [9.0, 10.0, 11.0, 12.0, 14.0],
+        metric="p50_ms",
+        seed=7,
+        samples=1000,
+        alpha=0.05,
+    )
+    simultaneous = bootstrap_ratio_interval(
+        [8.0, 9.0, 10.0, 11.0, 12.0],
+        [9.0, 10.0, 11.0, 12.0, 14.0],
+        metric="p50_ms",
+        seed=7,
+        samples=1000,
+        alpha=multiplicity_control()["comparison_alpha"],
+    )
+
+    assert simultaneous.lower <= pointwise.lower
+    assert simultaneous.upper >= pointwise.upper
+
+
 def test_pair_registry_preregisters_one_primary_endpoint() -> None:
     assert {
         (spec["primary_endpoint"]["scope"], spec["primary_endpoint"]["metric"])
         for spec in PAIR_SPECS.values()
     } == {("storage", "native_bytes")}
+
+
+def test_registered_pair_candidate_family_uses_bonferroni_control() -> None:
+    control = multiplicity_control()
+
+    assert control["planned_pairs"] == tuple(PAIR_SPECS)
+    assert control["planned_comparisons"] == 7
+    assert control["comparison_alpha"] == pytest.approx(0.05 / 7)
+    assert control["secondary_metrics"] == "descriptive_only"
+    assert control["cross_pair_inference"] == "simultaneous"
+    assert control["error_control_target"] == "FWER"
+    assert control["status"] == "PREREGISTERED_NO_COVERAGE"
 
 
 @pytest.mark.parametrize(
@@ -179,3 +218,9 @@ def test_bootstrap_ratio_rejects_invalid_inputs(
 ) -> None:
     with pytest.raises(ValueError):
         bootstrap_ratio_interval(reference, candidate, metric="p50_ms", samples=samples)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 1.0, -0.1])
+def test_bootstrap_ratio_rejects_invalid_alpha(alpha: float) -> None:
+    with pytest.raises(ValueError, match="alpha"):
+        bootstrap_ratio_interval([1.0], [1.0], metric="p50_ms", alpha=alpha)

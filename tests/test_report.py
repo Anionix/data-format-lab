@@ -4,7 +4,61 @@ from pathlib import Path
 
 import pytest
 
-from format_bench.report import render_report
+from format_bench.report import _equivalence, render_report
+
+
+def test_equivalence_report_exposes_multiplicity_and_coverage_limit() -> None:
+    report = "\n".join(
+        _equivalence(
+            {
+                "equivalence": {
+                    "multiplicity_control": {
+                        "error_control_target": "FWER",
+                        "method": "bonferroni_simultaneous_intervals",
+                        "family_id": "equivalence.primary.v2",
+                        "planned_comparisons": 7,
+                        "family_alpha": 0.05,
+                        "comparison_alpha": 0.05 / 7,
+                        "primary_interval_method": "deterministic_exact",
+                        "coverage_claim": "none",
+                        "status": "PREREGISTERED_NO_COVERAGE",
+                        "accepted_risk": "repeated encoding remains pending",
+                        "secondary_metrics": "descriptive_only",
+                    },
+                    "pairs": {
+                        "csv-tsv": {
+                            "primary_endpoint": {
+                                "scope": "storage",
+                                "metric": "native_bytes",
+                            },
+                            "formats": {
+                                "tsv": {
+                                    "storage": {
+                                        "metrics": [
+                                            {
+                                                "metric": "native_bytes",
+                                                "ratio": 1.0,
+                                                "lower": 1.0,
+                                                "upper": 1.0,
+                                            }
+                                        ]
+                                    },
+                                    "operations": {},
+                                }
+                            },
+                        }
+                    },
+                }
+            }
+        )
+    )
+
+    assert "### Primary Multiplicity Control" in report
+    assert "| Error-control target | FWER |" in report
+    assert "| Planned comparisons | 7 |" in report
+    assert "| Coverage claim | none |" in report
+    assert "| Status | PREREGISTERED_NO_COVERAGE |" in report
+    assert "| csv-tsv | tsv | storage | native_bytes | primary |" in report
 
 
 def test_prompt_report_is_deterministic_and_includes_exact_tokens(tmp_path: Path) -> None:
