@@ -6,7 +6,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .equivalence import EquivalenceBounds, EquivalenceVerdict
-from .equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
+from .equivalence_compare import (
+    EQUIVALENCE_CONTRACT_VERSION,
+    PAIR_SPECS,
+    pair_contract,
+    pair_evidence,
+)
 from .fair import expected_rows, operations_for
 from .model import Comparability, ExecutionState, transition
 from .runner import (
@@ -91,11 +96,25 @@ def run_equivalence(
         for operation in operations
     ]
     worker_counts = parallel_worker_counts(len(jobs), parallel=parallel)
+    bounds = EquivalenceBounds()
+    equivalence_contract = {
+        "contract_version": EQUIVALENCE_CONTRACT_VERSION,
+        "bounds": asdict(bounds),
+        "parallel_jobs": parallel,
+        **worker_counts,
+        "primary_endpoints": {
+            pair: dict(PAIR_SPECS[pair]["primary_endpoint"])
+            for pair in selected_pairs
+        },
+    }
+    # LLM contract: ROUNDTRIP_VERIFIED -> PRIMARY_ENDPOINT_PREREGISTERED ->
+    # BENCHMARKED; endpoint identity is durable before the first measurement.
+    run_manifest["equivalence"] = equivalence_contract
+    _write_json(manifest_path, run_manifest)
     measured = run_jobs(jobs, measurement, root, parallel=parallel)
     failed = {
         job_id for job_id, result in measured.items() if result["status"] != "MEASURED"
     }
-    bounds = EquivalenceBounds()
     pairs_evidence = {}
     for pair in selected_pairs:
         if pair in missing_by_pair:
@@ -153,10 +172,7 @@ def run_equivalence(
         ExecutionState.ROUNDTRIP_VERIFIED, result_state
     )
     run_manifest["equivalence"] = {
-        "contract_version": "1",
-        "bounds": asdict(bounds),
-        "parallel_jobs": parallel,
-        **worker_counts,
+        **equivalence_contract,
         "pairs": pairs_evidence,
     }
     run_manifest["measurement"] = measurement_metadata(measurement)

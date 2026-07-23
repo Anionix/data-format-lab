@@ -11,6 +11,7 @@ from format_bench.equivalence import (
     classify_metrics,
 )
 from format_bench.equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
+from format_bench.equivalence_compare import compare_candidate
 from format_bench.formats import OrcAdapter, ParquetAdapter
 
 
@@ -49,6 +50,65 @@ def test_bootstrap_ratio_uses_independent_samples_and_is_seeded() -> None:
     assert first == second
     assert first.ratio == pytest.approx(2.0)
     assert first.lower <= first.ratio <= first.upper
+
+
+def test_pair_registry_preregisters_one_primary_endpoint() -> None:
+    assert {
+        (spec["primary_endpoint"]["scope"], spec["primary_endpoint"]["metric"])
+        for spec in PAIR_SPECS.values()
+    } == {("storage", "native_bytes")}
+
+
+@pytest.mark.parametrize(
+    ("candidate_native_bytes", "candidate_transport_bytes", "candidate_p95", "expected"),
+    [
+        (101, 200, 2.0, EquivalenceVerdict.PRACTICALLY_EQUIVALENT),
+        (120, 100, 1.0, EquivalenceVerdict.MEANINGFUL_DIFFERENCE),
+    ],
+)
+def test_primary_endpoint_alone_controls_candidate_verdict(
+    candidate_native_bytes: int,
+    candidate_transport_bytes: int,
+    candidate_p95: float,
+    expected: EquivalenceVerdict,
+) -> None:
+    operation = {
+        "warm_process_p50_ms": [1.0, 1.0],
+        "warm_process_p95_ms": [1.0, 1.0],
+    }
+    comparison = compare_candidate(
+        {
+            "status": "MEASURED",
+            "native_bytes": 100,
+            "transport_zstd_bytes": 100,
+            "operations": {"read_all": operation},
+        },
+        {
+            "status": "MEASURED",
+            "native_bytes": candidate_native_bytes,
+            "transport_zstd_bytes": candidate_transport_bytes,
+            "operations": {
+                "read_all": {
+                    **operation,
+                    "warm_process_p95_ms": [candidate_p95, candidate_p95],
+                }
+            },
+        },
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=("read_all",),
+    )
+
+    assert comparison["verdict"] == expected
+    assert comparison["verdict_basis"] == "primary_endpoint"
+    assert comparison["primary_endpoint"]["metric"] == "native_bytes"
+    if expected is EquivalenceVerdict.PRACTICALLY_EQUIVALENT:
+        assert comparison["storage"]["verdict"] is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
+        assert (
+            comparison["operations"]["read_all"]["verdict"]
+            is EquivalenceVerdict.MEANINGFUL_DIFFERENCE
+        )
 
 
 def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:

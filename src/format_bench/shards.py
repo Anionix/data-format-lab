@@ -205,6 +205,8 @@ def merge_equivalence_shards(
     shard_records: list[JSONValue] = []
     environments: list[JSONObject] = []
     measurements: list[JSONObject] = []
+    equivalence_contracts: list[JSONObject] = []
+    primary_endpoints: JSONObject = {}
     for shard in shard_paths:
         manifest = _read_json(shard / "manifest.json")
         results = _read_json(shard / "results.json")
@@ -245,6 +247,21 @@ def merge_equivalence_shards(
         if results.get("profile") != "equivalence":
             raise ValueError(f"shard does not declare the equivalence profile: {shard}")
         equivalence = _object(results.get("equivalence"), f"{shard}/equivalence")
+        equivalence_contracts.append(
+            {
+                "contract_version": equivalence.get("contract_version", "1"),
+                "bounds": _object(
+                    equivalence.get("bounds", {}), f"{shard}/equivalence.bounds"
+                ),
+            }
+        )
+        for pair, endpoint in _object_map(
+            equivalence.get("primary_endpoints", {}),
+            f"{shard}/equivalence.primary_endpoints",
+        ).items():
+            if pair in primary_endpoints and primary_endpoints[pair] != endpoint:
+                raise ValueError(f"conflicting primary endpoint: {pair}")
+            primary_endpoints[pair] = endpoint
         pairs = _object_map(
             equivalence.get("pairs"), f"{shard}/equivalence.pairs"
         )
@@ -281,6 +298,16 @@ def merge_equivalence_shards(
         raise ValueError("shard environments do not match")
     if len({json.dumps(value, sort_keys=True) for value in measurements}) != 1:
         raise ValueError("shard measurement protocols do not match")
+    if (
+        len(
+            {
+                json.dumps(value, sort_keys=True)
+                for value in equivalence_contracts
+            }
+        )
+        != 1
+    ):
+        raise ValueError("shard equivalence contracts do not match")
     _copy_run_files(base_run, output_run)
 
     manifest = dict(base_manifest)
@@ -289,10 +316,9 @@ def merge_equivalence_shards(
         ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED
     )
     first_shard_results = _read_json(shard_paths[0] / "results.json")
-    first_equivalence = _object(first_shard_results["equivalence"], "equivalence")
     equivalence_value: JSONObject = {
-        "contract_version": "1",
-        "bounds": _object(first_equivalence.get("bounds", {}), "equivalence.bounds"),
+        **equivalence_contracts[0],
+        "primary_endpoints": primary_endpoints,
         "parallel_jobs": True,
         "shard_count": len(shard_paths),
         "shared_job_ids": shared_job_ids,

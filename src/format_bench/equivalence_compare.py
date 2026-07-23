@@ -7,10 +7,19 @@ from .equivalence import (
     EquivalenceVerdict,
     RatioInterval,
     bootstrap_ratio_interval,
+    classify_interval,
     classify_metrics,
 )
 from .fair import OPERATIONS
 from .model import Lane
+
+EQUIVALENCE_CONTRACT_VERSION = "2"
+
+
+class PrimaryEndpoint(TypedDict):
+    scope: Literal["storage", "operation"]
+    metric: Literal["native_bytes", "transport_zstd_bytes", "p50_ms", "p95_ms"]
+    operation: NotRequired[str]
 
 
 class PairSpec(TypedDict):
@@ -22,11 +31,18 @@ class PairSpec(TypedDict):
     execution_plan: NotRequired[dict[str, "ExecutionPlan"]]
     writer_plan: NotRequired[dict[str, dict[str, object]]]
     accepted_risk: NotRequired[str]
+    primary_endpoint: PrimaryEndpoint
 
 
 class ExecutionPlan(TypedDict):
     projection_pushdown: bool
     predicate_pushdown: bool
+
+
+PRIMARY_ENDPOINT: PrimaryEndpoint = {
+    "scope": "storage",
+    "metric": "native_bytes",
+}
 
 
 PAIR_SPECS: dict[str, PairSpec] = {
@@ -35,18 +51,21 @@ PAIR_SPECS: dict[str, PairSpec] = {
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "csv",
         "candidates": ("tsv",),
+        "primary_endpoint": PRIMARY_ENDPOINT,
     },
     "arrow-feather": {
         "lane": Lane.EQUIVALENCE,
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "arrow_ipc",
         "candidates": ("feather_v2",),
+        "primary_endpoint": PRIMARY_ENDPOINT,
     },
     "parquet-orc": {
         "lane": Lane.EQUIVALENCE,
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "parquet_default",
         "candidates": ("orc_zlib",),
+        "primary_endpoint": PRIMARY_ENDPOINT,
         "comparison_scope": "configured_system",
         "execution_plan": {
             "parquet_default": {
@@ -81,24 +100,30 @@ PAIR_SPECS: dict[str, PairSpec] = {
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "object_jsonl",
         "candidates": ("avro_ocf",),
+        "primary_endpoint": PRIMARY_ENDPOINT,
     },
     "jsonl-msgpack-cbor": {
         "lane": Lane.EQUIVALENCE,
         "allowed_lanes": (Lane.FAIR, Lane.EQUIVALENCE),
         "reference": "object_jsonl",
         "candidates": ("msgpack_rows", "cbor_rows"),
+        "primary_endpoint": PRIMARY_ENDPOINT,
     },
     "sqlite-duckdb": {
         "lane": Lane.ENGINE_CONTAINER,
         "allowed_lanes": (Lane.ENGINE_CONTAINER,),
         "reference": "sqlite_db",
         "candidates": ("duckdb_db",),
+        "primary_endpoint": PRIMARY_ENDPOINT,
     },
 }
 
 
 def pair_contract(spec: PairSpec) -> dict[str, object]:
-    contract: dict[str, object] = {}
+    contract: dict[str, object] = {
+        "primary_endpoint": dict(spec["primary_endpoint"]),
+        "verdict_basis": "primary_endpoint",
+    }
     if "comparison_scope" in spec:
         contract["comparison_scope"] = spec["comparison_scope"]
     if "execution_plan" in spec:
@@ -126,13 +151,38 @@ def _exact_interval(metric: str, reference: float, candidate: float) -> RatioInt
     return RatioInterval(metric, ratio, ratio, ratio)
 
 
-def _not_applicable(reason: str) -> dict:
+def _not_applicable(reason: str, primary_endpoint: PrimaryEndpoint) -> dict:
     return {
         "verdict": EquivalenceVerdict.NOT_APPLICABLE,
+        "verdict_basis": "primary_endpoint",
+        "primary_endpoint": primary_endpoint,
         "failure_reason": reason,
         "storage": {},
         "operations": {},
     }
+
+
+def _primary_interval(
+    primary_endpoint: PrimaryEndpoint,
+    storage: list[RatioInterval],
+    operations: dict[str, list[RatioInterval]],
+) -> RatioInterval:
+    scope = primary_endpoint["scope"]
+    if scope == "storage":
+        intervals = storage
+    else:
+        operation = primary_endpoint.get("operation")
+        if operation is None or operation not in operations:
+            raise ValueError("primary operation endpoint is unavailable")
+        intervals = operations[operation]
+    matches = [
+        interval
+        for interval in intervals
+        if interval.metric == primary_endpoint["metric"]
+    ]
+    if len(matches) != 1:
+        raise ValueError("primary endpoint must resolve to exactly one interval")
+    return matches[0]
 
 
 def compare_candidate(
@@ -141,11 +191,14 @@ def compare_candidate(
     *,
     bounds: EquivalenceBounds,
     seed: int,
+    primary_endpoint: PrimaryEndpoint,
     operations: tuple[str, ...] | None = None,
 ) -> dict:
     operation_names = operations or tuple(operation.value for operation in OPERATIONS)
     if reference.get("status") != "MEASURED" or candidate.get("status") != "MEASURED":
-        return _not_applicable("one or more benchmark jobs failed")
+        return _not_applicable(
+            "one or more benchmark jobs failed", primary_endpoint
+        )
     reference_operations = reference["operations"]
     candidate_operations = candidate["operations"]
     if any(
@@ -155,6 +208,8 @@ def compare_candidate(
     ):
         return {
             "verdict": EquivalenceVerdict.INCONCLUSIVE,
+            "verdict_basis": "primary_endpoint",
+            "primary_endpoint": primary_endpoint,
             "failure_reason": "at least two fresh-process samples are required for an interval",
             "storage": {},
             "operations": {},
@@ -171,7 +226,7 @@ def compare_candidate(
         ),
     ]
     operations: dict[str, dict] = {}
-    all_intervals = list(storage_intervals)
+    operation_intervals: dict[str, list[RatioInterval]] = {}
     for offset, operation in enumerate(operation_names):
         reference_evidence = reference_operations[operation]
         candidate_evidence = candidate_operations[operation]
@@ -189,13 +244,23 @@ def compare_candidate(
                 seed=seed + offset * 2 + 1,
             ),
         ]
-        all_intervals.extend(intervals)
+        operation_intervals[operation] = intervals
         operations[operation] = {
             "verdict": classify_metrics(intervals, bounds),
             "metrics": [_interval_json(item) for item in intervals],
         }
+    primary = _primary_interval(
+        primary_endpoint, storage_intervals, operation_intervals
+    )
+    primary_verdict = classify_interval(primary, bounds)
     return {
-        "verdict": classify_metrics(all_intervals, bounds),
+        "verdict": primary_verdict,
+        "verdict_basis": "primary_endpoint",
+        "primary_endpoint": {
+            **primary_endpoint,
+            **_interval_json(primary),
+            "verdict": primary_verdict,
+        },
         "failure_reason": None,
         "storage": {
             "verdict": classify_metrics(storage_intervals, bounds),
@@ -235,7 +300,12 @@ def pair_evidence(
             },
         }
         formats[candidate_name] = compare_candidate(
-            reference, candidate, bounds=bounds, seed=seed, operations=operation_names
+            reference,
+            candidate,
+            bounds=bounds,
+            seed=seed,
+            primary_endpoint=spec["primary_endpoint"],
+            operations=operation_names,
         )
     verdicts = [item["verdict"] for item in formats.values()]
     if any(item == EquivalenceVerdict.MEANINGFUL_DIFFERENCE for item in verdicts):

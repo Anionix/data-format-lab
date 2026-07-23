@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import format_bench.equivalence_run as equivalence_run
 from format_bench.equivalence_run import run_equivalence
 from format_bench.formats.text import CsvAdapter, TsvAdapter
 from format_bench.runner import MeasurementConfig
@@ -24,6 +25,17 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
     )
     verify_run(run_dir, {adapter.describe().name: adapter for adapter in adapters})
     monkeypatch.setenv("FORMAT_BENCH_MAX_WORKERS", "2")
+    original_run_jobs = equivalence_run.run_jobs
+
+    def assert_preregistered(*args, **kwargs):
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        assert manifest["equivalence"]["contract_version"] == "2"
+        assert manifest["equivalence"]["primary_endpoints"] == {
+            "csv-tsv": {"scope": "storage", "metric": "native_bytes"}
+        }
+        return original_run_jobs(*args, **kwargs)
+
+    monkeypatch.setattr(equivalence_run, "run_jobs", assert_preregistered)
 
     result_path = run_equivalence(
         root,
@@ -38,6 +50,7 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
     manifest = json.loads((run_dir / "manifest.json").read_text())
     results = json.loads(result_path.read_text())
     expected = {"requested_workers": 2, "effective_workers": 2}
+    assert manifest["equivalence"]["contract_version"] == "2"
     assert {key: manifest["equivalence"][key] for key in expected} == expected
     assert {key: results["equivalence"][key] for key in expected} == expected
     assert manifest["measurement"]["worker_timeout_seconds"] == 7.5

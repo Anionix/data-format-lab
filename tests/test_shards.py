@@ -61,8 +61,21 @@ def _shard_results(pair: str, name: str) -> dict:
         "status": "MEASURED",
         "results": {f"{name}/read_all": {"status": "MEASURED", "result": 4}},
         "equivalence": {
+            "contract_version": "2",
             "bounds": {"size_ratio": 0.02},
-            "pairs": {pair: {"verdict": "PRACTICALLY_EQUIVALENT"}},
+            "primary_endpoints": {
+                pair: {"scope": "storage", "metric": "native_bytes"}
+            },
+            "pairs": {
+                pair: {
+                    "primary_endpoint": {
+                        "scope": "storage",
+                        "metric": "native_bytes",
+                    },
+                    "verdict_basis": "primary_endpoint",
+                    "verdict": "PRACTICALLY_EQUIVALENT",
+                }
+            },
         },
     }
 
@@ -97,6 +110,10 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     assert merged["status"] == "MEASURED"
     assert set(merged["results"]) == {"arrow_ipc/read_all", "feather_v2/read_all"}
     assert set(merged["equivalence"]["pairs"]) == {"arrow-feather", "csv-tsv"}
+    assert set(merged["equivalence"]["primary_endpoints"]) == {
+        "arrow-feather",
+        "csv-tsv",
+    }
     assert manifest["state"] == "BENCHMARKED"
     assert not any(path.is_symlink() for path in output.rglob("*"))
 

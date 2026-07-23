@@ -1,5 +1,8 @@
 # Equivalence Lane v1
 
+Superseded for new measurements by [Equivalence Lane v2](equivalence-v2.md).
+Existing v1 artifacts retain their recorded all-metrics verdicts.
+
 ## Contract
 
 `format-bench run --profile equivalence --dataset <id>` runs all registered pairs. Repeatable `--pair` selects a subset. The input must already have passed the canonical round-trip gate.
