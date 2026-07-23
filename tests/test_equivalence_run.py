@@ -62,4 +62,6 @@ def test_unavailable_parquet_orc_still_reports_accepted_risk(tmp_path: Path) -> 
     pair = json.loads(result_path.read_text())["equivalence"]["pairs"]["parquet-orc"]
     assert pair["comparison_scope"] == "configured_system"
     assert pair["execution_plan"]["orc_zlib"]["predicate_pushdown"] is False
+    assert pair["writer_plan"]["parquet_default"]["compression"] == "zstd"
+    assert pair["writer_plan"]["orc_zlib"]["compression"] == "zlib"
     assert "predicate" in pair["accepted_risk"]

@@ -11,6 +11,7 @@ from format_bench.equivalence import (
     classify_metrics,
 )
 from format_bench.equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
+from format_bench.formats import OrcAdapter, ParquetAdapter
 
 
 def test_equivalence_bounds_distinguish_inside_outside_and_crossing_intervals() -> None:
@@ -64,7 +65,24 @@ def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
             "predicate_pushdown": False,
         },
     }
+    assert spec["writer_plan"] == {
+        "parquet_default": {
+            "compression": "zstd",
+            "level": "library-default",
+            "dictionary": True,
+        },
+        "orc_zlib": {
+            "compression": "zlib",
+            "compression_strategy": "speed",
+            "dictionary_key_size_threshold": 0.0,
+        },
+    }
+    assert spec["writer_plan"]["parquet_default"] == (
+        ParquetAdapter().describe().settings
+    )
+    assert spec["writer_plan"]["orc_zlib"] == OrcAdapter().describe().settings
     assert "predicate" in spec["accepted_risk"]
+    assert "codec" in spec["accepted_risk"]
     assert pair_contract(spec)["accepted_risk"] == spec["accepted_risk"]
 
     samples = {
@@ -88,6 +106,7 @@ def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
     )
 
     assert evidence["execution_plan"] == spec["execution_plan"]
+    assert evidence["writer_plan"] == spec["writer_plan"]
     assert evidence["accepted_risk"] == spec["accepted_risk"]
 
 
@@ -99,6 +118,4 @@ def test_bootstrap_ratio_rejects_invalid_inputs(
     reference: list[float], candidate: list[float], samples: int
 ) -> None:
     with pytest.raises(ValueError):
-        bootstrap_ratio_interval(
-            reference, candidate, metric="p50_ms", samples=samples
-        )
+        bootstrap_ratio_interval(reference, candidate, metric="p50_ms", samples=samples)
