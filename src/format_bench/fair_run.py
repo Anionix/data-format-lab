@@ -47,6 +47,17 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
         for name in entries
         for operation in operations_for(dataset_manifest)
     ]
+    measurement_record = measurement_metadata(
+        measurement,
+        dataset_id=run_manifest["dataset_id"],
+        dataset_manifest=dataset_manifest,
+    )
+    # LLM contract precondition: estimand metadata is durable before
+    # ROUNDTRIP_VERIFIED -> BENCHMARKED.
+    run_manifest["measurement"] = measurement_record
+    manifest_path.write_text(
+        json.dumps(run_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     measured = run_jobs(jobs, measurement, root)
     successful_entries = 0
     failed_entries = 0
@@ -72,8 +83,7 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
         else ExecutionState.FAILED
     )
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
-    run_manifest["measurement"] = measurement_metadata(measurement)
-    results = new_results(root, run_dir.name, measurement)
+    results = new_results(root, run_dir.name, measurement_record)
     results.update(
         {
             "profile": "fair",

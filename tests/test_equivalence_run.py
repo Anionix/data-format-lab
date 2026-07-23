@@ -36,6 +36,15 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
         control = manifest["equivalence"]["multiplicity_control"]
         assert control["method"] == "bonferroni_simultaneous_intervals"
         assert control["planned_comparisons"] == 7
+        assert manifest["measurement"]["estimand"]["targets"]["warm_p50_ms"] == {
+            "variable": "per_process_median_post_warmup_elapsed_excluding_validation",
+            "unit": "milliseconds",
+            "population_summary": "median_across_fresh_processes",
+            "estimator": "median_of_per_process_medians",
+            "rounding": "3_decimal_places",
+            "evidence_field": "warm_process_p50_ms",
+            "estimate_field": "warm_process_estimates.median_p50_ms",
+        }
         return original_run_jobs(*args, **kwargs)
 
     monkeypatch.setattr(equivalence_run, "run_jobs", assert_preregistered)
@@ -58,6 +67,7 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
     assert {key: results["equivalence"][key] for key in expected} == expected
     assert manifest["measurement"]["worker_timeout_seconds"] == 7.5
     assert results["measurement"]["worker_timeout_seconds"] == 7.5
+    assert manifest["measurement"]["estimand"] == results["measurement"]["estimand"]
 
 
 def test_unavailable_parquet_orc_still_reports_accepted_risk(tmp_path: Path) -> None:

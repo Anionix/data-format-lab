@@ -18,6 +18,7 @@ Data Format Lab tests storage and database claims against explicit contracts. It
 - **Claims lane**: A format-native workload derived from a primary-source claim.
 - **Prompt lane**: Equal projected content measured as model tokens.
 - **Equivalence lane**: Pairwise comparison of formats with the same logical table and workload; it never creates a global ranking.
+- **Estimand**: Preregistered target population, condition, variable, population summary, and failure strategy for a reported measurement.
 - **Engine-container lane**: SQL engine and database-file evidence, kept separate from file-format comparisons.
 - **Robustness lane**: Boundary, malformed-input, and crash-resistance evidence with no performance ranking.
 - **Conformance gate**: Canonical round-trip verification required before performance evidence is eligible.
