@@ -39,6 +39,11 @@ class ResultEvidence(TypedDict):
     normalized_hash: str
 
 
+def _evidence_type(field: pa.Field) -> str:
+    # Arrow string_view is a storage-level view of the same UTF-8 logical type.
+    return "string" if pa.types.is_string_view(field.type) else str(field.type)
+
+
 def operations_for(manifest: Mapping[str, object] | None = None) -> tuple[str, ...]:
     if manifest is not None and "workloads" in manifest:
         workloads = load_workloads(manifest)
@@ -131,7 +136,11 @@ def result_evidence(
         "rows": table.num_rows,
         "columns": table.column_names,
         "schema": [
-            {"name": field.name, "type": str(field.type), "nullable": field.nullable}
+            {
+                "name": field.name,
+                "type": _evidence_type(field),
+                "nullable": field.nullable,
+            }
             for field in table.schema
         ],
         "row_order": "ORDER_SENSITIVE" if order_sensitive else "ORDER_INSENSITIVE",

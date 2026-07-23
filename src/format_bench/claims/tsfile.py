@@ -7,21 +7,41 @@ from typing import Any, Callable
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from format_bench.fair import FairOperation, result_evidence
 from format_bench.runner import stats_ms
 
 
 TABLE_NAME = "sensors"
 
 
-def _measure(function: Callable[[], int], warmups: int, iterations: int) -> dict:
+def _normalize_result(name: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if name in {"temperature", "pressure"}:
+        return float(value)
+    if name == "sequence":
+        return int(value)
+    if name == "active":
+        return bool(value)
+    return str(value)
+
+
+def _measure(function: Callable[[], pa.Table], warmups: int, iterations: int) -> dict:
+    result = pa.table({})
     for _ in range(warmups):
-        function()
-    samples, result = [], 0
+        result = function()
+    samples = []
     for _ in range(iterations):
         started = time.perf_counter_ns()
         result = function()
         samples.append((time.perf_counter_ns() - started) / 1_000_000)
-    return {"timing": stats_ms(samples), "result": result}
+    return {
+        "timing": stats_ms(samples),
+        "result": result.num_rows,
+        "evidence": result_evidence(result, FairOperation.READ_ALL),
+    }
 
 
 def _schema() -> tuple[Any, list[str], list[Any]]:
@@ -181,26 +201,50 @@ def run_tsfile_claim(
     end = min(points_per_device, start + max(1, points_per_device // 10))
     device = f"device-{device_index:03d}"
 
-    def ts_query() -> int:
-        rows = 0
+    def ts_query() -> pa.Table:
+        rows = []
         with TsFileReader(str(tsfile_path)) as reader:
             with reader.query_table(
                 TABLE_NAME, columns, start, end - 1, tag_eq("device", device)
             ) as result:
                 while result.next():
-                    rows += 1
-        return rows
+                    rows.append(
+                        {
+                            name: _normalize_result(
+                                name, result.get_value_by_name(name)
+                            )
+                            for name in columns
+                        }
+                    )
+        return pa.Table.from_pylist(
+            rows,
+            schema=pa.schema(
+                [
+                    pa.field("device", pa.string()),
+                    pa.field("site", pa.string()),
+                    pa.field("temperature", pa.float64()),
+                    pa.field("pressure", pa.float64()),
+                    pa.field("active", pa.bool_()),
+                    pa.field("sequence", pa.int64()),
+                ]
+            ),
+        )
 
-    def parquet_query() -> int:
+    def parquet_query() -> pa.Table:
         return pq.read_table(
             parquet_path,
             columns=columns,
             filters=[("device", "=", device), ("timestamp", ">=", start), ("timestamp", "<", end)],
-        ).num_rows
+        )
 
     ts_result = _measure(ts_query, warmups, iterations)
     parquet_result = _measure(parquet_query, warmups, iterations)
-    status = "MEASURED" if ts_result["result"] == parquet_result["result"] else "FAILED"
+    status = (
+        "MEASURED"
+        if ts_result["result"] == parquet_result["result"]
+        and ts_result["evidence"] == parquet_result["evidence"]
+        else "FAILED"
+    )
     return {
         "status": status,
         "rows": devices * points_per_device,
@@ -213,4 +257,8 @@ def run_tsfile_claim(
         },
         "bytes": {"tsfile": tsfile_path.stat().st_size, "parquet": parquet_path.stat().st_size},
         "timing": {"tsfile": ts_result, "parquet": parquet_result},
+        "evidence": {
+            "tsfile": ts_result["evidence"],
+            "parquet": parquet_result["evidence"],
+        },
     }
