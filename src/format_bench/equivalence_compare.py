@@ -20,6 +20,7 @@ class PairSpec(TypedDict):
     candidates: tuple[str, ...]
     comparison_scope: NotRequired[Literal["configured_system"]]
     execution_plan: NotRequired[dict[str, "ExecutionPlan"]]
+    writer_plan: NotRequired[dict[str, dict[str, object]]]
     accepted_risk: NotRequired[str]
 
 
@@ -57,9 +58,22 @@ PAIR_SPECS: dict[str, PairSpec] = {
                 "predicate_pushdown": False,
             },
         },
+        "writer_plan": {
+            "parquet_default": {
+                "compression": "zstd",
+                "level": "library-default",
+                "dictionary": True,
+            },
+            "orc_zlib": {
+                "compression": "zlib",
+                "compression_strategy": "speed",
+                "dictionary_key_size_threshold": 0.0,
+            },
+        },
         "accepted_risk": (
             "PyArrow ORC predicate evaluation remains post-read; timing therefore "
-            "compares configured reader systems, not isolated format layouts."
+            "compares configured reader systems, not isolated format layouts. "
+            "Writer codecs also differ: Parquet uses Zstd and ORC uses Zlib."
         ),
     },
     "jsonl-avro": {
@@ -89,6 +103,8 @@ def pair_contract(spec: PairSpec) -> dict[str, object]:
         contract["comparison_scope"] = spec["comparison_scope"]
     if "execution_plan" in spec:
         contract["execution_plan"] = spec["execution_plan"]
+    if "writer_plan" in spec:
+        contract["writer_plan"] = spec["writer_plan"]
     if "accepted_risk" in spec:
         contract["accepted_risk"] = spec["accepted_risk"]
     return contract
@@ -145,7 +161,9 @@ def compare_candidate(
         }
 
     storage_intervals = [
-        _exact_interval("native_bytes", reference["native_bytes"], candidate["native_bytes"]),
+        _exact_interval(
+            "native_bytes", reference["native_bytes"], candidate["native_bytes"]
+        ),
         _exact_interval(
             "transport_zstd_bytes",
             reference["transport_zstd_bytes"],

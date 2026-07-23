@@ -47,6 +47,15 @@ The `parquet-orc` result records this execution plan, uses
 into the report. Its timings compare the pinned reader implementations and
 settings; they do not isolate file-layout effects.
 
+The writer plan is also asymmetric. `parquet_default` uses Zstd with
+dictionary encoding and a library-default compression level; `orc_zlib` uses
+Zlib with the ORC defaults of the speed strategy and a zero dictionary-key
+threshold. The result envelope records both plans. Storage and timing ratios
+therefore remain configured-system evidence rather than codec-controlled
+format evidence.
+
 Primary APIs:
 [Parquet `read_table`](https://arrow.apache.org/docs/23.0/python/generated/pyarrow.parquet.read_table.html) and
-[ORC `read_table`](https://arrow.apache.org/docs/23.0/python/generated/pyarrow.orc.read_table.html).
+[ORC `read_table`](https://arrow.apache.org/docs/23.0/python/generated/pyarrow.orc.read_table.html);
+[Parquet writer settings](https://arrow.apache.org/docs/23.0/python/parquet.html#compression-encoding-and-file-compatibility) and
+[ORC writer arguments](https://arrow.apache.org/docs/23.0/_modules/pyarrow/orc.html).

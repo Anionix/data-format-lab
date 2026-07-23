@@ -48,12 +48,23 @@ class OrcAdapter:
             lane=Lane.EQUIVALENCE,
             comparability=Comparability.FULL_COMPARABLE,
             extension=".orc",
-            settings={"compression": "zlib"},
+            settings={
+                "compression": "zlib",
+                "compression_strategy": "speed",
+                "dictionary_key_size_threshold": 0.0,
+            },
         )
 
     def encode(self, table: pa.Table, path: Path) -> Artifact:
         return write_artifact(
-            path, lambda: orc.write_table(table, path, compression="zlib")
+            path,
+            lambda: orc.write_table(
+                table,
+                path,
+                compression="zlib",
+                compression_strategy="speed",
+                dictionary_key_size_threshold=0.0,
+            ),
         )
 
     def read(self, path: Path, manifest: dict) -> pa.Table:
