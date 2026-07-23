@@ -518,6 +518,18 @@ def _equivalence(results: dict) -> list[str]:
     pairs = evidence.get("pairs", {})
     rows: list[list[object]] = []
     for pair, item in sorted(pairs.items()):
+        endpoint = item.get("primary_endpoint", {})
+        if not isinstance(endpoint, dict):
+            endpoint = {}
+        primary = "/".join(
+            str(value)
+            for value in (
+                endpoint.get("scope"),
+                endpoint.get("operation"),
+                endpoint.get("metric"),
+            )
+            if value
+        )
         rows.append(
             [
                 pair,
@@ -525,6 +537,7 @@ def _equivalence(results: dict) -> list[str]:
                 item.get("comparison_scope", "format_pair"),
                 item.get("reference", "N/A"),
                 ", ".join(item.get("candidates", ())) or "N/A",
+                primary or "legacy all-metrics",
                 item.get("verdict", "N/A"),
                 item.get("accepted_risk") or "",
                 item.get("failure_reason") or "",
@@ -557,7 +570,7 @@ def _equivalence(results: dict) -> list[str]:
     return [
         "## Equivalence Evidence",
         "",
-        "Equivalence is decided only within the declared pair and lane; it is not a universal ranking.",
+        "Contract v2 uses each pair's preregistered primary endpoint; secondary intervals remain descriptive evidence. Legacy v1 keeps its recorded all-metrics verdict.",
         "",
         "### Pair Verdicts",
         "",
@@ -568,6 +581,7 @@ def _equivalence(results: dict) -> list[str]:
                 "Scope",
                 "Reference",
                 "Candidates",
+                "Primary endpoint",
                 "Verdict",
                 "Accepted risk",
                 "Failure",
