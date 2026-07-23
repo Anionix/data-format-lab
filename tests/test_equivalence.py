@@ -10,6 +10,7 @@ from format_bench.equivalence import (
     classify_interval,
     classify_metrics,
 )
+from format_bench.equivalence_compare import PAIR_SPECS, pair_contract, pair_evidence
 
 
 def test_equivalence_bounds_distinguish_inside_outside_and_crossing_intervals() -> None:
@@ -47,6 +48,47 @@ def test_bootstrap_ratio_uses_independent_samples_and_is_seeded() -> None:
     assert first == second
     assert first.ratio == pytest.approx(2.0)
     assert first.lower <= first.ratio <= first.upper
+
+
+def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
+    spec = PAIR_SPECS["parquet-orc"]
+
+    assert spec["comparison_scope"] == "configured_system"
+    assert spec["execution_plan"] == {
+        "parquet_default": {
+            "projection_pushdown": True,
+            "predicate_pushdown": True,
+        },
+        "orc_zlib": {
+            "projection_pushdown": True,
+            "predicate_pushdown": False,
+        },
+    }
+    assert "predicate" in spec["accepted_risk"]
+    assert pair_contract(spec)["accepted_risk"] == spec["accepted_risk"]
+
+    samples = {
+        f"{name}/read_all": {
+            "warm_process_p50_ms": [1.0, 1.0],
+            "warm_process_p95_ms": [1.0, 1.0],
+        }
+        for name in ("parquet_default", "orc_zlib")
+    }
+    entries = {
+        name: {"native_bytes": 10, "transport_zstd_bytes": 10}
+        for name in ("parquet_default", "orc_zlib")
+    }
+    evidence = pair_evidence(
+        spec,
+        samples,
+        entries,
+        EquivalenceBounds(),
+        seed=1,
+        operations=("read_all",),
+    )
+
+    assert evidence["execution_plan"] == spec["execution_plan"]
+    assert evidence["accepted_risk"] == spec["accepted_risk"]
 
 
 @pytest.mark.parametrize(

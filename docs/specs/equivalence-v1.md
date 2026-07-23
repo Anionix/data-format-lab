@@ -34,3 +34,19 @@ The runner stores the point ratio and an independent 95% bootstrap interval for 
 Intervals crossing a boundary are `INCONCLUSIVE`; they are not silently treated as no difference. A candidate can have different verdicts for different operations.
 
 Binary formats do not receive a direct corpus token count. Prompt-token measurements remain in the separate `prompt` lane.
+
+## Parquet/ORC accepted risk
+
+With pinned PyArrow 23.0.1, both adapters project columns at the reader
+boundary. Parquet also passes predicates to `pyarrow.parquet.read_table`;
+`pyarrow.orc.read_table` has a `columns` argument but no equivalent `filters`
+argument. ORC predicates therefore remain post-read Arrow operations.
+
+The `parquet-orc` result records this execution plan, uses
+`comparison_scope = "configured_system"`, and carries the accepted-risk text
+into the report. Its timings compare the pinned reader implementations and
+settings; they do not isolate file-layout effects.
+
+Primary APIs:
+[Parquet `read_table`](https://arrow.apache.org/docs/23.0/python/generated/pyarrow.parquet.read_table.html) and
+[ORC `read_table`](https://arrow.apache.org/docs/23.0/python/generated/pyarrow.orc.read_table.html).
