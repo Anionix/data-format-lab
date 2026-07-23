@@ -1,0 +1,20 @@
+# LLM contract: DISCOVERED -> NORMALIZED -> CLASSIFIED -> FIX_PROPOSED -> VERIFIED -> REPORTED; terminal execution is INCOMPLETE | UNSUPPORTED.
+[engine]
+version = "0.1.0-alpha.1"
+source_revision = "f6877942a0de2b0c91f5334e7197996515e6344a"
+
+[repository]
+workspace = "."
+targets = ["."]
+
+[[providers]]
+adapter_id = "ruff"
+adapter_version = "0.1.0-alpha.1"
+tool_name = "ruff"
+tool_version = "0.15.20"
+program = "diagnostic-triage-provider-python"
+required = true
+required_capabilities = ["diagnostic.check/v1"]
+
+[output]
+format = "json"

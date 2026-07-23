@@ -7,7 +7,7 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = { nixpkgs, rust-overlay, ... }:
+  outputs = { diagnostic-triage, nixpkgs, rust-overlay, ... }:
     let
       systems = [ "aarch64-darwin" "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -59,6 +59,7 @@
               xz
               xxhash
               zlib
+              diagnostic-triage.packages.${system}.diagnostic-triage
             ];
             env = {
               PYTHONNOUSERSITE = "1";

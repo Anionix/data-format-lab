@@ -1,0 +1,88 @@
+name: Diagnostic Triage observation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnostic-triage-observe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Run pinned repository diagnostics
+        id: diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="diagnostic-triage-report.json"
+          set +e
+          nix develop --command diagnostic-triage ci > "$report"
+          status=$?
+          set -e
+          if test "$status" -ne 0 && test "$status" -ne 1; then
+            echo "Diagnostic Triage operational exit: $status" >&2
+            exit "$status"
+          fi
+          verdict="$(jq -er '
+            if .schema_version == "diagnostic-triage.session-report/v1"
+            then .verdict
+            else error("unexpected report schema")
+            end
+          ' "$report")"
+          case "$status:$verdict" in
+            0:PASS|1:POLICY_FAIL) ;;
+            *)
+              echo "exit/verdict mismatch: $status/$verdict" >&2
+              exit 2
+              ;;
+          esac
+          printf 'exit_code=%s\nverdict=%s\n' "$status" "$verdict" >> "$GITHUB_OUTPUT"
+
+      - name: Validate the offline GitHub Actions Observer
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix develop --command diagnostic-triage observe \
+            --source github-actions \
+            --input tests/fixtures/diagnostic-triage/github-actions-success.json \
+            > diagnostic-triage-observer.jsonl
+          jq -s -e '
+            .[0].kind == "manifest"
+            and .[-1].kind == "completion"
+            and .[-1].status == "COMPLETE"
+          ' diagnostic-triage-observer.jsonl >/dev/null
+
+      - name: Record observation summary
+        run: |
+          {
+            echo "### Diagnostic Triage"
+            echo "- Verdict: \`${{ steps.diagnostics.outputs.verdict }}\`"
+            echo "- Exit code: \`${{ steps.diagnostics.outputs.exit_code }}\`"
+            echo "- Enforcement: observe-only"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bounded observation evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: diagnostic-triage-observe-${{ github.sha }}
+          path: |
+            diagnostic-triage-report.json
+            diagnostic-triage-observer.jsonl
+          if-no-files-found: warn
+          retention-days: 7

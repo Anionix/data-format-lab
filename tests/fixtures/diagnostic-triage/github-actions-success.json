@@ -1,0 +1,11 @@
+{
+  "id": 393001,
+  "name": "Diagnostic Triage observation",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-07-23T00:00:00Z",
+  "run_started_at": "2026-07-23T00:00:02Z",
+  "updated_at": "2026-07-23T00:00:42Z",
+  "run_attempt": 1,
+  "head_sha": "b7667752ff2ba0283c6ef18c71685ac9e95c89d3"
+}
