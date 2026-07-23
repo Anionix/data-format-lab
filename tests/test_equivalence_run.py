@@ -22,6 +22,7 @@ def test_equivalence_records_parallel_worker_counts_in_manifest_and_results(
         run_dir,
         fixture=True,
         selected=adapters,
+        size_observations=2,
     )
     verify_run(run_dir, {adapter.describe().name: adapter for adapter in adapters})
     monkeypatch.setenv("FORMAT_BENCH_MAX_WORKERS", "2")
@@ -80,6 +81,7 @@ def test_unavailable_parquet_orc_still_reports_accepted_risk(tmp_path: Path) -> 
         run_dir,
         fixture=True,
         selected=adapters,
+        size_observations=2,
     )
     verify_run(run_dir, {adapter.describe().name: adapter for adapter in adapters})
 

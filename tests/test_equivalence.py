@@ -24,6 +24,37 @@ from format_bench.equivalence_compare import (
 from format_bench.formats import OrcAdapter, ParquetAdapter
 
 
+def _measured_format(
+    native_bytes: int,
+    transport_bytes: int,
+    operations: dict[str, dict],
+) -> dict:
+    attempts = [
+        {
+            "index": index,
+            "status": "MEASURED",
+            "native_bytes": native_bytes,
+            "transport_zstd_bytes": transport_bytes,
+            "artifact_sha256": f"{index:064x}",
+            "roundtrip_verified": True,
+        }
+        for index in range(2)
+    ]
+    return {
+        "status": "MEASURED",
+        "native_bytes": native_bytes,
+        "transport_zstd_bytes": transport_bytes,
+        "size_observations": {
+            "contract_version": "1",
+            "resampling_unit": "same_process_encode_invocation",
+            "attempted": 2,
+            "completed": 2,
+            "attempts": attempts,
+        },
+        "operations": operations,
+    }
+
+
 def test_equivalence_bounds_distinguish_inside_outside_and_crossing_intervals() -> None:
     bounds = EquivalenceBounds()
     assert (
@@ -151,23 +182,17 @@ def test_primary_endpoint_alone_controls_candidate_verdict(
         "warm_process_p95_ms": [1.0] * 10,
     }
     comparison = compare_candidate(
-        {
-            "status": "MEASURED",
-            "native_bytes": 100,
-            "transport_zstd_bytes": 100,
-            "operations": {"read_all": operation},
-        },
-        {
-            "status": "MEASURED",
-            "native_bytes": candidate_native_bytes,
-            "transport_zstd_bytes": candidate_transport_bytes,
-            "operations": {
+        _measured_format(100, 100, {"read_all": operation}),
+        _measured_format(
+            candidate_native_bytes,
+            candidate_transport_bytes,
+            {
                 "read_all": {
                     **operation,
                     "warm_process_p95_ms": [candidate_p95] * 10,
                 }
             },
-        },
+        ),
         bounds=EquivalenceBounds(),
         seed=7,
         primary_endpoint={"scope": "storage", "metric": "native_bytes"},
@@ -197,18 +222,8 @@ def test_incomplete_secondary_timing_does_not_override_storage_verdict() -> None
         "warm_process_p95_ms": [1.0],
     }
     comparison = compare_candidate(
-        {
-            "status": "MEASURED",
-            "native_bytes": 100,
-            "transport_zstd_bytes": 100,
-            "operations": {"read_all": reference_operation},
-        },
-        {
-            "status": "MEASURED",
-            "native_bytes": 101,
-            "transport_zstd_bytes": 100,
-            "operations": {"read_all": candidate_operation},
-        },
+        _measured_format(100, 100, {"read_all": reference_operation}),
+        _measured_format(101, 100, {"read_all": candidate_operation}),
         bounds=EquivalenceBounds(),
         seed=7,
         primary_endpoint={"scope": "storage", "metric": "native_bytes"},
@@ -248,28 +263,26 @@ def test_candidate_comparison_emits_reproducible_bootstrap_evidence() -> None:
     reference_values = [float(value) for value in range(10, 20)]
     candidate_values = [float(value) for value in range(11, 21)]
     comparison = compare_candidate(
-        {
-            "status": "MEASURED",
-            "native_bytes": 100,
-            "transport_zstd_bytes": 100,
-            "operations": {
+        _measured_format(
+            100,
+            100,
+            {
                 "read_all": {
                     "warm_process_p50_ms": reference_values,
                     "warm_process_p95_ms": reference_values,
                 }
             },
-        },
-        {
-            "status": "MEASURED",
-            "native_bytes": 101,
-            "transport_zstd_bytes": 101,
-            "operations": {
+        ),
+        _measured_format(
+            101,
+            101,
+            {
                 "read_all": {
                     "warm_process_p50_ms": candidate_values,
                     "warm_process_p95_ms": candidate_values,
                 }
             },
-        },
+        ),
         bounds=EquivalenceBounds(),
         seed=7,
         primary_endpoint={"scope": "storage", "metric": "native_bytes"},
@@ -298,6 +311,79 @@ def test_candidate_comparison_emits_reproducible_bootstrap_evidence() -> None:
         assert metric["ratio"] == reproduced.ratio
         assert metric["lower"] == reproduced.lower
         assert metric["upper"] == reproduced.upper
+
+
+def test_storage_comparison_uses_repeated_encode_bootstrap_evidence() -> None:
+    reference = _measured_format(100, 80, {})
+    candidate = _measured_format(101, 81, {})
+    reference["size_observations"]["attempts"][1]["native_bytes"] = 102
+    candidate["size_observations"]["attempts"][1]["native_bytes"] = 104
+
+    comparison = compare_candidate(
+        reference,
+        candidate,
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=(),
+    )
+
+    primary = comparison["primary_endpoint"]
+    assert primary["interval_method"] == "bootstrap_percentile"
+    assert primary["coverage_claim"] == "none"
+    assert primary["bootstrap"]["resampling_unit"] == ("same_process_encode_invocation")
+    assert primary["bootstrap"]["reference_observations"] == 2
+    assert primary["bootstrap"]["candidate_observations"] == 2
+
+
+def test_missing_repeated_storage_evidence_is_not_applicable() -> None:
+    reference = _measured_format(100, 80, {})
+    candidate = _measured_format(101, 81, {})
+    candidate["size_observations"]["attempts"] = candidate["size_observations"][
+        "attempts"
+    ][:1]
+    candidate["size_observations"]["completed"] = 1
+
+    comparison = compare_candidate(
+        reference,
+        candidate,
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=(),
+    )
+
+    assert comparison["verdict"] is EquivalenceVerdict.NOT_APPLICABLE
+    assert (
+        comparison["primary_endpoint"]["verdict"]
+        is EquivalenceVerdict.NOT_APPLICABLE
+    )
+    assert comparison["storage"]["failure_reason"] == (
+        "incomplete repeated encoding observations"
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("index", 0), ("artifact_sha256", "not-a-sha256")],
+)
+def test_malformed_size_provenance_is_not_applicable(
+    field: str, value: object
+) -> None:
+    reference = _measured_format(100, 80, {})
+    candidate = _measured_format(101, 81, {})
+    candidate["size_observations"]["attempts"][1][field] = value
+
+    comparison = compare_candidate(
+        reference,
+        candidate,
+        bounds=EquivalenceBounds(),
+        seed=7,
+        primary_endpoint={"scope": "storage", "metric": "native_bytes"},
+        operations=(),
+    )
+
+    assert comparison["verdict"] is EquivalenceVerdict.NOT_APPLICABLE
 
 
 def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
@@ -342,8 +428,7 @@ def test_parquet_orc_declares_the_remaining_reader_asymmetry() -> None:
         for name in ("parquet_default", "orc_zlib")
     }
     entries = {
-        name: {"native_bytes": 10, "transport_zstd_bytes": 10}
-        for name in ("parquet_default", "orc_zlib")
+        name: _measured_format(10, 10, {}) for name in ("parquet_default", "orc_zlib")
     }
     evidence = pair_evidence(
         spec,

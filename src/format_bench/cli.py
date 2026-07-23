@@ -69,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--dataset", required=True)
     prepare.add_argument("--run-dir", type=Path)
     prepare.add_argument("--fixture", action="store_true")
+    prepare.add_argument("--size-observations", type=_positive_int, default=1)
 
     verify = subcommands.add_parser("verify")
     verify.add_argument("--run-dir", type=Path, required=True)
@@ -235,6 +236,48 @@ def _measurement_config(args: argparse.Namespace, run_dir: Path) -> MeasurementC
     )
 
 
+def _equivalence_size_observations(fixture: bool) -> int:
+    return 2 if fixture else 10
+
+
+def _has_repeated_size_observations(entry: dict, expected: int) -> bool:
+    evidence = entry.get("size_observations")
+    if not isinstance(evidence, dict) or not isinstance(
+        evidence.get("attempts"), list
+    ):
+        return False
+    if (
+        evidence.get("contract_version") != "1"
+        or evidence.get("resampling_unit") != "same_process_encode_invocation"
+    ):
+        return False
+    attempts = evidence["attempts"]
+    if not (
+        evidence.get("attempted") == evidence.get("completed") == len(attempts)
+        and len(attempts) == expected
+    ):
+        return False
+    for index, attempt in enumerate(attempts):
+        if not isinstance(attempt, dict):
+            return False
+        digest = attempt.get("artifact_sha256")
+        sizes = (attempt.get("native_bytes"), attempt.get("transport_zstd_bytes"))
+        if (
+            attempt.get("index") != index
+            or attempt.get("status") != "MEASURED"
+            or attempt.get("roundtrip_verified") is not True
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            or any(
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                for value in sizes
+            )
+        ):
+            return False
+    return True
+
+
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     load_manifest(root, args.dataset)
     if args.run_dir is None or not args.run_dir.exists():
@@ -250,10 +293,19 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
             }
             registered = adapter_map()
             selected = tuple(registered[name] for name in sorted(names))
-        prepare_kwargs = {"fixture": args.fixture}
-        if selected is not None:
-            prepare_kwargs["selected"] = selected
-        run_dir = prepare_run(root, args.dataset, args.run_dir, **prepare_kwargs)
+        if selected is None:
+            run_dir = prepare_run(
+                root, args.dataset, args.run_dir, fixture=args.fixture
+            )
+        else:
+            run_dir = prepare_run(
+                root,
+                args.dataset,
+                args.run_dir,
+                fixture=args.fixture,
+                selected=selected,
+                size_observations=_equivalence_size_observations(args.fixture),
+            )
         verify_run(run_dir)
         return run_dir
     if args.fixture:
@@ -264,6 +316,38 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("dataset_id") != args.dataset:
         raise ValueError("run directory dataset does not match --dataset")
+    if args.profile == "equivalence":
+        expected_observations = _equivalence_size_observations(
+            bool(manifest.get("fixture"))
+        )
+        required = {
+            name
+            for pair in (args.pair or tuple(PAIR_SPECS))
+            for name in (
+                PAIR_SPECS[pair]["reference"],
+                *PAIR_SPECS[pair]["candidates"],
+            )
+        }
+        formats = {
+            entry.get("format"): entry
+            for entry in manifest.get("formats", ())
+            if isinstance(entry, dict)
+        }
+        incomplete = sorted(
+            name
+            for name in required
+            if name in formats
+            and formats[name].get("state") == ExecutionState.ROUNDTRIP_VERIFIED
+            and not _has_repeated_size_observations(
+                formats[name], expected_observations
+            )
+        )
+        if incomplete:
+            raise ValueError(
+                "equivalence run needs repeated size observations for: "
+                f"{', '.join(incomplete)}; prepare with --size-observations "
+                f"{expected_observations}"
+            )
     return args.run_dir
 
 
@@ -289,7 +373,13 @@ def main(argv: list[str] | None = None) -> None:
                 args.user, args.output or Path(".data/captures")
             )
     elif args.command == "prepare":
-        path = prepare_run(root, args.dataset, args.run_dir, fixture=args.fixture)
+        path = prepare_run(
+            root,
+            args.dataset,
+            args.run_dir,
+            fixture=args.fixture,
+            size_observations=args.size_observations,
+        )
     elif args.command == "verify":
         path = verify_run(args.run_dir)
     elif args.command == "run":

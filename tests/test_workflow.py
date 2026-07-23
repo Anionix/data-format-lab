@@ -53,7 +53,14 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"
     chosen = (CsvAdapter(), ObjectJsonlAdapter())
-    prepared = prepare_run(root, DATASET, run_dir, fixture=True, selected=chosen)
+    prepared = prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=chosen,
+        size_observations=2,
+    )
 
     manifest = json.loads((prepared / "manifest.json").read_text())
     assert manifest["state"] == "ENCODED"
@@ -61,6 +68,10 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
     assert manifest["rankable"] is False
     assert all(not Path(entry["artifact"]).is_absolute() for entry in manifest["formats"])
     assert {entry["state"] for entry in manifest["formats"]} == {"ENCODED"}
+    assert all(
+        entry["size_observations"]["completed"] == 2 for entry in manifest["formats"]
+    )
+    assert not (prepared / ".size-observations").exists()
 
     verify_run(prepared, {adapter.describe().name: adapter for adapter in chosen})
     verified = json.loads((prepared / "manifest.json").read_text())
@@ -69,6 +80,99 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
         "ROUNDTRIP_VERIFIED"
     }
     assert all(entry["verification"]["passed"] for entry in verified["formats"])
+    assert all(
+        all(
+            attempt["roundtrip_verified"]
+            for attempt in entry["size_observations"]["attempts"]
+        )
+        for entry in verified["formats"]
+    )
+
+
+@pytest.mark.parametrize(("fixture", "expected"), [(True, 2), (False, 10)])
+def test_equivalence_size_observation_count_is_bounded(
+    fixture: bool, expected: int
+) -> None:
+    assert cli._equivalence_size_observations(fixture) == expected
+    args = cli.build_parser().parse_args(
+        ["prepare", "--dataset", DATASET, "--size-observations", str(expected)]
+    )
+    assert args.size_observations == expected
+
+
+@pytest.mark.parametrize(
+    ("fixture", "observations", "required", "malformed"),
+    [
+        (True, 1, 2, None),
+        (False, 2, 10, None),
+        (True, 2, 2, "digest"),
+        (False, 10, 10, "contract"),
+    ],
+)
+def test_existing_equivalence_run_rejects_invalid_size_evidence(
+    tmp_path: Path,
+    fixture: bool,
+    observations: int,
+    required: int,
+    malformed: str | None,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    attempts = [
+        {
+            "index": index,
+            "status": "MEASURED",
+            "native_bytes": 10,
+            "transport_zstd_bytes": 8,
+            "artifact_sha256": f"{index:064x}",
+            "roundtrip_verified": True,
+        }
+        for index in range(observations)
+    ]
+    if malformed == "digest":
+        attempts[-1]["artifact_sha256"] = "not-a-sha256"
+    evidence = {
+        "contract_version": "1",
+        "resampling_unit": "same_process_encode_invocation",
+        "attempted": observations,
+        "completed": observations,
+        "attempts": attempts,
+    }
+    if malformed == "contract":
+        evidence["contract_version"] = "0"
+    (run_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "dataset_id": DATASET,
+                "fixture": fixture,
+                "formats": [
+                    {
+                        "format": name,
+                        "state": "ROUNDTRIP_VERIFIED",
+                        "size_observations": evidence,
+                    }
+                    for name in ("csv", "tsv")
+                ],
+            }
+        )
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "equivalence",
+            "--dataset",
+            DATASET,
+            "--run-dir",
+            str(run_dir),
+            "--pair",
+            "csv-tsv",
+        ]
+    )
+
+    with pytest.raises(ValueError, match=f"--size-observations {required}"):
+        cli._run_directory(root, args)
 
 
 @pytest.mark.parametrize(

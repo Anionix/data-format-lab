@@ -152,6 +152,7 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
             "failure_reason": identity_failure,
             "native_bytes": entry.get("native_bytes"),
             "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
+            "size_observations": entry.get("size_observations"),
             "artifact_sha256": _sha256(artifact) if artifact.exists() else None,
         }
     return identities

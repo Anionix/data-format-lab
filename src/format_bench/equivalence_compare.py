@@ -35,7 +35,7 @@ class MultiplicityControl(TypedDict):
     comparison_alpha: float
     secondary_metrics: Literal["descriptive_only"]
     cross_pair_inference: Literal["simultaneous"]
-    primary_interval_method: Literal["deterministic_exact"]
+    primary_interval_method: Literal["bootstrap_percentile"]
     coverage_claim: Literal["none"]
     status: Literal["PREREGISTERED_NO_COVERAGE"]
     accepted_risk: str
@@ -157,13 +157,13 @@ def multiplicity_control() -> MultiplicityControl:
         "comparison_alpha": FAMILY_ALPHA / planned_comparisons,
         "secondary_metrics": "descriptive_only",
         "cross_pair_inference": "simultaneous",
-        "primary_interval_method": "deterministic_exact",
+        "primary_interval_method": "bootstrap_percentile",
         "coverage_claim": "none",
         "status": "PREREGISTERED_NO_COVERAGE",
         "accepted_risk": (
-            "Bonferroni allocation is preregistered, but one exact observed "
-            "size ratio has no statistical coverage; repeated-encoding size "
-            "uncertainty remains tracked by issue #274."
+            "Bonferroni allocation is preregistered, but same-process repeated "
+            "encoding intervals have no validated coverage; bootstrap coverage "
+            "validation remains tracked by issue #271."
         ),
     }
 
@@ -211,13 +211,6 @@ def _interval_json(interval: RatioInterval) -> dict[str, object]:
     return payload
 
 
-def _exact_interval(metric: str, reference: float, candidate: float) -> RatioInterval:
-    if reference <= 0 or candidate <= 0:
-        raise ValueError(f"{metric} values must be positive")
-    ratio = candidate / reference
-    return RatioInterval(metric, ratio, ratio, ratio)
-
-
 def _not_applicable(reason: str, primary_endpoint: PrimaryEndpoint) -> dict:
     return {
         "verdict": EquivalenceVerdict.NOT_APPLICABLE,
@@ -252,6 +245,100 @@ def _primary_interval(
     return matches[0]
 
 
+def _size_samples(entry: dict, metric: str) -> tuple[int, ...]:
+    evidence = entry.get("size_observations")
+    if not isinstance(evidence, dict):
+        return ()
+    attempts = evidence.get("attempts")
+    if (
+        evidence.get("contract_version") != "1"
+        or evidence.get("resampling_unit") != "same_process_encode_invocation"
+        or not isinstance(attempts, list)
+        or evidence.get("attempted") != evidence.get("completed")
+        or evidence.get("completed") != len(attempts)
+    ):
+        return ()
+    values = []
+    for expected_index, attempt in enumerate(attempts):
+        if not isinstance(attempt, dict):
+            return ()
+        value = attempt.get(metric)
+        digest = attempt.get("artifact_sha256")
+        if (
+            attempt.get("index") != expected_index
+            or attempt.get("status") != "MEASURED"
+            or attempt.get("roundtrip_verified") is not True
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            or isinstance(value, bool)
+            or not isinstance(value, int)
+            or value <= 0
+        ):
+            return ()
+        values.append(value)
+    return tuple(values)
+
+
+def _storage_evidence(
+    reference: dict,
+    candidate: dict,
+    *,
+    bounds: EquivalenceBounds,
+    seed: int,
+    primary_endpoint: PrimaryEndpoint,
+    comparison_alpha: float,
+) -> tuple[list[RatioInterval], dict]:
+    intervals = []
+    records = []
+    missing = []
+    for offset, metric in enumerate(("native_bytes", "transport_zstd_bytes")):
+        reference_samples = _size_samples(reference, metric)
+        candidate_samples = _size_samples(candidate, metric)
+        if len(reference_samples) < 2 or len(candidate_samples) < 2:
+            missing.append(metric)
+            records.append(
+                {
+                    "metric": metric,
+                    "verdict": EquivalenceVerdict.NOT_APPLICABLE,
+                    "failure_reason": "incomplete repeated encoding observations",
+                    "reference_observations": len(reference_samples),
+                    "candidate_observations": len(candidate_samples),
+                }
+            )
+            continue
+        interval = bootstrap_ratio_interval(
+            reference_samples,
+            candidate_samples,
+            metric=metric,
+            seed=seed + 10_000 + offset,
+            alpha=(
+                comparison_alpha
+                if primary_endpoint == {"scope": "storage", "metric": metric}
+                else FAMILY_ALPHA
+            ),
+            resampling_unit="same_process_encode_invocation",
+        )
+        intervals.append(interval)
+        records.append(
+            {
+                **_interval_json(interval),
+                "verdict": classify_interval(interval, bounds),
+            }
+        )
+    return intervals, {
+        "verdict": (
+            EquivalenceVerdict.NOT_APPLICABLE
+            if missing
+            else classify_metrics(intervals, bounds)
+        ),
+        "metrics": records,
+        "failure_reason": (
+            "incomplete repeated encoding observations" if missing else None
+        ),
+    }
+
+
 def compare_candidate(
     reference: dict,
     candidate: dict,
@@ -262,25 +349,23 @@ def compare_candidate(
     comparison_alpha: float = FAMILY_ALPHA,
     operations: tuple[str, ...] | None = None,
 ) -> dict:
-    operation_names = operations or tuple(operation.value for operation in OPERATIONS)
+    operation_names = (
+        tuple(operation.value for operation in OPERATIONS)
+        if operations is None
+        else operations
+    )
     if reference.get("status") != "MEASURED" or candidate.get("status") != "MEASURED":
         return _not_applicable("one or more benchmark jobs failed", primary_endpoint)
     reference_operations = reference["operations"]
     candidate_operations = candidate["operations"]
-    storage_intervals = [
-        _exact_interval(
-            "native_bytes", reference["native_bytes"], candidate["native_bytes"]
-        ),
-        _exact_interval(
-            "transport_zstd_bytes",
-            reference["transport_zstd_bytes"],
-            candidate["transport_zstd_bytes"],
-        ),
-    ]
-    storage = {
-        "verdict": classify_metrics(storage_intervals, bounds),
-        "metrics": [_interval_json(item) for item in storage_intervals],
-    }
+    storage_intervals, storage = _storage_evidence(
+        reference,
+        candidate,
+        bounds=bounds,
+        seed=seed,
+        primary_endpoint=primary_endpoint,
+        comparison_alpha=comparison_alpha,
+    )
     operation_results: dict[str, dict] = {}
     operation_intervals: dict[str, list[RatioInterval]] = {}
     for offset, operation in enumerate(operation_names):
@@ -349,12 +434,17 @@ def compare_candidate(
             primary_endpoint, storage_intervals, operation_intervals
         )
     except ValueError:
+        unavailable = (
+            EquivalenceVerdict.NOT_APPLICABLE
+            if primary_endpoint["scope"] == "storage"
+            else EquivalenceVerdict.INCONCLUSIVE
+        )
         return {
-            "verdict": EquivalenceVerdict.INCONCLUSIVE,
+            "verdict": unavailable,
             "verdict_basis": "primary_endpoint",
             "primary_endpoint": {
                 **primary_endpoint,
-                "verdict": EquivalenceVerdict.INCONCLUSIVE,
+                "verdict": unavailable,
             },
             "failure_reason": "primary endpoint has insufficient observations",
             "storage": storage,
@@ -369,11 +459,7 @@ def compare_candidate(
             **_interval_json(primary),
             "verdict": primary_verdict,
             "comparison_alpha": comparison_alpha,
-            "interval_method": (
-                "deterministic_exact"
-                if primary_endpoint["scope"] == "storage"
-                else "bootstrap_percentile"
-            ),
+            "interval_method": "bootstrap_percentile",
             "coverage_claim": (
                 "none"
                 if primary_endpoint["scope"] == "storage"
@@ -394,7 +480,11 @@ def pair_evidence(
     seed: int,
     operations: tuple[str, ...] | None = None,
 ) -> dict:
-    operation_names = operations or tuple(operation.value for operation in OPERATIONS)
+    operation_names = (
+        tuple(operation.value for operation in OPERATIONS)
+        if operations is None
+        else operations
+    )
     reference_name = spec["reference"]
     names = (reference_name, *spec["candidates"])
     formats: dict[str, dict] = {}

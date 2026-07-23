@@ -79,7 +79,7 @@ def _shard_results(pair: str, name: str) -> dict:
                 "comparison_alpha": 0.025,
                 "secondary_metrics": "descriptive_only",
                 "cross_pair_inference": "simultaneous",
-                "primary_interval_method": "deterministic_exact",
+                "primary_interval_method": "bootstrap_percentile",
                 "coverage_claim": "none",
                 "status": "PREREGISTERED_NO_COVERAGE",
                 "accepted_risk": "fixture exact interval",
