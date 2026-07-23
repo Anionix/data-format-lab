@@ -19,6 +19,15 @@ PROMPT_COLUMNS = (
     "topics",
     "description",
 )
+COMPACT_SCHEMA = {
+    "m": "taxonomy_id",
+    "r": "full_name",
+    "l": "language",
+    "s": "repo_stars",
+    "k": "matched_terms",
+    "t": "topics",
+    "d": "description",
+}
 TOKENIZERS = ("o200k_base", "cl100k_base")
 NULL_MARKER = r"\N"
 
@@ -36,6 +45,40 @@ def _taxonomy_rows(taxonomy: list[tuple]) -> list[tuple]:
         tuple(NULL_MARKER if value is None else value for value in row)
         for row in taxonomy
     ]
+
+
+def _compact_schema_text() -> str:
+    return json.dumps(COMPACT_SCHEMA, ensure_ascii=False, separators=(",", ":")) + "\n"
+
+
+def _compact_tsv_text(records: list[dict[str, Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter="\t", lineterminator="\n")
+    writer.writerow(list(COMPACT_SCHEMA))
+    for row in records:
+        writer.writerow(
+            [
+                row["taxonomy_id"],
+                row["full_name"],
+                row["language"] or "",
+                row["repo_stars"],
+                ",".join(row["matched_terms"]),
+                ",".join(row["topics"]),
+                row["description"] or "",
+            ]
+        )
+    return output.getvalue()
+
+
+def _retrieval_taxonomy_tsv(records: list[dict], taxonomy: list[tuple]) -> str:
+    used = {row["taxonomy_id"] for row in records}
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter="\t", lineterminator="\n")
+    writer.writerow(["m", "g", "c", "mc"])
+    writer.writerows(
+        _taxonomy_rows([row for row in taxonomy if row[0] in used])
+    )
+    return output.getvalue()
 
 
 def prompt_records(table: pa.Table) -> tuple[list[dict[str, Any]], list[tuple]]:
@@ -71,26 +114,13 @@ def write_prompt_artifacts(table: pa.Table, directory: Path) -> dict[str, Path]:
         "object_jsonl": directory / "prompt-object.jsonl",
         "array_jsonl": directory / "prompt-array.jsonl",
         "array_schema": directory / "prompt-array-schema.json",
+        "compact_schema": directory / "prompt-compact-schema.json",
     }
     with paths["taxonomy"].open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(["m", "g", "c", "mc"])
         writer.writerows(_taxonomy_rows(taxonomy))
-    with paths["compact_tsv"].open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(["m", "r", "l", "s", "k", "t", "d"])
-        for row in records:
-            writer.writerow(
-                [
-                    row["taxonomy_id"],
-                    row["full_name"],
-                    row["language"] or "",
-                    row["repo_stars"],
-                    ",".join(row["matched_terms"]),
-                    ",".join(row["topics"]),
-                    row["description"] or "",
-                ]
-            )
+    paths["compact_tsv"].write_text(_compact_tsv_text(records), encoding="utf-8")
     with paths["object_jsonl"].open("w", encoding="utf-8") as handle:
         for row in records:
             handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
@@ -104,6 +134,7 @@ def write_prompt_artifacts(table: pa.Table, directory: Path) -> dict[str, Path]:
         json.dumps(PROMPT_COLUMNS, ensure_ascii=False, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
+    paths["compact_schema"].write_text(_compact_schema_text(), encoding="utf-8")
     return paths
 
 
@@ -114,40 +145,17 @@ def _token_counts(text: str) -> dict[str, int]:
     }
 
 
-def _retrieval_tsv(records: list[dict], taxonomy: list[tuple]) -> str:
-    used = {row["taxonomy_id"] for row in records}
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter="\t", lineterminator="\n")
-    writer.writerow(["m", "g", "c", "mc"])
-    writer.writerows(
-        _taxonomy_rows([row for row in taxonomy if row[0] in used])
-    )
-    writer.writerow(["m", "r", "l", "s", "k", "t", "d"])
-    for row in records:
-        writer.writerow(
-            [
-                row["taxonomy_id"],
-                row["full_name"],
-                row["language"] or "",
-                row["repo_stars"],
-                ",".join(row["matched_terms"]),
-                ",".join(row["topics"]),
-                row["description"] or "",
-            ]
-        )
-    return output.getvalue()
-
-
 def token_metrics(table: pa.Table, paths: dict[str, Path]) -> dict:
     taxonomy_text = paths["taxonomy"].read_text(encoding="utf-8")
+    compact_schema = paths["compact_schema"].read_text(encoding="utf-8")
     corpus = {}
     for name in ("compact_tsv", "object_jsonl", "array_jsonl"):
         payload = paths[name].read_text(encoding="utf-8")
-        schema = (
-            paths["array_schema"].read_text(encoding="utf-8")
-            if name == "array_jsonl"
-            else ""
-        )
+        schema = ""
+        if name == "array_jsonl":
+            schema = paths["array_schema"].read_text(encoding="utf-8")
+        elif name == "compact_tsv":
+            schema = compact_schema
         text = taxonomy_text + schema + payload
         corpus[name] = {
             "payload_bytes": paths[name].stat().st_size,
@@ -160,10 +168,17 @@ def token_metrics(table: pa.Table, paths: dict[str, Path]) -> dict:
     records.sort(key=lambda row: (-row["repo_stars"], row["full_name"]))
     retrieval = {}
     for count in (5, 10, 20):
-        text = _retrieval_tsv(records[:count], taxonomy)
+        selected = records[:count]
+        taxonomy_text = _retrieval_taxonomy_tsv(selected, taxonomy)
+        payload = _compact_tsv_text(selected)
+        text = taxonomy_text + compact_schema + payload
         retrieval[str(count)] = {
-            "rows": min(count, len(records)),
+            "rows": len(selected),
             "bytes": len(text.encode("utf-8")),
+            "payload_bytes": len(payload.encode("utf-8")),
+            "taxonomy_bytes": len(taxonomy_text.encode("utf-8")),
+            "schema_bytes": len(compact_schema.encode("utf-8")),
+            "total_bytes": len(text.encode("utf-8")),
             "tokens": _token_counts(text),
         }
     return {
