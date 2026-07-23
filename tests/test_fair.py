@@ -34,6 +34,26 @@ def test_result_evidence_includes_type_and_nullability() -> None:
     )
 
 
+def test_result_evidence_distinguishes_same_rows_with_different_values() -> None:
+    original = pa.table({"value": [1, 2]})
+    changed = pa.table({"value": [1, 3]})
+
+    assert original.num_rows == changed.num_rows
+    assert result_evidence(original, FairOperation.READ_ALL) != result_evidence(
+        changed, FairOperation.READ_ALL
+    )
+
+
+def test_result_evidence_distinguishes_same_rows_with_different_schema() -> None:
+    original = pa.table({"value": pa.array([1, 2], type=pa.int64())})
+    changed = pa.table({"value": pa.array([1, 2], type=pa.float64())})
+
+    assert original.num_rows == changed.num_rows
+    assert result_evidence(original, FairOperation.READ_ALL) != result_evidence(
+        changed, FairOperation.READ_ALL
+    )
+
+
 def test_result_evidence_remains_order_insensitive() -> None:
     table = pa.table({"value": [1, 2, 3]})
     reversed_table = table.take(pa.array([2, 1, 0]))

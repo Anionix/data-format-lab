@@ -10,6 +10,7 @@ import pyarrow.parquet as pq
 import vortex
 import vortex.expr as ve
 
+from format_bench.fair import FairOperation, result_evidence
 from format_bench.runner import stats_ms
 
 
@@ -17,18 +18,23 @@ ROW_GROUP_SIZE = 4096
 PROJECTION = ["full_name", "repo_stars"]
 
 
-def _measure(function: Callable[[], int], warmups: int, iterations: int) -> dict:
+def _measure(function: Callable[[], pa.Table], warmups: int, iterations: int) -> dict:
+    result = pa.table({})
     for _ in range(warmups):
-        function()
-    samples, result = [], 0
+        result = function()
+    samples = []
     for _ in range(iterations):
         started = time.perf_counter_ns()
         result = function()
         samples.append((time.perf_counter_ns() - started) / 1_000_000)
-    return {"timing": stats_ms(samples), "result": result}
+    return {
+        "timing": stats_ms(samples),
+        "result": result.num_rows,
+        "evidence": result_evidence(result, FairOperation.READ_ALL),
+    }
 
 
-def _parquet_random_take(path: Path, indices: list[int]) -> int:
+def _parquet_random_take(path: Path, indices: list[int]) -> pa.Table:
     parquet = pq.ParquetFile(path)
     groups = sorted({index // ROW_GROUP_SIZE for index in indices})
     table = parquet.read_row_groups(groups, columns=PROJECTION)
@@ -37,7 +43,7 @@ def _parquet_random_take(path: Path, indices: list[int]) -> int:
         offsets[group] = offset
         offset += parquet.metadata.row_group(group).num_rows
     local = [offsets[index // ROW_GROUP_SIZE] + index % ROW_GROUP_SIZE for index in indices]
-    return table.take(pa.array(local, type=pa.int64())).num_rows
+    return table.take(pa.array(local, type=pa.int64()))
 
 
 def _write_compact(table: pa.Table, path: Path) -> None:
@@ -51,13 +57,12 @@ def _vortex_scan(
     *,
     expr=None,
     indices=None,
-) -> int:
+) -> pa.Table:
     source = vortex.open(str(path))
     return (
         source.scan(PROJECTION, expr=expr, indices=indices)
         .read_all()
         .to_arrow_table()
-        .num_rows
     )
 
 
@@ -78,13 +83,13 @@ def _variant(
     vortex_indices = vortex.array(pa.array(indices, type=pa.uint64()))
     operations = {
         "full_projection": (
-            lambda: pq.read_table(parquet_path, columns=PROJECTION).num_rows,
+            lambda: pq.read_table(parquet_path, columns=PROJECTION),
             lambda: _vortex_scan(vortex_path),
         ),
         "filter_popular": (
             lambda: pq.read_table(
                 parquet_path, columns=PROJECTION, filters=[("repo_stars", ">", 100000)]
-            ).num_rows,
+            ),
             lambda: _vortex_scan(
                 vortex_path, expr=ve.column("repo_stars") > 100000
             ),
@@ -92,7 +97,7 @@ def _variant(
         "filter_none": (
             lambda: pq.read_table(
                 parquet_path, columns=PROJECTION, filters=[("repo_stars", ">", 99_999_999)]
-            ).num_rows,
+            ),
             lambda: _vortex_scan(
                 vortex_path, expr=ve.column("repo_stars") > 99_999_999
             ),
@@ -106,7 +111,10 @@ def _variant(
     for operation, (parquet_fn, vortex_fn) in operations.items():
         parquet_result = _measure(parquet_fn, warmups, iterations)
         vortex_result = _measure(vortex_fn, warmups, iterations)
-        if parquet_result["result"] != vortex_result["result"]:
+        if (
+            parquet_result["result"] != vortex_result["result"]
+            or parquet_result["evidence"] != vortex_result["evidence"]
+        ):
             raise ValueError(f"stress result mismatch for {name}/{operation}")
         measured[operation] = {"parquet": parquet_result, "vortex": vortex_result}
     return {
