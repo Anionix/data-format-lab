@@ -31,3 +31,26 @@ This map is the handoff record for the v0.2 equivalence expansion. Code PRs rema
 4. Create non-stacked PRs from the latest `origin/main`, merge in dependency order, and perform post-merge review-thread closeout.
 
 The current local branch is not a publication claim until these remaining evidence and GitHub steps are complete. Failed or unavailable formats remain valid terminal evidence and are not ranked.
+
+## Revalidation aggregate regeneration
+
+The v0.2 aggregate generator and finalizer are tracked as
+`tools/build_revalidation_aggregate.py` and
+`tools/finalize_revalidation.sh`. The finalizer fails immediately when a
+required run is absent, regenerates reports with the pinned project
+environment, builds the aggregate, rejects partial completion, and then calls
+the standard evidence packager.
+
+The generator preserves incomplete pair evidence, source run paths,
+manifest/result SHA-256 values, and encoding/measurement commits. The tracked
+files are now the canonical public source. Each build preserves the
+`pilot-contract` input directory and replaces every other entry under the
+dedicated generated aggregate directory, so stale claims cannot enter its
+checksum manifest. The finalizer resolves the repository root from its own
+path, replaces unbounded polling and mixed interpreters, and creates the
+packaging workspace explicitly.
+
+Aggregate `COMPLETE` describes measurement execution, not a decisive
+equivalence conclusion. `INCONCLUSIVE` is a complete terminal measurement;
+`NOT_APPLICABLE`, missing, and failed pair evidence remain incomplete and
+cannot satisfy aggregate completion.
