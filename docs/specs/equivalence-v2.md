@@ -52,6 +52,27 @@ Bonferroni is preregistered but does not create statistical coverage from one
 encoding. Repeated-encoding size uncertainty remains tracked by
 [issue #274](https://github.com/Anionix/data-format-lab/issues/274).
 
+## Timing bootstrap contract
+
+The standard timing configuration independently resamples ten fresh-process
+summaries for each format 2,000 times. Fixture and explicitly configured runs
+use their scheduled process count. Every emitted interval records the actual
+observation counts, effective seed, alpha, replicate count, resampling unit,
+RNG, and percentile-index rule. The lower order statistic is `floor(qB)` and
+the upper is `ceil((1-q)B)-1`, using zero-based indexes and `q = alpha / 2`.
+
+Independent resampling follows NIST's distinction between unpaired and paired
+bootstrap groups. The percentile interval is first-order accurate; BCa,
+studentization, coverage simulation, and Monte Carlo error remain tracked by
+[issue #271](https://github.com/Anionix/data-format-lab/issues/271).
+The implementation uses `Random.randrange`, whose stream is not guaranteed
+across Python versions. Evidence therefore records the exact Python
+implementation and version, and replay requires that pinned runtime. Python's
+stronger cross-version guarantee applies only to the seeded `random()` stream.
+
+- [NIST bootstrap reference](https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/bootplot.htm)
+- [Python random reproducibility](https://docs.python.org/3/library/random.html#notes-on-reproducibility)
+
 ## Decision boundaries
 
 The v1 practical-equivalence bounds are unchanged:

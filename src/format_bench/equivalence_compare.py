@@ -141,9 +141,7 @@ PAIR_SPECS: dict[str, PairSpec] = {
 
 def multiplicity_control() -> MultiplicityControl:
     planned_pairs = tuple(PAIR_SPECS)
-    planned_comparisons = sum(
-        len(spec["candidates"]) for spec in PAIR_SPECS.values()
-    )
+    planned_comparisons = sum(len(spec["candidates"]) for spec in PAIR_SPECS.values())
     if planned_comparisons < 1:
         raise ValueError("equivalence registry needs at least one candidate")
     return {
@@ -187,13 +185,30 @@ def pair_contract(spec: PairSpec) -> dict[str, object]:
     return contract
 
 
-def _interval_json(interval: RatioInterval) -> dict[str, float | str]:
-    return {
+def _interval_json(interval: RatioInterval) -> dict[str, object]:
+    payload: dict[str, object] = {
         "metric": interval.metric,
         "ratio": interval.ratio,
         "lower": interval.lower,
         "upper": interval.upper,
     }
+    if interval.bootstrap is not None:
+        evidence = interval.bootstrap
+        payload["bootstrap"] = {
+            "method": evidence.method,
+            "samples": evidence.samples,
+            "seed": evidence.seed,
+            "alpha": evidence.alpha,
+            "quantile_rule": evidence.quantile_rule,
+            "lower_index": evidence.lower_index,
+            "upper_index": evidence.upper_index,
+            "resampling_unit": evidence.resampling_unit,
+            "reference_observations": evidence.reference_observations,
+            "candidate_observations": evidence.candidate_observations,
+            "rng": evidence.rng,
+            "runtime": evidence.runtime,
+        }
+    return payload
 
 
 def _exact_interval(metric: str, reference: float, candidate: float) -> RatioInterval:
@@ -249,25 +264,9 @@ def compare_candidate(
 ) -> dict:
     operation_names = operations or tuple(operation.value for operation in OPERATIONS)
     if reference.get("status") != "MEASURED" or candidate.get("status") != "MEASURED":
-        return _not_applicable(
-            "one or more benchmark jobs failed", primary_endpoint
-        )
+        return _not_applicable("one or more benchmark jobs failed", primary_endpoint)
     reference_operations = reference["operations"]
     candidate_operations = candidate["operations"]
-    if any(
-        len(reference_operations[operation].get("warm_process_p50_ms", ())) < 2
-        or len(candidate_operations[operation].get("warm_process_p50_ms", ())) < 2
-        for operation in operation_names
-    ):
-        return {
-            "verdict": EquivalenceVerdict.INCONCLUSIVE,
-            "verdict_basis": "primary_endpoint",
-            "primary_endpoint": primary_endpoint,
-            "failure_reason": "at least two fresh-process samples are required for an interval",
-            "storage": {},
-            "operations": {},
-        }
-
     storage_intervals = [
         _exact_interval(
             "native_bytes", reference["native_bytes"], candidate["native_bytes"]
@@ -278,49 +277,89 @@ def compare_candidate(
             candidate["transport_zstd_bytes"],
         ),
     ]
-    operations: dict[str, dict] = {}
+    storage = {
+        "verdict": classify_metrics(storage_intervals, bounds),
+        "metrics": [_interval_json(item) for item in storage_intervals],
+    }
+    operation_results: dict[str, dict] = {}
     operation_intervals: dict[str, list[RatioInterval]] = {}
     for offset, operation in enumerate(operation_names):
         reference_evidence = reference_operations[operation]
         candidate_evidence = candidate_operations[operation]
-        intervals = [
-            bootstrap_ratio_interval(
-                reference_evidence["warm_process_p50_ms"],
-                candidate_evidence["warm_process_p50_ms"],
-                metric="p50_ms",
-                seed=seed + offset * 2,
+        intervals = []
+        metric_records = []
+        missing = []
+        for metric_offset, (metric, field) in enumerate(
+            (
+                ("p50_ms", "warm_process_p50_ms"),
+                ("p95_ms", "warm_process_p95_ms"),
+            )
+        ):
+            reference_samples = reference_evidence.get(field, ())
+            candidate_samples = candidate_evidence.get(field, ())
+            if len(reference_samples) < 2 or len(candidate_samples) < 2:
+                missing.append(metric)
+                metric_records.append(
+                    {
+                        "metric": metric,
+                        "verdict": EquivalenceVerdict.INCONCLUSIVE,
+                        "failure_reason": "fewer than two observations",
+                        "reference_observations": len(reference_samples),
+                        "candidate_observations": len(candidate_samples),
+                    }
+                )
+                continue
+            interval = bootstrap_ratio_interval(
+                reference_samples,
+                candidate_samples,
+                metric=metric,
+                seed=seed + offset * 2 + metric_offset,
                 alpha=comparison_alpha
                 if primary_endpoint
                 == {
                     "scope": "operation",
                     "operation": operation,
-                    "metric": "p50_ms",
+                    "metric": metric,
                 }
                 else FAMILY_ALPHA,
-            ),
-            bootstrap_ratio_interval(
-                reference_evidence["warm_process_p95_ms"],
-                candidate_evidence["warm_process_p95_ms"],
-                metric="p95_ms",
-                seed=seed + offset * 2 + 1,
-                alpha=comparison_alpha
-                if primary_endpoint
-                == {
-                    "scope": "operation",
-                    "operation": operation,
-                    "metric": "p95_ms",
+            )
+            intervals.append(interval)
+            metric_records.append(
+                {
+                    **_interval_json(interval),
+                    "verdict": classify_interval(interval, bounds),
                 }
-                else FAMILY_ALPHA,
-            ),
-        ]
+            )
         operation_intervals[operation] = intervals
-        operations[operation] = {
-            "verdict": classify_metrics(intervals, bounds),
-            "metrics": [_interval_json(item) for item in intervals],
+        operation_results[operation] = {
+            "verdict": (
+                EquivalenceVerdict.INCONCLUSIVE
+                if missing
+                else classify_metrics(intervals, bounds)
+            ),
+            "metrics": metric_records,
+            "failure_reason": (
+                f"fewer than two observations for: {', '.join(missing)}"
+                if missing
+                else None
+            ),
         }
-    primary = _primary_interval(
-        primary_endpoint, storage_intervals, operation_intervals
-    )
+    try:
+        primary = _primary_interval(
+            primary_endpoint, storage_intervals, operation_intervals
+        )
+    except ValueError:
+        return {
+            "verdict": EquivalenceVerdict.INCONCLUSIVE,
+            "verdict_basis": "primary_endpoint",
+            "primary_endpoint": {
+                **primary_endpoint,
+                "verdict": EquivalenceVerdict.INCONCLUSIVE,
+            },
+            "failure_reason": "primary endpoint has insufficient observations",
+            "storage": storage,
+            "operations": operation_results,
+        }
     primary_verdict = classify_interval(primary, bounds)
     return {
         "verdict": primary_verdict,
@@ -342,11 +381,8 @@ def compare_candidate(
             ),
         },
         "failure_reason": None,
-        "storage": {
-            "verdict": classify_metrics(storage_intervals, bounds),
-            "metrics": [_interval_json(item) for item in storage_intervals],
-        },
-        "operations": operations,
+        "storage": storage,
+        "operations": operation_results,
     }
 
 
