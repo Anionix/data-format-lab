@@ -97,3 +97,24 @@ def test_github_actions_observer_is_offline_and_complete() -> None:
     assert events[0]["kind"] == "manifest"
     assert events[-1]["kind"] == "completion"
     assert events[-1]["status"] == "COMPLETE"
+
+
+def test_observation_outputs_do_not_pollute_repository_identity() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "diagnostic-triage-observe.yml"
+    ).read_text()
+
+    evidence_names = (
+        "diagnostic-triage-report.json",
+        "diagnostic-triage-observer.jsonl",
+    )
+    evidence_lines = [
+        line
+        for line in workflow.splitlines()
+        if any(name in line for name in evidence_names)
+    ]
+
+    assert len(evidence_lines) == 5
+    assert all(
+        "RUNNER_TEMP" in line or "runner.temp" in line for line in evidence_lines
+    )
