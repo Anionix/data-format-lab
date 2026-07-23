@@ -11,14 +11,27 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import Callable, Literal, TypedDict, TypeVar
 
 
 _Measured = TypeVar("_Measured")
+
+
+class MeasurementEstimandV1(TypedDict):
+    contract_version: Literal["1"]
+    target_population: dict[str, object]
+    observational_unit: Literal["dataset_row"]
+    timing_population: dict[str, str]
+    comparison_condition: Literal["declared_format_operation_and_settings"]
+    execution_conditions: dict[str, str]
+    targets: dict[str, dict[str, str]]
+    descriptive_outputs: dict[str, str]
+    failure_strategy: Literal["fail_job_on_any_unsuccessful_process_without_imputation"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +49,15 @@ class Job:
     job_id: str
     command: tuple[str, ...]
     expected_result: int
+
+
+def _valid_timing(value: object) -> bool:
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(value)
+        and value >= 0
+    )
 
 
 def percentile(values: list[float], fraction: float) -> float:
@@ -151,7 +173,13 @@ def _run_fresh_process(
         }
     missing = sorted(
         field
-        for field in ("first_open_ms", "samples_ms", "result", "max_rss_bytes")
+        for field in (
+            "first_open_ms",
+            "samples_ms",
+            "result",
+            "max_rss_bytes",
+            "evidence",
+        )
         if field not in result
     )
     if missing:
@@ -159,15 +187,25 @@ def _run_fresh_process(
             "status": "FAILED",
             "reason": f"worker response missing required fields: {', '.join(missing)}",
         }
+    samples = result["samples_ms"]
     if (
         isinstance(result["result"], bool)
         or not isinstance(result["result"], int)
-        or not isinstance(result["first_open_ms"], (int, float))
-        or not isinstance(result["samples_ms"], list)
-        or not all(isinstance(sample, (int, float)) for sample in result["samples_ms"])
+        or not isinstance(samples, list)
+        or isinstance(result["max_rss_bytes"], bool)
         or not isinstance(result["max_rss_bytes"], int)
+        or result["max_rss_bytes"] < 0
     ):
         return {"status": "FAILED", "reason": "worker response has invalid field types"}
+    if not isinstance(result["evidence"], dict) or not result["evidence"]:
+        return {"status": "FAILED", "reason": "worker response has invalid evidence"}
+    if (
+        not samples
+        or len(samples) != config.iterations
+        or not _valid_timing(result["first_open_ms"])
+        or not all(_valid_timing(sample) for sample in samples)
+    ):
+        return {"status": "FAILED", "reason": "worker response has invalid timing samples"}
     if result["result"] != job.expected_result:
         return {"status": "FAILED", "reason": "worker result count mismatch"}
     return result
@@ -224,6 +262,10 @@ def run_job(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
         "warm_samples_ms": warm,
         "warm_process_p50_ms": warm_process_p50,
         "warm_process_p95_ms": warm_process_p95,
+        "warm_process_estimates": {
+            "median_p50_ms": round(statistics.median(warm_process_p50), 3),
+            "median_p95_ms": round(statistics.median(warm_process_p95), 3),
+        },
         "result": processes[-1]["result"],
         "evidence": evidence,
     }
@@ -256,7 +298,7 @@ def run_jobs(
     if not ordered:
         return {}
     if not parallel:
-        return {job.job_id: run_job(job, config, cwd) for job in ordered}
+        return {job.job_id: _run_job_evidence(job, config, cwd) for job in ordered}
     worker_count = parallel_worker_counts(len(ordered), parallel=True)[
         "effective_workers"
     ]
@@ -264,9 +306,17 @@ def run_jobs(
     # lanes stay serial so measured formats do not contend for shared resources.
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
-            job.job_id: executor.submit(run_job, job, config, cwd) for job in ordered
+            job.job_id: executor.submit(_run_job_evidence, job, config, cwd)
+            for job in ordered
         }
         return {job.job_id: futures[job.job_id].result() for job in ordered}
+
+
+def _run_job_evidence(job: Job, config: MeasurementConfig, cwd: Path) -> dict:
+    try:
+        return run_job(job, config, cwd)
+    except Exception as error:
+        return {"status": "FAILED", "reason": f"{type(error).__name__}: {error}"}
 
 
 def _sha256(path: Path) -> str:
@@ -358,19 +408,99 @@ def environment_info(root: Path) -> dict:
     }
 
 
-def new_results(root: Path, run_id: str, config: MeasurementConfig) -> dict:
+def new_results(root: Path, run_id: str, measurement: Mapping[str, object]) -> dict:
     return {
         "schema_version": "1",
         "run_id": run_id,
         "environment": environment_info(root),
-        "measurement": measurement_metadata(config),
+        "measurement": dict(measurement),
         "results": {},
     }
 
 
-def measurement_metadata(config: MeasurementConfig) -> dict:
+def measurement_estimand(
+    dataset_id: str, dataset_manifest: Mapping[str, object]
+) -> MeasurementEstimandV1:
+    rows = dataset_manifest.get("rows")
+    source_sha256 = dataset_manifest.get("source_sha256")
+    if (
+        not isinstance(dataset_id, str)
+        or not dataset_id
+        or dataset_id.strip() != dataset_id
+        or Path(dataset_id).name != dataset_id
+    ):
+        raise ValueError("estimand dataset_id must be non-empty")
+    if isinstance(rows, bool) or not isinstance(rows, int) or rows < 0:
+        raise ValueError("estimand rows must be a non-negative integer")
+    if not isinstance(source_sha256, str) or len(source_sha256) != 64:
+        raise ValueError("estimand source_sha256 must be a SHA-256 digest")
+    if any(character not in "0123456789abcdefABCDEF" for character in source_sha256):
+        raise ValueError("estimand source_sha256 must be a SHA-256 digest")
+    return {
+        "contract_version": "1",
+        "target_population": {
+            "kind": "immutable_dataset_snapshot",
+            "dataset_id": dataset_id,
+            "membership": "all_declared_rows",
+            "rows": rows,
+            "source_sha256": source_sha256,
+        },
+        "observational_unit": "dataset_row",
+        "timing_population": {
+            "unit": "fresh_child_process",
+            "membership": "all_scheduled_processes_under_recorded_environment",
+        },
+        "comparison_condition": "declared_format_operation_and_settings",
+        "execution_conditions": {
+            "os_cache": "not_purged",
+            "process_state": "fresh_then_retained",
+            "validation_timing": "excluded",
+        },
+        "targets": {
+            "fresh_p50_ms": {
+                "variable": "first_invocation_elapsed_excluding_validation",
+                "unit": "milliseconds",
+                "population_summary": "median_across_fresh_processes",
+                "estimator": "linear_interpolated_quantile_0.50",
+                "rounding": "3_decimal_places",
+                "evidence_field": "fresh_samples_ms",
+                "estimate_field": "fresh_process.p50_ms",
+            },
+            "warm_p50_ms": {
+                "variable": "per_process_median_post_warmup_elapsed_excluding_validation",
+                "unit": "milliseconds",
+                "population_summary": "median_across_fresh_processes",
+                "estimator": "median_of_per_process_medians",
+                "rounding": "3_decimal_places",
+                "evidence_field": "warm_process_p50_ms",
+                "estimate_field": "warm_process_estimates.median_p50_ms",
+            },
+            "warm_p95_ms": {
+                "variable": "per_process_p95_post_warmup_elapsed_excluding_validation",
+                "unit": "milliseconds",
+                "population_summary": "median_across_fresh_processes",
+                "estimator": "median_of_per_process_linear_interpolated_p95",
+                "rounding": "3_decimal_places",
+                "evidence_field": "warm_process_p95_ms",
+                "estimate_field": "warm_process_estimates.median_p95_ms",
+            },
+        },
+        "descriptive_outputs": {
+            "warm": "pooled_iterations_not_an_independent_inferential_sample"
+        },
+        "failure_strategy": "fail_job_on_any_unsuccessful_process_without_imputation",
+    }
+
+
+def measurement_metadata(
+    config: MeasurementConfig,
+    *,
+    dataset_id: str,
+    dataset_manifest: Mapping[str, object],
+) -> dict[str, object]:
     return {
         **asdict(config),
         "worker_timeout_seconds": config.timeout_seconds,
         "os_cache_purged": False,
+        "estimand": measurement_estimand(dataset_id, dataset_manifest),
     }

@@ -41,6 +41,22 @@ def _package_versions(environment: dict) -> str:
     )
 
 
+def _contract_phrase(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return value.replace("_", " ")
+
+
+def _estimand_target(value: object) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    variable = _contract_phrase(value.get("variable"))
+    summary = _contract_phrase(value.get("population_summary"))
+    if variable is None or summary is None:
+        return None
+    return f"{variable}; {summary}"
+
+
 def _environment_rows(environment: dict) -> list[list[object]]:
     rows: list[list[object]] = [
         ["Git commit", environment.get("git_commit")],
@@ -156,6 +172,20 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
             f"{measurement.get('iterations')} measurements; "
             f"timeout {measurement.get('timeout_seconds')}s"
         )
+    estimand = measurement.get("estimand", {})
+    estimand = estimand if isinstance(estimand, dict) else {}
+    population = estimand.get("target_population", {})
+    population = population if isinstance(population, dict) else {}
+    population_summary = None
+    if population:
+        population_summary = (
+            f"{population.get('dataset_id')}: {population.get('rows')} rows "
+            f"({_contract_phrase(population.get('kind'))})"
+        )
+    targets = estimand.get("targets", {})
+    targets = targets if isinstance(targets, dict) else {}
+    descriptive = estimand.get("descriptive_outputs", {})
+    descriptive = descriptive if isinstance(descriptive, dict) else {}
     rows = [
         ["Input SHA-256", actual_source_sha256 or declared_source_sha256],
         ["Canonical hash", input_manifest.get("canonical_hash")],
@@ -171,6 +201,13 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         ["PyArrow", packages.get("pyarrow")],
         ["Packages", _package_versions(environment)],
         ["Protocol", protocol],
+        ["Estimand contract", estimand.get("contract_version")],
+        ["Target population", population_summary],
+        ["Fresh estimand", _estimand_target(targets.get("fresh_p50_ms"))],
+        ["Warm estimand", _estimand_target(targets.get("warm_p50_ms"))],
+        ["Warm tail estimand", _estimand_target(targets.get("warm_p95_ms"))],
+        ["Pooled warm role", _contract_phrase(descriptive.get("warm"))],
+        ["Failure strategy", _contract_phrase(estimand.get("failure_strategy"))],
         ["Seed", measurement.get("seed", manifest.get("seed"))],
         ["OS cache purged", measurement.get("os_cache_purged")],
     ]
@@ -269,11 +306,15 @@ def _fair(manifest: dict, results: dict) -> list[str]:
         name, operation = job_id.split("/", 1)
         if name not in eligible_names or evidence["status"] != "MEASURED":
             continue
+        warm_process = evidence.get("warm_process_estimates", {})
+        warm_process = warm_process if isinstance(warm_process, dict) else {}
         timings.append(
             [
                 name,
                 operation,
                 evidence["fresh_process"]["p50_ms"],
+                warm_process.get("median_p50_ms"),
+                warm_process.get("median_p95_ms"),
                 evidence["warm"]["p50_ms"],
                 evidence["warm"]["p95_ms"],
                 evidence["warm"]["iqr_ms"],
@@ -292,9 +333,11 @@ def _fair(manifest: dict, results: dict) -> list[str]:
                     "Format",
                     "Operation",
                     "Fresh p50 ms",
-                    "Warm p50 ms",
-                    "Warm p95 ms",
-                    "IQR ms",
+                    "Warm median-of-p50 ms",
+                    "Warm median-of-p95 ms",
+                    "Pooled warm p50 ms",
+                    "Pooled warm p95 ms",
+                    "Pooled warm IQR ms",
                     "Rows",
                     "Result hash",
                     "RSS bytes",

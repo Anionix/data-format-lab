@@ -109,9 +109,15 @@ def run_equivalence(
         },
         "multiplicity_control": multiplicity_control(),
     }
-    # LLM contract: ROUNDTRIP_VERIFIED -> PRIMARY_ENDPOINT_PREREGISTERED ->
-    # BENCHMARKED; endpoint identity is durable before the first measurement.
+    measurement_record = measurement_metadata(
+        measurement,
+        dataset_id=run_manifest["dataset_id"],
+        dataset_manifest=input_manifest,
+    )
+    # LLM contract precondition: endpoint and estimand metadata are durable
+    # before ROUNDTRIP_VERIFIED -> BENCHMARKED.
     run_manifest["equivalence"] = equivalence_contract
+    run_manifest["measurement"] = measurement_record
     _write_json(manifest_path, run_manifest)
     measured = run_jobs(jobs, measurement, root, parallel=parallel)
     failed = {
@@ -177,9 +183,8 @@ def run_equivalence(
         **equivalence_contract,
         "pairs": pairs_evidence,
     }
-    run_manifest["measurement"] = measurement_metadata(measurement)
     _write_json(manifest_path, run_manifest)
-    results = new_results(root, run_dir.name, measurement)
+    results = new_results(root, run_dir.name, measurement_record)
     results["profile"] = "equivalence"
     results["dataset_id"] = run_manifest["dataset_id"]
     results["state"] = result_state

@@ -8,7 +8,7 @@ import format_bench.fair_run as fair_run_module
 from format_bench.workflow import prepare_run, verify_run
 
 
-def test_fair_run_uses_fresh_workers_and_advances_state(tmp_path: Path) -> None:
+def test_fair_run_uses_fresh_workers_and_advances_state(tmp_path: Path, monkeypatch) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "fixture-run"
     adapter = CsvAdapter()
@@ -20,6 +20,17 @@ def test_fair_run_uses_fresh_workers_and_advances_state(tmp_path: Path) -> None:
         selected=[adapter],
     )
     verify_run(run_dir, {"csv": adapter})
+    original_run_jobs = fair_run_module.run_jobs
+
+    def assert_preregistered(*args, **kwargs):
+        manifest = json.loads((run_dir / "manifest.json").read_text())
+        assert (
+            manifest["measurement"]["estimand"]["targets"]["fresh_p50_ms"]["variable"]
+            == "first_invocation_elapsed_excluding_validation"
+        )
+        return original_run_jobs(*args, **kwargs)
+
+    monkeypatch.setattr(fair_run_module, "run_jobs", assert_preregistered)
 
     result_path = run_fair(
         root,
@@ -38,6 +49,7 @@ def test_fair_run_uses_fresh_workers_and_advances_state(tmp_path: Path) -> None:
     assert results["measurement"]["timeout_seconds"] == 120
     assert results["measurement"]["worker_timeout_seconds"] == 120
     assert manifest["measurement"]["worker_timeout_seconds"] == 120
+    assert manifest["measurement"]["estimand"] == results["measurement"]["estimand"]
     assert manifest["formats"][0]["state"] == "BENCHMARKED"
 
 

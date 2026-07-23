@@ -12,8 +12,10 @@ from format_bench.runner import (
     MeasurementConfig,
     environment_info,
     measure_callable,
+    measurement_metadata,
     parallel_worker_counts,
     run_job,
+    run_jobs,
     stats_ms,
 )
 
@@ -70,6 +72,69 @@ def test_parallel_worker_counts_include_environment_cap(monkeypatch) -> None:
     }
 
 
+def test_measurement_metadata_defines_data_and_timing_estimands() -> None:
+    measurement = measurement_metadata(
+        MeasurementConfig(),
+        dataset_id="fixture",
+        dataset_manifest={"rows": 4, "source_sha256": "a" * 64},
+    )
+    estimand = measurement["estimand"]
+
+    assert estimand["target_population"] == {
+        "kind": "immutable_dataset_snapshot",
+        "dataset_id": "fixture",
+        "membership": "all_declared_rows",
+        "rows": 4,
+        "source_sha256": "a" * 64,
+    }
+    assert estimand["timing_population"]["unit"] == "fresh_child_process"
+    assert estimand["targets"]["fresh_p50_ms"]["evidence_field"] == "fresh_samples_ms"
+    assert estimand["targets"]["fresh_p50_ms"]["variable"] == (
+        "first_invocation_elapsed_excluding_validation"
+    )
+    assert estimand["targets"]["warm_p50_ms"]["estimator"] == (
+        "median_of_per_process_medians"
+    )
+    assert estimand["targets"]["warm_p50_ms"]["evidence_field"] == (
+        "warm_process_p50_ms"
+    )
+    assert estimand["targets"]["warm_p95_ms"]["evidence_field"] == (
+        "warm_process_p95_ms"
+    )
+    assert estimand["descriptive_outputs"]["warm"].startswith("pooled_iterations")
+    assert estimand["failure_strategy"].endswith("without_imputation")
+
+
+@pytest.mark.parametrize(
+    "dataset_manifest",
+    [
+        {"rows": True, "source_sha256": "a" * 64},
+        {"rows": -1, "source_sha256": "a" * 64},
+        {"rows": 4, "source_sha256": ""},
+        {"rows": 4, "source_sha256": "not-a-sha256"},
+    ],
+)
+def test_measurement_metadata_rejects_invalid_population(
+    dataset_manifest: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="estimand"):
+        measurement_metadata(
+            MeasurementConfig(),
+            dataset_id="fixture",
+            dataset_manifest=dataset_manifest,
+        )
+
+
+@pytest.mark.parametrize("dataset_id", [123, "../fixture"])
+def test_measurement_metadata_rejects_invalid_dataset_id(dataset_id: object) -> None:
+    with pytest.raises(ValueError, match="estimand"):
+        measurement_metadata(
+            MeasurementConfig(),
+            dataset_id=dataset_id,
+            dataset_manifest={"rows": 4, "source_sha256": "a" * 64},
+        )
+
+
 @pytest.mark.parametrize(
     ("values", "warmups", "iterations"),
     [([3, 2, 3], 1, 1), ([3, 3, 2, 3], 0, 3)],
@@ -89,6 +154,7 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
             "samples_ms": [1.0, 1.5],
             "result": 7,
             "max_rss_bytes": 100,
+            "evidence": {"normalized_hash": "fixture"},
         }
     )
     job = Job("fixture/read", (sys.executable, "-c", f"print({payload!r})"), 7)
@@ -103,6 +169,73 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     assert result["fresh_process"]["samples"] == 2
     assert result["warm"]["samples"] == 4
     assert result["max_rss_bytes_p50"] == 100
+    assert result["warm_process_estimates"] == {
+        "median_p50_ms": 1.25,
+        "median_p95_ms": 1.475,
+    }
+
+
+@pytest.mark.parametrize("samples", [[], [1.0, 2.0], [float("nan")], [-1.0]])
+def test_run_job_rejects_malformed_timing_samples(
+    tmp_path: Path, samples: list[float]
+) -> None:
+    payload = json.dumps(
+        {
+            "first_open_ms": 2.0,
+            "samples_ms": samples,
+            "result": 7,
+            "max_rss_bytes": 100,
+            "evidence": {"normalized_hash": "fixture"},
+        }
+    )
+    job = Job("fixture/read", (sys.executable, "-c", f"print({payload!r})"), 7)
+
+    result = run_job(
+        job,
+        MeasurementConfig(fresh_processes=1, warmups=0, iterations=1),
+        tmp_path,
+    )
+
+    assert result["status"] == "FAILED"
+    assert "timing" in result["reason"]
+
+
+def test_run_job_rejects_missing_result_evidence(tmp_path: Path) -> None:
+    payload = json.dumps(
+        {
+            "first_open_ms": 2.0,
+            "samples_ms": [1.0],
+            "result": 7,
+            "max_rss_bytes": 100,
+        }
+    )
+    job = Job("fixture/read", (sys.executable, "-c", f"print({payload!r})"), 7)
+
+    result = run_job(
+        job,
+        MeasurementConfig(fresh_processes=1, warmups=0, iterations=1),
+        tmp_path,
+    )
+
+    assert result["status"] == "FAILED"
+    assert "evidence" in result["reason"]
+
+
+def test_run_jobs_records_unexpected_job_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def raise_unexpected(*_args, **_kwargs):
+        raise RuntimeError("fixture crash")
+
+    monkeypatch.setattr(runner, "run_job", raise_unexpected)
+    job = Job("fixture/read", ("fixture",), 7)
+
+    assert run_jobs([job], MeasurementConfig(), tmp_path) == {
+        "fixture/read": {
+            "status": "FAILED",
+            "reason": "RuntimeError: fixture crash",
+        }
+    }
 
 
 def test_run_job_stops_after_first_failed_fresh_attempt(

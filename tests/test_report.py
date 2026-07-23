@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from format_bench.report import _equivalence, render_report
+from format_bench.runner import MeasurementConfig, measurement_metadata
 
 
 def test_equivalence_report_exposes_multiplicity_and_coverage_limit() -> None:
@@ -158,18 +159,19 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
             "python": "3.12.0",
             "packages": {"pyarrow": "23.0.1"},
         },
-        "measurement": {
-            "fresh_processes": 10,
-            "warmups": 5,
-            "iterations": 30,
-            "seed": 20260703,
-            "timeout_seconds": 120,
-            "os_cache_purged": False,
-        },
+        "measurement": measurement_metadata(
+            MeasurementConfig(),
+            dataset_id="fixture",
+            dataset_manifest={"rows": 4, "source_sha256": "a" * 64},
+        ),
         "results": {
             "csv/read_all": {
                 "status": "MEASURED",
                 "fresh_process": {"p50_ms": 1},
+                "warm_process_estimates": {
+                    "median_p50_ms": 1.25,
+                    "median_p95_ms": 2.25,
+                },
                 "warm": {"p50_ms": 1, "p95_ms": 2, "iqr_ms": 1},
                 "result": 4,
                 "evidence": {"normalized_hash": "abc123"},
@@ -196,7 +198,7 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
 
     report = render_report(tmp_path).read_text()
 
-    assert "| csv | read_all | 1 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
+    assert "| csv | read_all | 1 | 1.25 | 2.25 | 1 | 2 | 1 | 4 | abc123 | 100 |" in report
     assert f"| Input SHA-256 | {hashlib.sha256(source.read_bytes()).hexdigest()} |" in report
     assert "| Canonical hash | canonical-sha |" in report
     assert "| Rows / columns | 4 / 1 |" in report
@@ -206,6 +208,15 @@ def test_fair_report_includes_normalized_result_hash(tmp_path: Path) -> None:
     assert "| Packages | {\"pyarrow\":\"22.0.0\"} |" in report
     assert "| Packages | {\"pyarrow\":\"23.0.1\"} |" in report
     assert "| Protocol | 10 fresh processes; 5 warmups; 30 measurements; timeout 120s |" in report
+    assert (
+        "| Target population | fixture: 4 rows (immutable dataset snapshot) |" in report
+    )
+    assert "first invocation elapsed excluding validation; median across fresh processes" in report
+    assert "per process median post warmup elapsed" in report
+    assert "pooled iterations not an independent inferential sample" in report
+    assert "fail job on any unsuccessful process without imputation" in report
+    assert "Warm median-of-p50 ms" in report
+    assert "Pooled warm p50 ms" in report
     assert "| csv | {\"delimiter\":\",\"} |" in report
     reported = json.loads((tmp_path / "manifest.json").read_text())
     assert reported["formats"][0]["state"] == "REPORTED"
