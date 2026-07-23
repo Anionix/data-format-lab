@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-PIN = "f6877942a0de2b0c91f5334e7197996515e6344a"
+PIN = "d036a33bfc5a49c05f54200df9be8f55e2987cd6"
 BINARY = "diagnostic-triage"
 
 

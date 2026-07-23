@@ -6,17 +6,17 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1784813272,
-        "narHash": "sha256-S3o/YdOg+lTVS6/XmguGZnd2Jp8zkNFfN2sIRblLQw0=",
+        "lastModified": 1784815781,
+        "narHash": "sha256-L3uBzwFf/5wXPPJnWK2pyXe34RBgH2HRXeNJ6DpKg+U=",
         "owner": "Anionix",
         "repo": "diagnostic-triage",
-        "rev": "f6877942a0de2b0c91f5334e7197996515e6344a",
+        "rev": "d036a33bfc5a49c05f54200df9be8f55e2987cd6",
         "type": "github"
       },
       "original": {
         "owner": "Anionix",
         "repo": "diagnostic-triage",
-        "rev": "f6877942a0de2b0c91f5334e7197996515e6344a",
+        "rev": "d036a33bfc5a49c05f54200df9be8f55e2987cd6",
         "type": "github"
       }
     },

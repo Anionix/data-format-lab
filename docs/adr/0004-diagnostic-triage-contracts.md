@@ -25,11 +25,10 @@ versioned JSON Lines protocol, providers, and release artifacts. This repository
 a pinned consumer. It owns only `diagnostic-triage.toml`, repository policy,
 integration fixtures, observation workflow, and the immutable Nix lock.
 
-The initial consumer pin is source revision
-`f6877942a0de2b0c91f5334e7197996515e6344a`. The Nix input supplies the CLI,
-providers, observer, schemas, and fixtures without a runtime network fetch. The
-consumer test requires the configuration revision and locked input revision to be
-identical.
+The consumer revision is immutable in `flake.nix` and `flake.lock`. The Nix input
+supplies the CLI, providers, observer, schemas, and fixtures without a runtime
+network fetch. The consumer test requires the configuration revision and locked
+input revision to be identical.
 
 The module separates collection from policy. A finding records tool evidence,
 an optional source location, expected and observed behavior, classification, fix applicability, and a
