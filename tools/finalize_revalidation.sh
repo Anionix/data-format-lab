@@ -33,13 +33,7 @@ then
   exit 2
 fi
 
-mkdir -p .data/revalidation-20260719/package-run
-cp .data/revalidation-20260719/manifest.json .data/revalidation-20260719/package-run/manifest.json
-cp .data/revalidation-20260719/results.json .data/revalidation-20260719/package-run/results.json
-cp .data/revalidation-20260719/report.md .data/revalidation-20260719/package-run/report.md
-rsync -a --delete .data/revalidation-20260719/claims/ .data/revalidation-20260719/package-run/claims/
-
 PYTHONPATH=src .venv/bin/python -m format_bench package \
-  --run-dir .data/revalidation-20260719/package-run \
+  --run-dir .data/revalidation-20260719 \
   --output .data/release-evidence \
   --platform macos-arm64

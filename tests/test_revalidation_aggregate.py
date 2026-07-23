@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from types import ModuleType
 
+from format_bench.release import package_run
+
 
 ROOT = Path(__file__).parents[1]
 
@@ -36,7 +38,12 @@ def test_revalidation_generator_is_deterministic_and_keeps_provenance(
             "columns": [{"name": "full_name"}],
             "source_sha256": "source",
             "canonical_hash": "canonical",
-            "release_asset": "fixture.csv.zst",
+            "asset": {
+                "repository": "Anionix/data-format-lab",
+                "release_tag": "fixture",
+                "name": "fixture.csv.zst",
+                "compressed_sha256": "compressed",
+            },
         },
     )
     run = tmp_path / "runs" / "full-20260718-github-parallel-4"
@@ -62,7 +69,13 @@ def test_revalidation_generator_is_deterministic_and_keeps_provenance(
     builder.main()
     first = {
         name: (builder.OUTPUT / name).read_bytes()
-        for name in ("manifest.json", "results.json", "report.md", "SHA256SUMS.txt")
+        for name in (
+            "input/manifest.json",
+            "manifest.json",
+            "results.json",
+            "report.md",
+            "SHA256SUMS.txt",
+        )
     }
     stale = builder.OUTPUT / "claims" / "stale.json"
     _write_json(stale, {"stale": True})
@@ -72,6 +85,7 @@ def test_revalidation_generator_is_deterministic_and_keeps_provenance(
     assert not stale.exists()
     assert pilot.is_file()
     result = json.loads(first["results.json"])
+    aggregate_input = json.loads(first["input/manifest.json"])
     evidence = result["datasets"][0]["evidence"][0]
     assert result["completion_state"] == "COMPLETE"
     assert evidence["source"]["encoding_commit"] == "encode"
@@ -82,6 +96,19 @@ def test_revalidation_generator_is_deterministic_and_keeps_provenance(
     assert result["datasets"][0]["pilot_contract"]["attempts"][0]["sha256"] == (
         builder.sha256(pilot)
     )
+    assert aggregate_input["schema_version"] == "aggregate-input-1"
+    assert aggregate_input["datasets"][0]["dataset_manifest"]["sha256"] == (
+        builder.sha256(tmp_path / "datasets" / dataset_id / "manifest.json")
+    )
+    assert aggregate_input["datasets"][0]["source"]["compressed_asset"]["name"] == (
+        "fixture.csv.zst"
+    )
+    assert package_run(
+        builder.OUTPUT,
+        tmp_path / "release",
+        "macos-arm64",
+        source_root=tmp_path,
+    ).is_file()
 
 
 def test_revalidation_generator_uses_a_later_complete_candidate(
@@ -132,7 +159,8 @@ def test_revalidation_finalizer_is_bounded_and_uses_tracked_tools(
     assert 'cd "$repo_root"' in script
     assert "tools/build_revalidation_aggregate.py" in script
     assert ".venv/bin/python - <<'PY'" in script
-    assert "mkdir -p .data/revalidation-20260719/package-run" in script
+    assert "--run-dir .data/revalidation-20260719" in script
+    assert "package-run" not in script
 
     result = subprocess.run(
         [script_path],
