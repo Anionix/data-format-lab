@@ -2,6 +2,7 @@
   description = "Reproducible environment for Data Format Lab";
 
   inputs = {
+    diagnostic-triage.url = "github:Anionix/diagnostic-triage/f6877942a0de2b0c91f5334e7197996515e6344a";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
