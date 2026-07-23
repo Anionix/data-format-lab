@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Amended
 
 ## Context
 
@@ -18,19 +18,26 @@ robustness evidence as benchmark evidence.
 
 ## Decision
 
-Add Diagnostic Triage as a deep Rust module under
-`tools/diagnostic-triage/`. Its public interface is the
-`diagnostic-triage` command and versioned JSON Lines protocol. Diagnostic providers
-sit at that seam and normalize Ruff, ty, Pyright, pytest, Biome, Cargo, Clippy, and process
-evidence into `FindingV1`. The taxonomy in
-`docs/diagnostic-triage/taxonomy.md` owns stable classification identifiers.
+Use the standalone Apache-2.0
+[`Anionix/diagnostic-triage`](https://github.com/Anionix/diagnostic-triage)
+repository as the sole owner of the Rust implementation, taxonomy, schemas,
+versioned JSON Lines protocol, providers, and release artifacts. This repository is
+a pinned consumer. It owns only `diagnostic-triage.toml`, repository policy,
+integration fixtures, observation workflow, and the immutable Nix lock.
+
+The initial consumer pin is source revision
+`f6877942a0de2b0c91f5334e7197996515e6344a`. The Nix input supplies the CLI,
+providers, observer, schemas, and fixtures without a runtime network fetch. The
+consumer test requires the configuration revision and locked input revision to be
+identical.
 
 The module separates collection from policy. A finding records tool evidence,
 an optional source location, expected and observed behavior, classification, fix applicability, and a
 stable fingerprint. Policy maps findings to `PASS`, `POLICY_FAIL`, `INCOMPLETE`, or
 `UNSUPPORTED`; diagnostic providers do not decide repository policy.
 
-The public commands are `check`, `ci`, `fix`, `verify --patch`, and `issue-draft`.
+The public commands include `check`, `ci`, `fix`, `verify --patch`, `observe`, and
+`issue-draft`.
 `check` and `ci` never write tracked files. CLI exit status `0` means policy pass,
 `1` means a completed policy failure, and `2` means configuration, protocol,
 provider, or other operational failure.
@@ -64,20 +71,18 @@ rules, and zero unauthorized source writes. Only syntax, type, correctness, buil
 and test findings may block initially; style, preview rules, robustness findings,
 and unsupported tools remain non-blocking.
 
-Extraction to `Anionix/diagnostic-triage` requires two independent repositories to
-consume the same schema and protocol without repository-specific changes. Candidate
-consumers are `data-format-lab`, `Code-Review_Security`, and
-`nix-maintenance-status`. After extraction, consumers pin a verified commit or Nix
-lock; schema identifiers and finding fingerprints retain compatibility.
+`data-format-lab` is the first real consumer. `Code-Review_Security` and
+`nix-maintenance-status` remain rollout candidates. Generic changes belong in the
+standalone repository; data-format-specific policy and defects remain here.
 
 ## Consequences
 
-- Callers learn one small interface while normalization and policy stay local to
-  the module.
+- Callers learn one small interface while normalization stays in the standalone
+  engine and repository policy stays with the consumer.
 - New tools require diagnostic providers, not changes to format adapters or ranking logic.
 - Tool-native safe-fix metadata is preserved; absence of authoritative safety is
   treated as manual or unsafe.
-- Protocol and taxonomy changes require compatibility tests and an explicit schema
-  version; published identifiers are never reassigned.
-- A second independent consumer is required before package extraction, consistent
-  with ADR 0002.
+- Protocol and taxonomy changes are proposed upstream and require compatibility
+  tests plus an explicit schema version; published identifiers are never reassigned.
+- Local generic schema, taxonomy, and protocol copies are removed to prevent
+  divergent authorities.
