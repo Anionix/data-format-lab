@@ -1,6 +1,7 @@
 from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 from .contracts import NormalizedColumn
+from .workload_contract import WorkloadDeclarations
 
 
 class AdapterColumn(TypedDict):
@@ -17,7 +18,7 @@ class AdapterManifest(TypedDict):
     columns: AdapterColumns
     canonical_hash: str
     expected_counts: dict[str, int]
-    workloads: NotRequired[dict[str, object]]
+    workloads: NotRequired[WorkloadDeclarations]
 
 
 class VerificationResult(TypedDict):

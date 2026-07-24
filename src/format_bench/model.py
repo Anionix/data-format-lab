@@ -7,6 +7,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import cast
 
+from .workload_contract import (
+    ComparisonOperator,
+    WorkloadScalar,
+    is_comparison_operator,
+)
+
 
 class Lane(StrEnum):
     FAIR = "fair"
@@ -153,8 +159,8 @@ class WorkloadSpec:
     kind: WorkloadKind
     columns: tuple[str, ...] = ()
     column: str | None = None
-    operator: str | None = None
-    value: object | None = None
+    operator: ComparisonOperator | None = None
+    value: WorkloadScalar | None = None
     limit: int | None = None
     expected_rows: int | None = None
 
@@ -175,11 +181,19 @@ class WorkloadSpec:
             raise ValueError(f"workload columns for {operation} must contain strings")
         columns = tuple(cast(list[str] | tuple[str, ...], untyped_columns))
         column = payload.get("column")
-        operator = payload.get("operator")
+        raw_operator = payload.get("operator")
         if column is not None and not isinstance(column, str):
             raise ValueError("workload column must be a string")
-        if operator is not None and not isinstance(operator, str):
-            raise ValueError("workload operator must be a string")
+        operator: ComparisonOperator | None = None
+        if raw_operator is not None:
+            if not isinstance(raw_operator, str):
+                raise ValueError("workload operator must be a string")
+            if not is_comparison_operator(raw_operator):
+                raise ValueError("workload operator must be supported")
+            operator = raw_operator
+        value = payload.get("value")
+        if value is not None and not isinstance(value, (str, int, float, bool)):
+            raise ValueError("workload filter value must be a scalar")
         expected = payload.get("expected_rows")
         limit = payload.get("limit")
 
@@ -196,7 +210,7 @@ class WorkloadSpec:
             columns=columns,
             column=column,
             operator=operator,
-            value=payload.get("value"),
+            value=value,
             limit=optional_int(limit, "limit"),
             expected_rows=optional_int(expected, "expected_rows"),
         )
@@ -209,7 +223,11 @@ class WorkloadSpec:
         if self.kind is WorkloadKind.PROJECTION and not self.columns:
             raise ValueError(f"projection workload {self.operation} needs columns")
         if self.kind is WorkloadKind.FILTER:
-            if not self.column or self.operator not in {"eq", "gt", "gte", "lt", "lte"}:
+            if (
+                not self.column
+                or self.operator is None
+                or self.value is None
+            ):
                 raise ValueError(f"filter workload {self.operation} needs a supported predicate")
         if self.kind is WorkloadKind.HEAD and (self.limit is None or self.limit <= 0):
             raise ValueError(f"head workload {self.operation} needs a positive limit")
