@@ -68,10 +68,13 @@ def test_strict_json_dumps_accepts_finite_numbers() -> None:
     assert strict_json_dumps({"value": 1.25}) == '{"value": 1.25}'
 
 
-@pytest.mark.parametrize("token", ("NaN", "Infinity", "-Infinity"))
+@pytest.mark.parametrize(
+    "token",
+    ("NaN", "Infinity", "-Infinity", "1e9999", "-1e9999"),
+)
 def test_strict_json_loads_rejects_nonfinite_numbers(token: str) -> None:
     with pytest.raises(json.JSONDecodeError, match="non-finite JSON number"):
-        strict_json_loads(f'{{"value":{token}}}')
+        strict_json_loads(f'{{"nested":[{{"value":{token}}}]}}')
 
 
 def test_strict_json_loads_accepts_finite_numbers() -> None:

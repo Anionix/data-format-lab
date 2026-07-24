@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Never, TypedDict, Unpack
 
 
@@ -21,9 +22,20 @@ def _reject_nonfinite(token: str) -> Never:
     )
 
 
+def _parse_finite_float(token: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        _reject_nonfinite(token)
+    return value
+
+
 def strict_json_loads(value: str) -> Any:
     """Parse RFC 8259 JSON without Python's NaN and Infinity extensions."""
-    return json.loads(value, parse_constant=_reject_nonfinite)
+    return json.loads(
+        value,
+        parse_constant=_reject_nonfinite,
+        parse_float=_parse_finite_float,
+    )
 
 
 def strict_json_dumps(value: object, **kwargs: Unpack[JsonDumpOptions]) -> str:
