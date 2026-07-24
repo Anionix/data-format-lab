@@ -137,6 +137,25 @@ def test_fastlanes_invalid_worker_output_remains_a_harness_failure(
     assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
 
 
+def test_fastlanes_nonfinite_worker_output_remains_a_harness_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args,
+            0,
+            '{"failure_class":"TARGET","status":"FAILED","value":NaN}\n',
+            "",
+        ),
+    )
+
+    result = _run_case(tmp_path, "mixed-13-columns", 1024, 1)
+
+    assert result["outcome"] is ObservedOutcome.HARNESS_FAILED
+
+
 def test_fastlanes_worker_protocol_marks_target_failure(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:

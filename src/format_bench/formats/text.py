@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pyarrow as pa
@@ -101,9 +102,29 @@ class ObjectJsonlAdapter:
 
     def encode(self, table: pa.Table, path: Path) -> Artifact:
         def write() -> None:
-            with path.open("w", encoding="utf-8") as handle:
-                for row in table.to_pylist():
-                    handle.write(strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+            temporary: Path | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=path.parent,
+                    prefix=f".{path.name}-",
+                    delete=False,
+                ) as handle:
+                    temporary = Path(handle.name)
+                    for row in table.to_pylist():
+                        handle.write(
+                            strict_json_dumps(
+                                row,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            )
+                            + "\n"
+                        )
+                temporary.replace(path)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
 
         return write_artifact(path, write)
 

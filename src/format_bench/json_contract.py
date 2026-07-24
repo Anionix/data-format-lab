@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TypedDict, Unpack
+from typing import Any, Never, TypedDict, Unpack
 
 
 class JsonDumpOptions(TypedDict, total=False):
@@ -11,6 +11,19 @@ class JsonDumpOptions(TypedDict, total=False):
     indent: int | str | None
     separators: tuple[str, str] | None
     sort_keys: bool
+
+
+def _reject_nonfinite(token: str) -> Never:
+    raise json.JSONDecodeError(
+        f"non-finite JSON number is not permitted: {token}",
+        token,
+        0,
+    )
+
+
+def strict_json_loads(value: str) -> Any:
+    """Parse RFC 8259 JSON without Python's NaN and Infinity extensions."""
+    return json.loads(value, parse_constant=_reject_nonfinite)
 
 
 def strict_json_dumps(value: object, **kwargs: Unpack[JsonDumpOptions]) -> str:

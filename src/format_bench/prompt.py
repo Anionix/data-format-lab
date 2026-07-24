@@ -107,8 +107,30 @@ def prompt_records(table: pa.Table) -> tuple[list[dict[str, Any]], list[tuple]]:
 
 
 def write_prompt_artifacts(table: pa.Table, directory: Path) -> dict[str, Path]:
-    directory.mkdir(parents=True, exist_ok=True)
     records, taxonomy = prompt_records(table)
+    object_jsonl = "".join(
+        strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+        for row in records
+    )
+    array_jsonl = "".join(
+        strict_json_dumps(
+            [row[name] for name in PROMPT_COLUMNS],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + "\n"
+        for row in records
+    )
+    array_schema = (
+        strict_json_dumps(
+            PROMPT_COLUMNS,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    compact_schema = _compact_schema_text()
+    directory.mkdir(parents=True, exist_ok=True)
     paths = {
         "taxonomy": directory / "prompt-taxonomy.tsv",
         "compact_tsv": directory / "prompt-compact.tsv",
@@ -122,20 +144,10 @@ def write_prompt_artifacts(table: pa.Table, directory: Path) -> dict[str, Path]:
         writer.writerow(["m", "g", "c", "mc"])
         writer.writerows(_taxonomy_rows(taxonomy))
     paths["compact_tsv"].write_text(_compact_tsv_text(records), encoding="utf-8")
-    with paths["object_jsonl"].open("w", encoding="utf-8") as handle:
-        for row in records:
-            handle.write(strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
-    with paths["array_jsonl"].open("w", encoding="utf-8") as handle:
-        for row in records:
-            handle.write(
-                strict_json_dumps([row[name] for name in PROMPT_COLUMNS], ensure_ascii=False, separators=(",", ":"))
-                + "\n"
-            )
-    paths["array_schema"].write_text(
-        strict_json_dumps(PROMPT_COLUMNS, ensure_ascii=False, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
-    paths["compact_schema"].write_text(_compact_schema_text(), encoding="utf-8")
+    paths["object_jsonl"].write_text(object_jsonl, encoding="utf-8")
+    paths["array_jsonl"].write_text(array_jsonl, encoding="utf-8")
+    paths["array_schema"].write_text(array_schema, encoding="utf-8")
+    paths["compact_schema"].write_text(compact_schema, encoding="utf-8")
     return paths
 
 

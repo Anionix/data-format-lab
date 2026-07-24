@@ -74,9 +74,17 @@ class GitHubClient(Protocol):
 
 class GhClient:
     def _call(self, args: list[str], payload: dict[str, object] | None = None) -> object:
+        try:
+            input_payload = (
+                json.dumps(payload, allow_nan=False)
+                if payload is not None
+                else None
+            )
+        except (RecursionError, TypeError, ValueError) as error:
+            raise ReviewCloseoutError("gh api payload is not strict JSON") from error
         result = subprocess.run(
             ["gh", "api", *args],
-            input=json.dumps(payload, allow_nan=False) if payload is not None else None,
+            input=input_payload,
             capture_output=True, text=True, check=False,
         )
         if result.returncode != 0:

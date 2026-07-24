@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pyarrow as pa
@@ -6,7 +7,7 @@ import pytest
 
 from format_bench.canonical import canonical_hash, load_dataset, query_counts, read_csv
 from format_bench.datasets import sha256_bytes
-from format_bench.interop import run_arrow_ipc_interoperability
+from format_bench.interop import _consume, run_arrow_ipc_interoperability
 from format_bench.workflow import _fixture_manifest
 
 
@@ -72,6 +73,25 @@ def test_interoperability_output_cannot_be_reused(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError, match="already exists"):
         run_arrow_ipc_interoperability(table, manifest, output)
+
+
+def test_interoperability_rejects_nonfinite_worker_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "format_bench.interop.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args,
+            0,
+            '{"status":"PASS","decode_ms":NaN}',
+            "",
+        ),
+    )
+
+    result = _consume(tmp_path / "artifact.arrow", {}, {})
+
+    assert result["status"] == "FAILED"
+    assert result["error_type"] == "WorkerProtocolError"
 
 
 def test_load_dataset_rejects_modified_production_source(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ from typing import TypeGuard
 import pyarrow as pa
 
 from .formats.arrow_ipc import ArrowIpcAdapter
-from .json_contract import strict_json_dumps
+from .json_contract import strict_json_dumps, strict_json_loads
 from .runner import environment_info
 
 
@@ -62,7 +62,7 @@ def _consume(
         check=False,
     )
     try:
-        result: object = json.loads(process.stdout)
+        result = strict_json_loads(process.stdout)
     except json.JSONDecodeError:
         return _failure_evidence(
             "WorkerProtocolError", process.stderr[-500:] or "worker did not return JSON"

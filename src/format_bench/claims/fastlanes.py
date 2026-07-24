@@ -9,6 +9,7 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
+from format_bench.json_contract import strict_json_loads
 from format_bench.model import ObservedOutcome
 
 
@@ -84,7 +85,7 @@ def _run_case(directory: Path, name: str, rows: int, timeout_seconds: float) -> 
         result["outcome"] = ObservedOutcome.HARNESS_FAILED
     else:
         try:
-            payload = json.loads(stdout.strip().splitlines()[-1])
+            payload = strict_json_loads(stdout.strip().splitlines()[-1])
             if not isinstance(payload, dict):
                 raise TypeError("worker output must be a JSON object")
             result.update(payload)

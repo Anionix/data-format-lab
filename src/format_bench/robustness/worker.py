@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 from format_bench.model import ObservedOutcome, RobustnessExpectation
-from format_bench.json_contract import strict_json_dumps
+from format_bench.json_contract import strict_json_dumps, strict_json_loads
 from format_bench.registry import adapter_map
 from format_bench.robustness.paths import reject_symlink_tree
 from format_bench.robustness.targets import (
@@ -63,14 +62,14 @@ def run_request(request_path: Path) -> dict:
     root = Path.cwd().resolve()
     request: object = None
     try:
-        request = json.loads(request_path.read_text(encoding="utf-8"))
+        request = strict_json_loads(request_path.read_text(encoding="utf-8"))
         case_id = request["case_id"]
         target = request["target"]
         expectation = RobustnessExpectation(request["expectation"])
         manifest = _safe(root, request["manifest"])
         artifact = _safe(root, request["artifact"])
         adapter = adapter_map()[target]
-        effective_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+        effective_manifest = strict_json_loads(manifest.read_text(encoding="utf-8"))
         robustness_target = (
             target_map().get(target)
             if expectation is not RobustnessExpectation.MUST_ROUNDTRIP

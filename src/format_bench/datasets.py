@@ -194,11 +194,7 @@ def capture_github_stars(
     if destination.exists():
         raise FileExistsError(destination)
     records = _github_star_pages(user, os.environ.get("GITHUB_TOKEN"))
-    destination.mkdir(parents=True, exist_ok=False)
     endpoint = f"https://api.github.com/users/{quote(user)}/starred?per_page=100"
-    (destination / "raw.json").write_text(
-        strict_json_dumps(records, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
     metadata = {
         "schema_version": "1",
         "captured_at": timestamp,
@@ -207,7 +203,12 @@ def capture_github_stars(
         "records": len(records),
         "authenticated": bool(os.environ.get("GITHUB_TOKEN")),
     }
+    raw_json = strict_json_dumps(records, ensure_ascii=False, indent=2) + "\n"
+    capture_json = strict_json_dumps(metadata, indent=2) + "\n"
+    destination.mkdir(parents=True, exist_ok=False)
+    (destination / "raw.json").write_text(raw_json, encoding="utf-8")
     (destination / "capture.json").write_text(
-        strict_json_dumps(metadata, indent=2) + "\n", encoding="utf-8"
+        capture_json,
+        encoding="utf-8",
     )
     return destination

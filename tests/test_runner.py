@@ -175,7 +175,7 @@ def test_run_job_aggregates_fresh_process_output(tmp_path: Path) -> None:
     }
 
 
-@pytest.mark.parametrize("samples", [[], [1.0, 2.0], [float("nan")], [-1.0]])
+@pytest.mark.parametrize("samples", [[], [1.0, 2.0], [-1.0]])
 def test_run_job_rejects_malformed_timing_samples(
     tmp_path: Path, samples: list[float]
 ) -> None:
@@ -330,6 +330,17 @@ def test_run_job_joins_running_fresh_attempts_after_failure(
 
 def test_run_job_classifies_invalid_worker_output_as_failure(tmp_path: Path) -> None:
     job = Job("fixture/read", (sys.executable, "-c", "print('not json')"), 7)
+    result = run_job(job, MeasurementConfig(fresh_processes=1), tmp_path)
+    assert result["status"] == "FAILED"
+    assert "invalid JSON" in result["reason"]
+
+
+def test_run_job_rejects_nonfinite_worker_output(tmp_path: Path) -> None:
+    job = Job(
+        "fixture/read",
+        (sys.executable, "-c", "print('{\"first_open_ms\":NaN}')"),
+        7,
+    )
     result = run_job(job, MeasurementConfig(fresh_processes=1), tmp_path)
     assert result["status"] == "FAILED"
     assert "invalid JSON" in result["reason"]

@@ -75,3 +75,19 @@ def test_capture_rejects_unsafe_login_before_request(
     with pytest.raises(ValueError, match="valid login"):
         datasets.capture_github_stars("../octocat", tmp_path)
     assert requested is False
+
+
+def test_capture_nonfinite_failure_leaves_no_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        datasets,
+        "_github_star_pages",
+        lambda user, token: [{"score": float("nan")}],
+    )
+    timestamp = "2026-07-14T01:02:03+00:00"
+
+    with pytest.raises(ValueError, match="not JSON compliant"):
+        datasets.capture_github_stars("octocat", tmp_path, captured_at=timestamp)
+
+    assert not (tmp_path / "github-stars-octocat-2026-07-14T01-02-03-00-00").exists()

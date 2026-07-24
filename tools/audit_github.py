@@ -73,11 +73,17 @@ class Mutation:
 
 class GitHubRest:
     def _call(self, args: list[str], payload: dict[str, object] | None, attempts: int) -> object:
+        try:
+            input_payload = (
+                json.dumps(payload, allow_nan=False) if payload else None
+            )
+        except (RecursionError, TypeError, ValueError) as error:
+            raise AuditError("gh api payload is not strict JSON") from error
         for attempt in range(attempts):
             try:
                 result = subprocess.run(
                     ["gh", "api", *args],
-                    input=json.dumps(payload, allow_nan=False) if payload else None,
+                    input=input_payload,
                     capture_output=True, text=True, check=False,
                 )
             except OSError as error:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import platform
 from pathlib import Path
 from time import perf_counter_ns
@@ -10,7 +9,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 
 from .canonical import verify_table
-from .json_contract import strict_json_dumps
+from .json_contract import strict_json_dumps, strict_json_loads
 
 
 def _schema(table: pa.Table) -> list[dict[str, object]]:
@@ -59,7 +58,7 @@ def main() -> None:
     try:
         result = consume(
             args.artifact,
-            json.loads(args.manifest.read_text(encoding="utf-8")),
+            strict_json_loads(args.manifest.read_text(encoding="utf-8")),
         )
     except Exception as error:
         result = {

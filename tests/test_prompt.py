@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pyarrow as pa
+import pytest
 
 from format_bench.canonical import read_csv
 from format_bench.prompt import (
@@ -150,3 +151,29 @@ def test_nullable_taxonomy_is_distinct_and_deterministic(tmp_path: Path) -> None
         (3, "AI", "", "Agents"),
     ]
     assert NULL_MARKER in paths["taxonomy"].read_text()
+
+
+def test_prompt_nonfinite_failure_preserves_existing_artifacts(tmp_path: Path) -> None:
+    object_path = tmp_path / "prompt-object.jsonl"
+    array_path = tmp_path / "prompt-array.jsonl"
+    object_path.write_text("existing-object\n", encoding="utf-8")
+    array_path.write_text("existing-array\n", encoding="utf-8")
+    table = pa.table(
+        {
+            "group": ["AI", "AI"],
+            "category": ["Tools", "Tools"],
+            "micro_category": ["Agents", "Agents"],
+            "full_name": ["one/a", "two/b"],
+            "language": ["Python", "Rust"],
+            "repo_stars": [1.0, float("nan")],
+            "matched_terms": ["agent", "agent"],
+            "topics": ["ai", "ai"],
+            "description": ["one", "two"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="not JSON compliant"):
+        write_prompt_artifacts(table, tmp_path)
+
+    assert object_path.read_text(encoding="utf-8") == "existing-object\n"
+    assert array_path.read_text(encoding="utf-8") == "existing-array\n"
