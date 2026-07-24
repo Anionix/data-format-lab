@@ -5,10 +5,12 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+from .equivalence_admission import validate_equivalence_admission
 from .equivalence import EquivalenceBounds, EquivalenceVerdict
 from .equivalence_compare import (
     EQUIVALENCE_CONTRACT_VERSION,
     PAIR_SPECS,
+    STORAGE_ESTIMAND,
     multiplicity_control,
     pair_contract,
     pair_evidence,
@@ -72,6 +74,7 @@ def run_equivalence(
             missing_by_pair[pair] = f"formats are outside the pair lane contract: {', '.join(wrong_lane)}"
         else:
             measured_names.update(required)
+    validate_equivalence_admission(run_dir, run_manifest, measured_names)
     measurement = config or (
         MeasurementConfig(fresh_processes=2, warmups=1, iterations=2)
         if run_manifest.get("fixture")
@@ -107,6 +110,7 @@ def run_equivalence(
             pair: dict(PAIR_SPECS[pair]["primary_endpoint"])
             for pair in selected_pairs
         },
+        "storage_estimand": STORAGE_ESTIMAND.copy(),
         "multiplicity_control": multiplicity_control(),
     }
     measurement_record = measurement_metadata(

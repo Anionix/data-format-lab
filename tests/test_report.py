@@ -20,7 +20,7 @@ def test_equivalence_report_exposes_multiplicity_and_coverage_limit() -> None:
                         "planned_comparisons": 7,
                         "family_alpha": 0.05,
                         "comparison_alpha": 0.05 / 7,
-                        "primary_interval_method": "deterministic_exact",
+                        "primary_interval_method": "bootstrap_percentile",
                         "coverage_claim": "none",
                         "status": "PREREGISTERED_NO_COVERAGE",
                         "accepted_risk": "repeated encoding remains pending",

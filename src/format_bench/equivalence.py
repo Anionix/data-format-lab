@@ -93,8 +93,9 @@ def bootstrap_ratio_interval(
     seed: int = 20260703,
     samples: int = 2000,
     alpha: float = 0.05,
+    resampling_unit: str = "fresh_process",
 ) -> RatioInterval:
-    """Estimate an independent ratio interval; samples are not trial-paired."""
+    """Estimate an unpaired ratio interval from two observation groups."""
     left = tuple(float(value) for value in reference)
     right = tuple(float(value) for value in candidate)
     if samples < 2:
@@ -129,7 +130,7 @@ def bootstrap_ratio_interval(
             quantile_rule="lower=floor(qB);upper=ceil((1-q)B)-1",
             lower_index=lower_index,
             upper_index=upper_index,
-            resampling_unit="fresh_process",
+            resampling_unit=resampling_unit,
             reference_observations=len(left),
             candidate_observations=len(right),
             rng="python.random.Random.randrange",
