@@ -136,8 +136,26 @@ def _hardlink_tree(source: Path, destination: Path) -> None:
             raise ValueError(f"unsupported artifact entry: {entry}")
 
 
+def _mkdir_private_tree(destination: Path) -> None:
+    missing: list[Path] = []
+    current = destination
+    while not current.exists():
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            raise FileNotFoundError("shard output has no existing ancestor")
+        current = parent
+    if not current.is_dir():
+        raise NotADirectoryError(f"shard output ancestor is not a directory: {current}")
+    # LLM contract: ANCESTOR_DISCOVERED -> PRIVATE_CREATED | FAILED.
+    # Create each missing level explicitly so pathlib cannot apply umask-only
+    # parent creation before the private output leaf exists.
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+
+
 def _copy_run_files(base_run: Path, output_run: Path) -> None:
-    output_run.mkdir(mode=0o700, parents=True)
+    _mkdir_private_tree(output_run)
     for name in ("artifacts", "input"):
         _hardlink_tree(base_run / name, output_run / name)
     shutil.copy2(base_run / "manifest.json", output_run / "manifest.json")

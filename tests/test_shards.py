@@ -136,7 +136,8 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
         _write(shard / "manifest.json", shard_manifest)
         _write(shard / "results.json", _shard_results(pair, name))
 
-    output = tmp_path / "merged"
+    output_parent = tmp_path / "missing" / "nested"
+    output = output_parent / "merged"
     previous_mask = os.umask(mask)
     try:
         merge_equivalence_shards(base, shard_root, output)
@@ -145,7 +146,13 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
 
     merged = json.loads((output / "results.json").read_text(encoding="utf-8"))
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-    for directory in (output, output / "input", output / "artifacts"):
+    for directory in (
+        tmp_path / "missing",
+        output_parent,
+        output,
+        output / "input",
+        output / "artifacts",
+    ):
         assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     assert merged["status"] == "MEASURED"
     assert set(merged["results"]) == {"arrow_ipc/read_all", "feather_v2/read_all"}
