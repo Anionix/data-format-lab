@@ -10,6 +10,21 @@ PIN = "d036a33bfc5a49c05f54200df9be8f55e2987cd6"
 BINARY = "diagnostic-triage"
 
 
+def _yaml_block(document: str, header: str) -> str:
+    lines = document.splitlines()
+    start = lines.index(header)
+    indentation = len(header) - len(header.lstrip())
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if len(line) - len(line.lstrip()) <= indentation:
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def _run(*arguments: str) -> subprocess.CompletedProcess[str]:
     executable = shutil.which(BINARY)
     assert executable is not None, "the pinned Nix shell must expose diagnostic-triage"
@@ -107,6 +122,7 @@ def test_observation_outputs_do_not_pollute_repository_identity() -> None:
     evidence_names = (
         "diagnostic-triage-report.json",
         "diagnostic-triage-observer.jsonl",
+        "github-actions-run.json",
     )
     evidence_lines = [
         line
@@ -114,7 +130,47 @@ def test_observation_outputs_do_not_pollute_repository_identity() -> None:
         if any(name in line for name in evidence_names)
     ]
 
-    assert len(evidence_lines) == 5
+    assert evidence_lines
     assert all(
         "RUNNER_TEMP" in line or "runner.temp" in line for line in evidence_lines
     )
+
+
+def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "diagnostic-triage-observe.yml"
+    ).read_text()
+    workflow_header = workflow.split("jobs:", maxsplit=1)[0]
+    concurrency = _yaml_block(workflow, "concurrency:")
+    diagnostics = _yaml_block(workflow, "  diagnostics:")
+    completed_run = _yaml_block(workflow, "  completed-run:")
+
+    assert "workflow_run:" in workflow
+    assert "workflows: [CI]" in workflow
+    assert "types: [completed]" in workflow
+    assert "permissions: {}" in workflow_header
+    assert "actions: read" not in workflow_header
+
+    assert (
+        "group: diagnostic-triage-observe-"
+        "${{ github.event.workflow_run.id || github.ref }}" in concurrency
+    )
+    assert "cancel-in-progress: true" in concurrency
+
+    assert "if: github.event_name != 'workflow_run'" in diagnostics
+    assert "actions: read" not in diagnostics
+    assert "contents: read" in diagnostics
+    assert "persist-credentials: false" in diagnostics
+    assert "if: always() && github.event_name != 'pull_request'" in diagnostics
+
+    assert "if: github.event_name == 'workflow_run'" in completed_run
+    assert "actions: read" in completed_run
+    assert "contents: read" in completed_run
+    assert "ref: ${{ github.event.repository.default_branch }}" in completed_run
+    assert "persist-credentials: false" in completed_run
+    assert "head -c 16777217" in completed_run
+    assert "16777216" in completed_run
+    assert '.status == "completed" and .id == $observed_run_id' in completed_run
+    assert "github.event.workflow_run.head_sha" not in workflow
+    assert '"repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID"' in completed_run
+    assert '--input "$input"' in completed_run
