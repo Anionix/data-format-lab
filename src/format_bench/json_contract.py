@@ -46,28 +46,50 @@ def _destination_mode(directory_fd: int, name: str) -> int | None:
 
 def _create_temporary(
     directory_fd: int,
-    directory: Path,
     destination_name: str,
-) -> tuple[int, Path]:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-    for _ in range(100):
-        name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
-        try:
-            descriptor = os.open(
-                name,
-                flags,
-                0o666,
-                dir_fd=directory_fd,
-            )
-        except FileExistsError:
-            continue
-        return descriptor, directory / name
-    raise FileExistsError("could not create an exclusive temporary JSON file")
-
-
-def _temporary_name(directory_fd: int, descriptor: int, temporary: Path) -> str:
+) -> tuple[int, int, str]:
+    cleanup_directory_fd = os.dup(directory_fd)
     try:
-        entry = os.stat(temporary.name, dir_fd=directory_fd, follow_symlinks=False)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        for _ in range(100):
+            name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
+            try:
+                descriptor = os.open(
+                    name,
+                    flags,
+                    0o666,
+                    dir_fd=cleanup_directory_fd,
+                )
+            except FileExistsError:
+                continue
+            return descriptor, cleanup_directory_fd, name
+        raise FileExistsError("could not create an exclusive temporary JSON file")
+    except BaseException:
+        os.close(cleanup_directory_fd)
+        raise
+
+
+def _temporary_name(
+    directory_fd: int,
+    cleanup_directory_fd: int,
+    descriptor: int,
+    temporary_name: str,
+) -> str:
+    destination_directory = os.fstat(directory_fd)
+    temporary_directory = os.fstat(cleanup_directory_fd)
+    if (
+        destination_directory.st_dev != temporary_directory.st_dev
+        or destination_directory.st_ino != temporary_directory.st_ino
+    ):
+        raise ValueError(
+            "temporary JSON file must use the destination's same directory"
+        )
+    try:
+        entry = os.stat(
+            temporary_name,
+            dir_fd=cleanup_directory_fd,
+            follow_symlinks=False,
+        )
     except FileNotFoundError as error:
         raise ValueError(
             "temporary JSON file must use the destination's same directory"
@@ -78,10 +100,8 @@ def _temporary_name(directory_fd: int, descriptor: int, temporary: Path) -> str:
         or entry.st_dev != opened.st_dev
         or entry.st_ino != opened.st_ino
     ):
-        raise ValueError(
-            "temporary JSON file must be a regular same-directory entry"
-        )
-    return temporary.name
+        raise ValueError("temporary JSON file must be a regular same-directory entry")
+    return temporary_name
 
 
 def _replace_same_directory(
@@ -162,8 +182,8 @@ def atomic_write_json(path: Path, value: object) -> None:
         raise ValueError("JSON destination must name a regular file")
 
     directory_fd = -1
+    cleanup_directory_fd = -1
     descriptor = -1
-    temporary: Path | None = None
     temporary_name: str | None = None
     try:
         directory_fd = os.open(
@@ -171,12 +191,16 @@ def atomic_write_json(path: Path, value: object) -> None:
             os.O_RDONLY | os.O_DIRECTORY,
         )
         mode = _destination_mode(directory_fd, destination_name)
-        descriptor, temporary = _create_temporary(
+        descriptor, cleanup_directory_fd, temporary_name = _create_temporary(
             directory_fd,
-            destination_parent,
             destination_name,
         )
-        temporary_name = _temporary_name(directory_fd, descriptor, temporary)
+        temporary_name = _temporary_name(
+            directory_fd,
+            cleanup_directory_fd,
+            descriptor,
+            temporary_name,
+        )
         if mode is not None:
             os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as stream:
@@ -188,15 +212,24 @@ def atomic_write_json(path: Path, value: object) -> None:
         # os.replace is atomic on success; file fsync does not claim directory or
         # power-loss durability. See https://docs.python.org/3/library/os.html#os.replace
         _replace_same_directory(directory_fd, temporary_name, destination_name)
+        # LLM contract: TEMPORARY_OWNED -> PUBLISHED transfers the basename;
+        # this call must never clean a later entry that reuses the vacated name.
+        temporary_name = None
     finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        if temporary_name is not None and directory_fd >= 0:
+        try:
+            if descriptor >= 0:
+                os.close(descriptor)
+        finally:
             try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        elif temporary is not None:
-            temporary.unlink(missing_ok=True)
-        if directory_fd >= 0:
-            os.close(directory_fd)
+                if temporary_name is not None and cleanup_directory_fd >= 0:
+                    try:
+                        os.unlink(temporary_name, dir_fd=cleanup_directory_fd)
+                    except FileNotFoundError:
+                        pass
+            finally:
+                try:
+                    if cleanup_directory_fd >= 0:
+                        os.close(cleanup_directory_fd)
+                finally:
+                    if directory_fd >= 0:
+                        os.close(directory_fd)
