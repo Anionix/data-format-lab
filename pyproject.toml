@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "format-bench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Evidence-first benchmarks for data formats and format-native claims"
 requires-python = "==3.12.*"
 dependencies = [
@@ -33,6 +33,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/format_bench"]
+
+[tool.hatch.version]
+path = "src/format_bench/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
