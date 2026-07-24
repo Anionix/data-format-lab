@@ -13,6 +13,10 @@ from format_bench.robustness.targets import (
     read_target,
     target_map,
 )
+from format_bench.worker_limits import (
+    EffectiveWorkerResourceLimits,
+    apply_worker_resource_limits,
+)
 
 
 # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
@@ -131,11 +135,17 @@ def run_request(request_path: Path) -> dict:
     return {"schema_version": "1", "case_id": case_id, "observed": observed, "details": details}
 
 
-def main() -> None:
+def main(effective_limits: EffectiveWorkerResourceLimits | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", type=Path, required=True)
     args = parser.parse_args()
-    print(strict_json_dumps(run_request(args.request), separators=(",", ":")))
+    effective_limits = effective_limits or apply_worker_resource_limits()
+    response = run_request(args.request)
+    response["worker_resource_limits_effective"] = effective_limits.evidence()
+    response["worker_resource_limits_unsupported"] = list(
+        effective_limits.unsupported_resources
+    )
+    print(strict_json_dumps(response, separators=(",", ":")))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -130,10 +131,55 @@ def test_public_cli_runs_and_reports_bounded_fixture(
     assert evidence["config"]["mutations_per_target"] == 1
     assert evidence["config"]["case_timeout_seconds"] == 5
     assert evidence["config"]["artifact_budget_mib"] == 64
+    requested_limits = {
+        "address_space_bytes": 8 * 1024**3,
+        "file_size_bytes": 1024**3,
+        "open_files": 256,
+        "real_user_processes": 512,
+    }
+    assert evidence["config"]["worker_resource_limits_requested"] == requested_limits
+    effective_limits = evidence["config"]["worker_resource_limits_effective"]
+    unsupported_limits = evidence["config"][
+        "worker_resource_limits_unsupported"
+    ]
+    assert set(unsupported_limits) <= {
+        "address_space_bytes",
+        "real_user_processes",
+    }
+    if sys.platform == "darwin":
+        assert "address_space_bytes" in unsupported_limits
+    for name, requested in requested_limits.items():
+        effective = effective_limits[name]
+        if name in unsupported_limits:
+            assert effective is None
+        else:
+            assert isinstance(effective, int)
+            assert effective <= requested
+    assert evidence["config"]["worker_resource_limits_application"] == "APPLIED"
+    assert all(
+        item["worker_resource_limits_requested"] == requested_limits
+        and item["worker_resource_limits_effective"] == effective_limits
+        and item["worker_resource_limits_unsupported"] == unsupported_limits
+        and item["worker_resource_limits_application"] == "APPLIED"
+        for item in evidence["cases"]
+    )
     valid = next(item for item in evidence["cases"] if "input_arrow" in item)
+    worker_response = json.loads((run_dir / valid["stdout"]).read_text())
+    assert worker_response["worker_resource_limits_effective"] == effective_limits
+    assert (
+        worker_response["worker_resource_limits_unsupported"]
+        == unsupported_limits
+    )
     assert not Path(valid["input_arrow"]["path"]).is_absolute()
     cli.main(["report", "--run-dir", str(run_dir)])
     first = (run_dir / "report.md").read_text()
+    assert "| Requested worker address-space cap bytes | 8589934592 |" in first
+    assert (
+        f"| Unsupported worker resource caps | "
+        f"{', '.join(unsupported_limits) or 'None'} |"
+    ) in first
+    assert "| Effective real-user process ceiling |" in first
+    assert "| Worker resource cap application | APPLIED |" in first
     cli.main(["report", "--run-dir", str(run_dir)])
     assert (run_dir / "report.md").read_text() == first
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import format_bench.robustness.runner as robustness_runner
 from format_bench.model import ObservedOutcome, RobustnessVerdict
 from format_bench.robustness.runner import (
     CaseResult,
@@ -166,6 +167,62 @@ def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: 
     assert original_size_bytes > 4096
     valid = _run(tmp_path / "valid", "import json; print(json.dumps({'observed':'REJECTED'}))", "MUST_ROUNDTRIP")
     assert valid["verdict"] is RobustnessVerdict.FAIL
+
+
+def test_default_worker_does_not_claim_unconfirmed_resource_limits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _request(tmp_path)
+    process = {
+        "exit_code": 1,
+        "signal": None,
+        "timed_out": False,
+        "duration_ms": 1.0,
+        "stdout_bytes": 0,
+        "stderr_bytes": 16,
+        "stdout_truncated": False,
+        "stderr_truncated": False,
+        "output_budget_bytes": 1024,
+        "output_exhausted": False,
+        "cleanup_incomplete": False,
+    }
+    monkeypatch.setattr(
+        robustness_runner,
+        "_process",
+        lambda *_args, **_kwargs: (process, "", "setrlimit failed"),
+    )
+
+    result = run_case(tmp_path, "request.json", "evidence/case-1")
+
+    assert result["observed"] is ObservedOutcome.HARNESS_FAILED
+    assert result["worker_resource_limits_application"] == "UNCONFIRMED"
+    assert set(result["worker_resource_limits_effective"].values()) == {None}
+
+    process["exit_code"] = 0
+    contradictory = json.dumps(
+        {
+            "observed": "ACCEPTED",
+            "details": {},
+            "worker_resource_limits_effective": {
+                "address_space_bytes": None,
+                "file_size_bytes": 0,
+                "open_files": 999_999,
+                "real_user_processes": 0,
+            },
+            "worker_resource_limits_unsupported": [],
+        }
+    )
+    monkeypatch.setattr(
+        robustness_runner,
+        "_process",
+        lambda *_args, **_kwargs: (process, contradictory, ""),
+    )
+
+    mismatch = run_case(tmp_path, "request.json", "evidence/case-2")
+
+    assert mismatch["observed"] is ObservedOutcome.HARNESS_FAILED
+    assert mismatch["worker_resource_limits_application"] == "UNCONFIRMED"
+    assert set(mismatch["worker_resource_limits_effective"].values()) == {None}
 
 
 def test_runner_bounds_deep_worker_details_without_escaping(tmp_path: Path) -> None:

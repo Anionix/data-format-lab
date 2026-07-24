@@ -474,6 +474,34 @@ def _robustness(results: dict) -> list[str]:
         ["Case timeout seconds", config["case_timeout_seconds"]],
         ["Artifact budget MiB", config["artifact_budget_mib"]],
     ]
+    for label, key in (
+        ("Requested", "worker_resource_limits_requested"),
+        ("Effective", "worker_resource_limits_effective"),
+    ):
+        worker_limits = config.get(key)
+        if isinstance(worker_limits, dict):
+            config_rows.extend(
+                [
+                    [f"{label} worker address-space cap bytes", worker_limits["address_space_bytes"]],
+                    [f"{label} worker file-size cap bytes", worker_limits["file_size_bytes"]],
+                    [f"{label} worker open-file cap", worker_limits["open_files"]],
+                    [
+                        f"{label} real-user process ceiling",
+                        worker_limits["real_user_processes"],
+                    ],
+                ]
+            )
+    unsupported_limits = config.get("worker_resource_limits_unsupported")
+    if isinstance(unsupported_limits, list):
+        config_rows.append(
+            ["Unsupported worker resource caps", ", ".join(unsupported_limits) or "None"]
+        )
+    config_rows.append(
+        [
+            "Worker resource cap application",
+            config.get("worker_resource_limits_application"),
+        ]
+    )
 
     summary_rows = [
         [verdict, evidence["summary"].get(verdict.value, 0)]
