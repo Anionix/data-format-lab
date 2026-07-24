@@ -29,6 +29,11 @@ from format_bench.robustness.targets import (
     encode_malformed,
     encode_valid,
 )
+from format_bench.worker_limits import (
+    DEFAULT_WORKER_RESOURCE_LIMITS,
+    EffectiveWorkerResourceLimits,
+    effective_worker_resource_limits,
+)
 
 _PER_CASE_OUTPUT_BUDGET_BYTES = 1024 * 1024
 
@@ -97,6 +102,7 @@ def _case_result_reserve(
     mutation: Mapping[str, object] | None,
     timeout: float,
     output_budget_bytes: int,
+    worker_resource_limits_effective: EffectiveWorkerResourceLimits,
 ) -> int:
     placeholder = {
         "case_id": case_id,
@@ -127,6 +133,12 @@ def _case_result_reserve(
         "input_canonical_hash": "0" * 64,
         "input_arrow": _record(input_record),
         "artifact_records": [_record(item) for item in artifact_records],
+        "worker_resource_limits_requested": DEFAULT_WORKER_RESOURCE_LIMITS.evidence(),
+        "worker_resource_limits_effective": worker_resource_limits_effective.evidence(),
+        "worker_resource_limits_unsupported": list(
+            worker_resource_limits_effective.unsupported_resources
+        ),
+        "worker_resource_limits_application": "APPLIED",
         **({"mutation": mutation} if mutation is not None else {}),
     }
     return len(_json(placeholder))
@@ -146,7 +158,11 @@ def _execute(
     mutation_index: int | None = None,
     mutation_count: int = 0,
     seed: int = 0,
+    worker_resource_limits_effective: EffectiveWorkerResourceLimits | None = None,
 ) -> dict[str, object]:
+    worker_resource_limits_effective = (
+        worker_resource_limits_effective or effective_worker_resource_limits()
+    )
     with (
         tempfile.TemporaryDirectory() as temporary,
         tempfile.TemporaryDirectory(dir=run_dir) as process_directory,
@@ -218,6 +234,7 @@ def _execute(
             mutation,
             timeout,
             _PER_CASE_OUTPUT_BUDGET_BYTES,
+            worker_resource_limits_effective,
         )
         if remaining < result_reserve:
             raise ArtifactBudgetExceeded(
@@ -305,6 +322,7 @@ def run_bounded(
         ]
     mutation_count = min(mutations_per_target, 1) if run["fixture"] else mutations_per_target
     store = EvidenceStore(run_dir / "robustness", artifact_budget_mib * 1024 * 1024)
+    worker_resource_limits_effective = effective_worker_resource_limits()
     observations: list[dict] = []
     exhausted = False
     for target in targets or core_targets():
@@ -347,6 +365,7 @@ def run_bounded(
                         mutation_index=mutation_index,
                         mutation_count=mutation_count,
                         seed=seed,
+                        worker_resource_limits_effective=worker_resource_limits_effective,
                     )
                 )
             except ArtifactBudgetExceeded as error:
@@ -370,6 +389,30 @@ def run_bounded(
     summary = {verdict.value: 0 for verdict in RobustnessVerdict}
     for item in observations:
         summary[item["verdict"].value] += 1
+    launched = [
+        item
+        for item in observations
+        if "worker_resource_limits_requested" in item
+    ]
+    applied = [
+        item
+        for item in launched
+        if item.get("worker_resource_limits_application") == "APPLIED"
+    ]
+    if launched and len(applied) == len(launched):
+        resource_limit_application = "APPLIED"
+    elif applied:
+        resource_limit_application = "PARTIAL"
+    else:
+        resource_limit_application = "UNCONFIRMED"
+    effective_limit_evidence = (
+        applied[0]["worker_resource_limits_effective"]
+        if applied
+        else {
+            key: None
+            for key in DEFAULT_WORKER_RESOURCE_LIMITS.evidence()
+        }
+    )
     evidence = {
         "robustness_v1": {
             "contract_version": "1",
@@ -385,6 +428,16 @@ def run_bounded(
                 "effective_mutations_per_target": mutation_count,
                 "case_timeout_seconds": timeout_seconds,
                 "artifact_budget_mib": artifact_budget_mib,
+                "worker_resource_limits_requested": (
+                    DEFAULT_WORKER_RESOURCE_LIMITS.evidence()
+                ),
+                "worker_resource_limits_effective": (
+                    effective_limit_evidence
+                ),
+                "worker_resource_limits_unsupported": list(
+                    worker_resource_limits_effective.unsupported_resources
+                ),
+                "worker_resource_limits_application": resource_limit_application,
             },
             "cases": observations,
             "summary": summary,

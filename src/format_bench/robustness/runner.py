@@ -19,6 +19,10 @@ from format_bench.model import (
 )
 from format_bench.json_contract import strict_json_dumps, strict_json_loads
 from format_bench.robustness.paths import reject_symlink_tree
+from format_bench.worker_limits import (
+    DEFAULT_WORKER_RESOURCE_LIMITS,
+    effective_worker_resource_limits,
+)
 
 MAX_WORKER_DETAILS_BYTES = 4096
 DEFAULT_OUTPUT_RETENTION_BYTES = 1024 * 1024
@@ -52,6 +56,8 @@ class RequestPayload(TypedDict):
 class WorkerResponse(TypedDict):
     observed: str
     details: dict[str, object]
+    worker_resource_limits_effective: NotRequired[dict[str, int | None]]
+    worker_resource_limits_unsupported: NotRequired[list[str]]
 
 
 class CaseResult(TypedDict):
@@ -71,6 +77,10 @@ class CaseResult(TypedDict):
     input_arrow: NotRequired[object]
     artifact_records: NotRequired[object]
     mutation: NotRequired[object]
+    worker_resource_limits_requested: NotRequired[dict[str, int]]
+    worker_resource_limits_effective: NotRequired[dict[str, int | None]]
+    worker_resource_limits_unsupported: NotRequired[list[str]]
+    worker_resource_limits_application: NotRequired[str]
 
 
 def _json_object(value: object, label: str) -> dict[str, object]:
@@ -107,10 +117,49 @@ def _worker_response(stdout: str) -> WorkerResponse:
     value = strict_json_loads(stdout.strip())
     response = _json_object(value, "worker response")
     details: object = response.get("details", {})
-    return {
+    parsed: WorkerResponse = {
         "observed": _string_field(response, "observed"),
         "details": _bounded_details(_json_object(details, "worker response details")),
     }
+    effective = response.get("worker_resource_limits_effective")
+    unsupported = response.get("worker_resource_limits_unsupported")
+    if effective is None and unsupported is None:
+        return parsed
+    if not isinstance(unsupported, list):
+        raise TypeError("worker unsupported resource limits must be strings")
+    unsupported_strings: list[str] = []
+    for item in cast(list[object], unsupported):
+        if not isinstance(item, str):
+            raise TypeError("worker unsupported resource limits must be strings")
+        unsupported_strings.append(item)
+    effective_object = _json_object(
+        effective, "worker effective resource limits"
+    )
+    fields = (
+        "address_space_bytes",
+        "file_size_bytes",
+        "open_files",
+        "real_user_processes",
+    )
+    if set(effective_object) != set(fields):
+        raise TypeError("worker effective resource limit fields do not match")
+    if not all(
+        value is None
+        or (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value >= 0
+        )
+        for value in effective_object.values()
+    ):
+        raise TypeError("worker effective resource limits must be non-negative integers")
+    if not set(unsupported_strings).issubset(fields):
+        raise TypeError("worker unsupported resource limit is unknown")
+    parsed["worker_resource_limits_effective"] = cast(
+        dict[str, int | None], effective_object
+    )
+    parsed["worker_resource_limits_unsupported"] = unsupported_strings
+    return parsed
 
 
 def _bounded_details(details: dict[str, object]) -> dict[str, object]:
@@ -318,30 +367,30 @@ def _process(
 
 def _outcome(
     process: ProcessEvidence, stdout: str
-) -> tuple[ObservedOutcome, dict[str, object]]:
+) -> tuple[ObservedOutcome, dict[str, object], WorkerResponse | None]:
     if process["timed_out"]:
         details: dict[str, object] = (
             {"cleanup_incomplete": True}
             if process["cleanup_incomplete"]
             else {}
         )
-        return ObservedOutcome.TIMED_OUT, details
+        return ObservedOutcome.TIMED_OUT, details, None
     signal_number = process["signal"]
     if signal_number is not None:
         try:
             name = signal.Signals(signal_number).name
         except ValueError:
             name = None
-        return ObservedOutcome.CRASHED, {"signal_name": name}
+        return ObservedOutcome.CRASHED, {"signal_name": name}, None
     if process["output_exhausted"]:
-        return ObservedOutcome.BUDGET_EXHAUSTED, {}
+        return ObservedOutcome.BUDGET_EXHAUSTED, {}, None
     if process["exit_code"] != 0:
-        return ObservedOutcome.HARNESS_FAILED, {}
+        return ObservedOutcome.HARNESS_FAILED, {}, None
     try:
         response = _worker_response(stdout)
-        return ObservedOutcome(response["observed"]), response["details"]
+        return ObservedOutcome(response["observed"]), response["details"], response
     except (json.JSONDecodeError, KeyError, RecursionError, ValueError, TypeError):
-        return ObservedOutcome.HARNESS_FAILED, {}
+        return ObservedOutcome.HARNESS_FAILED, {}, None
 
 
 def run_case(
@@ -359,17 +408,55 @@ def run_case(
     _relative(root, payload["manifest"])
     _relative(root, payload["artifact"])
     expectation = RobustnessExpectation(payload["expectation"])
-    command = command or (
-        sys.executable, "-m", "format_bench.robustness.worker", "--request", Path(request).as_posix()
-    )
+    default_worker = command is None
+    planned_resource_limits = None
+    if default_worker:
+        planned_resource_limits = effective_worker_resource_limits()
+        command = (
+            sys.executable,
+            "-m",
+            "format_bench.robustness_worker_bootstrap",
+            "--request",
+            Path(request).as_posix(),
+        )
+    assert command is not None
     process, stdout, stderr = _process(
         command, root, timeout_seconds, output_budget_bytes
     )
     stdout_path = _save(root, Path(output_dir) / "stdout.txt", stdout)
     stderr_path = _save(root, Path(output_dir) / "stderr.txt", stderr)
-    observed, details = _outcome(process, stdout)
+    outcome = _outcome(process, stdout)
+    observed = outcome[0]
+    details: dict[str, object] = outcome[1]
+    worker_response = outcome[2]
+    resource_limits_confirmed = False
+    confirmed_effective_limits: dict[str, int | None] | None = None
+    confirmed_unsupported_limits: list[str] | None = None
+    if default_worker and worker_response is not None:
+        assert planned_resource_limits is not None
+        response_effective_limits = worker_response.get(
+            "worker_resource_limits_effective"
+        )
+        response_unsupported_limits = worker_response.get(
+            "worker_resource_limits_unsupported"
+        )
+        resource_limits_confirmed = (
+            response_effective_limits == planned_resource_limits.evidence()
+            and response_unsupported_limits
+            == list(planned_resource_limits.unsupported_resources)
+        )
+        if resource_limits_confirmed:
+            assert response_effective_limits is not None
+            assert response_unsupported_limits is not None
+            confirmed_effective_limits = response_effective_limits
+            confirmed_unsupported_limits = response_unsupported_limits
+        else:
+            observed = ObservedOutcome.HARNESS_FAILED
+            details = {
+                "error_type": "WorkerResourceLimitEvidenceMismatch",
+            }
     verdict = robustness_verdict(expectation, observed)
-    return {
+    result: CaseResult = {
         "case_id": payload["case_id"],
         "target": payload["target"],
         "expectation": expectation,
@@ -380,3 +467,26 @@ def run_case(
         "stdout": stdout_path,
         "stderr": stderr_path,
     }
+    if default_worker:
+        assert planned_resource_limits is not None
+        result["worker_resource_limits_requested"] = (
+            DEFAULT_WORKER_RESOURCE_LIMITS.evidence()
+        )
+        if resource_limits_confirmed:
+            assert confirmed_effective_limits is not None
+            assert confirmed_unsupported_limits is not None
+            result["worker_resource_limits_effective"] = confirmed_effective_limits
+            result["worker_resource_limits_unsupported"] = (
+                confirmed_unsupported_limits
+            )
+            result["worker_resource_limits_application"] = "APPLIED"
+        else:
+            result["worker_resource_limits_effective"] = {
+                key: None
+                for key in DEFAULT_WORKER_RESOURCE_LIMITS.evidence()
+            }
+            result["worker_resource_limits_unsupported"] = list(
+                planned_resource_limits.unsupported_resources
+            )
+            result["worker_resource_limits_application"] = "UNCONFIRMED"
+    return result
