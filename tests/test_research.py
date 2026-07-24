@@ -119,3 +119,31 @@ def test_research_records_reject_duplicate_source_commit_keys(
 
     with pytest.raises(json.JSONDecodeError, match="duplicate JSON object key: core"):
         load_research_records(tmp_path)
+
+
+def test_research_records_reject_non_hex_source_commits(tmp_path: Path) -> None:
+    record = {
+        "name": "case",
+        "comparability": "PARTIAL",
+        "state": "FAILED",
+        "source_commits": {"core": "z" * 40},
+        "claim_summary": "bounded failure",
+    }
+    _write_research_record(tmp_path, record)
+
+    with pytest.raises(ValueError, match="research commit is not a full SHA"):
+        load_research_records(tmp_path)
+
+
+def test_research_records_accept_uppercase_source_commits(tmp_path: Path) -> None:
+    commit = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+    record = {
+        "name": "case",
+        "comparability": "PARTIAL",
+        "state": "FAILED",
+        "source_commits": {"core": commit},
+        "claim_summary": "bounded failure",
+    }
+    _write_research_record(tmp_path, record)
+
+    assert load_research_records(tmp_path)["case"]["source_commits"] == {"core": commit}

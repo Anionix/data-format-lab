@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import cast
+from typing import TypeGuard, cast
 
 from .json_contract import strict_json_dumps, strict_json_loads
 from .model import Comparability, ExecutionState
 
 
 ResearchRecord = dict[str, object]
+_FULL_GIT_SHA1 = re.compile(r"[0-9A-Fa-f]{40}\Z")
+
+
+def _is_full_git_sha1(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and _FULL_GIT_SHA1.fullmatch(value) is not None
 
 
 def _json_object(value: object, context: str) -> dict[str, object]:
@@ -30,7 +36,7 @@ def _source_commits(record: ResearchRecord, name: str) -> dict[str, str]:
     raw = _json_object(record.get("source_commits"), "research source_commits")
     commits: dict[str, str] = {}
     for source, commit in raw.items():
-        if not source or not isinstance(commit, str) or len(commit) != 40:
+        if not source or not _is_full_git_sha1(commit):
             raise ValueError(f"research commit is not a full SHA: {name}")
         commits[source] = commit
     return commits
