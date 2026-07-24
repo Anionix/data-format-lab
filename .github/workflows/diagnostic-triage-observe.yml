@@ -122,14 +122,23 @@ jobs:
         run: |
           set -euo pipefail
           input="$RUNNER_TEMP/github-actions-run.json"
+          set +o pipefail
           gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID" > "$input"
+            "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID" \
+            | head -c 16777217 > "$input"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -o pipefail
+          api_status="${pipeline_status[0]}"
           byte_count="$(stat -c %s "$input")"
           if test "$byte_count" -gt 16777216; then
             echo "Completed-run input exceeds the 16 MiB observer limit" >&2
             exit 2
+          fi
+          if test "$api_status" -ne 0; then
+            echo "GitHub Actions REST request failed: $api_status" >&2
+            exit "$api_status"
           fi
           jq -e \
             --argjson observed_run_id "$OBSERVED_RUN_ID" \

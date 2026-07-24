@@ -141,6 +141,7 @@ def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None
         ROOT / ".github" / "workflows" / "diagnostic-triage-observe.yml"
     ).read_text()
     workflow_header = workflow.split("jobs:", maxsplit=1)[0]
+    concurrency = _yaml_block(workflow, "concurrency:")
     diagnostics = _yaml_block(workflow, "  diagnostics:")
     completed_run = _yaml_block(workflow, "  completed-run:")
 
@@ -149,6 +150,12 @@ def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None
     assert "types: [completed]" in workflow
     assert "permissions: {}" in workflow_header
     assert "actions: read" not in workflow_header
+
+    assert (
+        "group: diagnostic-triage-observe-"
+        "${{ github.event.workflow_run.id || github.ref }}" in concurrency
+    )
+    assert "cancel-in-progress: true" in concurrency
 
     assert "if: github.event_name != 'workflow_run'" in diagnostics
     assert "actions: read" not in diagnostics
@@ -161,9 +168,9 @@ def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None
     assert "contents: read" in completed_run
     assert "ref: ${{ github.event.repository.default_branch }}" in completed_run
     assert "persist-credentials: false" in completed_run
+    assert "head -c 16777217" in completed_run
     assert "16777216" in completed_run
     assert '.status == "completed" and .id == $observed_run_id' in completed_run
     assert "github.event.workflow_run.head_sha" not in workflow
     assert '"repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID"' in completed_run
     assert '--input "$input"' in completed_run
-    assert "github.event.workflow_run.id || github.ref" in workflow
