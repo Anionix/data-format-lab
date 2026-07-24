@@ -349,9 +349,11 @@ def test_atomic_write_json_retries_exclusive_name_collision(
     assert not (tmp_path / ".manifest.json.fresh.tmp").exists()
 
 
+@pytest.mark.parametrize("raise_after_publish", (False, True))
 def test_atomic_write_json_drops_temporary_name_after_replace(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    raise_after_publish: bool,
 ) -> None:
     token = "published"
     temporary_name = f".manifest.json.{token}.tmp"
@@ -387,13 +389,20 @@ def test_atomic_write_json_drops_temporary_name_after_replace(
             os.write(reused, b"REUSED")
         finally:
             os.close(reused)
+        if raise_after_publish:
+            raise RuntimeError("injected post-publication failure")
 
     monkeypatch.setattr(json_contract.secrets, "token_hex", lambda _size: token)
     monkeypatch.setattr(json_contract, "_create_temporary", capture_create)
     monkeypatch.setattr(json_contract, "_replace_same_directory", replace_and_reuse)
 
-    atomic_write_json(destination, {"state": "REPORTED"})
+    if raise_after_publish:
+        with pytest.raises(RuntimeError, match="post-publication failure"):
+            atomic_write_json(destination, {"state": "REPORTED"})
+    else:
+        atomic_write_json(destination, {"state": "REPORTED"})
 
+    assert destination.read_bytes() == b'{\n  "state": "REPORTED"\n}\n'
     assert (tmp_path / temporary_name).read_bytes() == b"REUSED"
     for descriptor in captured_directory_fds + captured_cleanup_fds:
         with pytest.raises(OSError):
