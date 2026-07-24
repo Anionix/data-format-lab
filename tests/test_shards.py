@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from format_bench.shards import merge_equivalence_shards
+from format_bench.shards import _mkdir_private_tree, merge_equivalence_shards
 
 
 def _write(path: Path, value: object) -> None:
@@ -109,6 +109,16 @@ def _shard_results(pair: str, name: str) -> dict:
             },
         },
     }
+
+
+def test_private_output_tree_rejects_race_created_leaf(tmp_path: Path) -> None:
+    output = tmp_path / "missing" / "nested" / "merged"
+    output.mkdir(parents=True)
+
+    with pytest.raises(FileExistsError):
+        _mkdir_private_tree(output)
+
+    assert list(output.iterdir()) == []
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")

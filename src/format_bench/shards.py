@@ -138,7 +138,7 @@ def _hardlink_tree(source: Path, destination: Path) -> None:
 
 def _mkdir_private_tree(destination: Path) -> None:
     missing: list[Path] = []
-    current = destination
+    current = destination.parent
     while not current.exists():
         missing.append(current)
         parent = current.parent
@@ -152,6 +152,10 @@ def _mkdir_private_tree(destination: Path) -> None:
     # parent creation before the private output leaf exists.
     for directory in reversed(missing):
         directory.mkdir(mode=0o700)
+    # LLM contract: OUTPUT_ABSENT -> OUTPUT_CREATED | COLLISION_REJECTED.
+    # The final leaf stays exclusive even if another process creates it after
+    # merge validation but before publication begins.
+    destination.mkdir(mode=0o700)
 
 
 def _copy_run_files(base_run: Path, output_run: Path) -> None:
