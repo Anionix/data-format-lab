@@ -1,6 +1,8 @@
 import ast
 import json
 import math
+import os
+import stat
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -86,6 +88,40 @@ def test_atomic_write_json_creates_and_replaces_deterministic_document(
     assert destination.read_bytes() == b'{\n  "value": 2\n}\n'
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX evidence-mode contract")
+def test_atomic_write_json_declares_and_preserves_evidence_mode(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "manifest.json"
+
+    atomic_write_json(destination, {"value": 1})
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+
+    destination.chmod(0o640)
+    atomic_write_json(destination, {"value": 2})
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o640
+
+
+def test_atomic_write_json_mode_failure_preserves_previous_document(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+
+    def fail_mode(*_args: object, **_kwargs: object) -> None:
+        raise OSError("injected mode failure")
+
+    monkeypatch.setattr(json_contract.os, "fchmod", fail_mode)
+
+    with pytest.raises(OSError, match="injected mode failure"):
+        atomic_write_json(destination, {"state": "BENCHMARKED"})
+
+    assert destination.read_bytes() == previous
+    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+
+
 def test_atomic_write_json_serialization_failure_preserves_previous_document(
     tmp_path: Path,
 ) -> None:
@@ -167,6 +203,40 @@ def test_atomic_write_json_accepts_same_directory_with_parent_segments(
     assert (destination_dir / "manifest.json").read_bytes() == (
         b'{\n  "state": "ENCODED"\n}\n'
     )
+
+
+def test_atomic_write_json_anchors_parent_identity_during_replace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination_dir = tmp_path / "destination"
+    nested = destination_dir / "nested"
+    nested.mkdir(parents=True)
+    intended = destination_dir / "manifest.json"
+    intended.write_bytes(b"INTENDED-OLD")
+    outside = tmp_path / "outside"
+    outside_child = outside / "child"
+    outside_child.mkdir(parents=True)
+    outside_manifest = outside / "manifest.json"
+    outside_manifest.write_bytes(b"OUTSIDE-OLD")
+    destination = nested / ".." / "manifest.json"
+    real_replace = os.replace
+
+    def retarget_parent(
+        source: str | bytes | Path,
+        target: str | bytes | Path,
+        **kwargs: object,
+    ) -> None:
+        nested.rmdir()
+        nested.symlink_to(outside_child, target_is_directory=True)
+        real_replace(source, target, **kwargs)
+
+    monkeypatch.setattr(json_contract.os, "replace", retarget_parent)
+
+    atomic_write_json(destination, {"state": "BENCHMARKED"})
+
+    assert intended.read_bytes() == b'{\n  "state": "BENCHMARKED"\n}\n'
+    assert outside_manifest.read_bytes() == b"OUTSIDE-OLD"
 
 
 def test_atomic_write_json_rejects_cross_directory_temp(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import stat
 import tempfile
 from pathlib import Path
 from typing import BinaryIO, Never, TypedDict, Unpack, cast
@@ -31,14 +32,49 @@ def _flush_atomic_file(destination: BinaryIO) -> None:
     os.fsync(destination.fileno())
 
 
-def _replace_same_directory(temporary: Path, destination: Path) -> None:
-    if not temporary.parent.samefile(destination.parent):
+def _destination_mode(directory_fd: int, name: str) -> int:
+    try:
+        destination = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return 0o644
+    if stat.S_ISLNK(destination.st_mode):
+        raise ValueError("JSON destination must not be a symbolic link")
+    if not stat.S_ISREG(destination.st_mode):
+        raise ValueError("JSON destination must be a regular file")
+    return stat.S_IMODE(destination.st_mode)
+
+
+def _temporary_name(directory_fd: int, descriptor: int, temporary: Path) -> str:
+    try:
+        entry = os.stat(temporary.name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError as error:
         raise ValueError(
             "temporary JSON file must use the destination's same directory"
+        ) from error
+    opened = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(entry.st_mode)
+        or entry.st_dev != opened.st_dev
+        or entry.st_ino != opened.st_ino
+    ):
+        raise ValueError(
+            "temporary JSON file must be a regular same-directory entry"
         )
-    if destination.is_symlink():
-        raise ValueError("JSON destination must not be a symbolic link")
-    os.replace(temporary, destination)
+    return temporary.name
+
+
+def _replace_same_directory(
+    directory_fd: int,
+    temporary_name: str,
+    destination_name: str,
+) -> None:
+    _destination_mode(directory_fd, destination_name)
+    os.replace(
+        temporary_name,
+        destination_name,
+        src_dir_fd=directory_fd,
+        dst_dir_fd=directory_fd,
+    )
 
 
 def _reject_nonfinite(token: str) -> Never:
@@ -99,20 +135,29 @@ def atomic_write_json(path: Path, value: object) -> None:
         "utf-8"
     )
     destination = path.absolute()
-    if destination.is_symlink():
-        raise ValueError("JSON destination must not be a symbolic link")
-    if destination.exists() and not destination.is_file():
-        raise ValueError("JSON destination must be a regular file")
+    destination_parent = destination.parent.resolve(strict=True)
+    destination_name = destination.name
+    if not destination_name or destination_name in {".", ".."}:
+        raise ValueError("JSON destination must name a regular file")
 
+    directory_fd = -1
     descriptor = -1
     temporary: Path | None = None
+    temporary_name: str | None = None
     try:
+        directory_fd = os.open(
+            destination_parent,
+            os.O_RDONLY | os.O_DIRECTORY,
+        )
+        mode = _destination_mode(directory_fd, destination_name)
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=f".{destination.name}.",
             suffix=".tmp",
-            dir=destination.parent,
+            dir=destination_parent,
         )
         temporary = Path(temporary_name)
+        temporary_name = _temporary_name(directory_fd, descriptor, temporary)
+        os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as stream:
             descriptor = -1
             _write_atomic_file(stream, payload)
@@ -121,9 +166,16 @@ def atomic_write_json(path: Path, value: object) -> None:
         # BENCHMARKED -> REPORTED becomes persistent only at this replace boundary.
         # os.replace is atomic on success; file fsync does not claim directory or
         # power-loss durability. See https://docs.python.org/3/library/os.html#os.replace
-        _replace_same_directory(temporary, destination)
+        _replace_same_directory(directory_fd, temporary_name, destination_name)
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        if temporary is not None:
+        if temporary_name is not None and directory_fd >= 0:
+            try:
+                os.unlink(temporary_name, dir_fd=directory_fd)
+            except FileNotFoundError:
+                pass
+        elif temporary is not None:
             temporary.unlink(missing_ok=True)
+        if directory_fd >= 0:
+            os.close(directory_fd)
