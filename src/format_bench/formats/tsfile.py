@@ -5,18 +5,19 @@ from typing import Any
 
 import pyarrow as pa
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, apply_arrow
 from format_bench.model import Comparability, Lane
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, VerificationResult, write_artifact
 
 
 TABLE_NAME = "stars"
 TAG_COLUMNS = {"group", "full_name"}
 
 
-def _types(manifest: dict) -> dict[str, Any]:
+def _types(manifest: AdapterManifest) -> dict[str, Any]:
     from tsfile import TSDataType
 
     mapping = {
@@ -25,7 +26,9 @@ def _types(manifest: dict) -> dict[str, Any]:
         "int64": TSDataType.INT64,
         "bool": TSDataType.BOOLEAN,
     }
-    return {column["name"]: mapping[column["arrow_type"]] for column in manifest["columns"]}
+    return {
+        column["name"]: mapping[column["arrow_type"]] for column in manifest["columns"]
+    }
 
 
 class TsFileAdapter:
@@ -43,11 +46,18 @@ class TsFileAdapter:
         )
 
     def encode(self, table: pa.Table, path: Path) -> Artifact:
-        from tsfile import ColumnCategory, ColumnSchema, TableSchema, Tablet, TsFileTableWriter
+        from tsfile import (
+            ColumnCategory,
+            ColumnSchema,
+            TableSchema,
+            Tablet,
+            TsFileTableWriter,
+        )
 
         manifest = {
             "columns": [
-                {"name": field.name, "arrow_type": _arrow_name(field.type)} for field in table.schema
+                {"name": field.name, "arrow_type": _arrow_name(field.type)}
+                for field in table.schema
             ]
         }
         types = _types(manifest)
@@ -77,7 +87,7 @@ class TsFileAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         from tsfile import TsFileReader
 
         names = [column["name"] for column in manifest["columns"]]
@@ -93,10 +103,14 @@ class TsFileAdapter:
                     )
         return pa.Table.from_pylist(rows, schema=arrow_schema(manifest))
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 

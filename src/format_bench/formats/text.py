@@ -7,12 +7,20 @@ import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.json as pajson
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.json_contract import strict_json_dumps
 from format_bench.model import Comparability, Lane, WorkloadKind
 
-from .base import Artifact, FormatDescription, ParserRejection, parse_artifact, write_artifact
+from .base import (
+    Artifact,
+    FormatDescription,
+    ParserRejection,
+    VerificationResult,
+    parse_artifact,
+    write_artifact,
+)
 
 ARROW_PARSER_ERRORS = (pa.ArrowException, OSError, ValueError)
 
@@ -30,7 +38,7 @@ class CsvAdapter:
     def encode(self, table: pa.Table, path: Path) -> Artifact:
         return write_artifact(path, lambda: pacsv.write_csv(table, path))
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         schema = arrow_schema(manifest)
         options = pacsv.ConvertOptions(
             column_types={field.name: field.type for field in schema},
@@ -47,10 +55,14 @@ class CsvAdapter:
                 raise ParserRejection(error) from error
         return parse_artifact(lambda: table.cast(schema), ARROW_PARSER_ERRORS)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
@@ -70,7 +82,7 @@ class TsvAdapter:
             path, lambda: pacsv.write_csv(table, path, write_options=options)
         )
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         schema = arrow_schema(manifest)
         options = pacsv.ConvertOptions(
             column_types={field.name: field.type for field in schema},
@@ -83,10 +95,14 @@ class TsvAdapter:
             convert_options=options,
         ).select(schema.names)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 
@@ -128,17 +144,21 @@ class ObjectJsonlAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         options = pajson.ParseOptions(explicit_schema=arrow_schema(manifest))
         table = parse_artifact(
             lambda: pajson.read_json(path, parse_options=options), ARROW_PARSER_ERRORS
         )
         return table.select(arrow_schema(manifest).names)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         spec = workload_for(operation, manifest)
         if spec.kind is WorkloadKind.READ_ALL:
             return self.read(path, manifest)
@@ -166,6 +186,8 @@ class ObjectJsonlAdapter:
                 [pa.array([], type=field.type) for field in schema], schema=schema
             )
             return empty.select(
-                list(spec.columns) if spec.kind is WorkloadKind.PROJECTION else schema.names
+                list(spec.columns)
+                if spec.kind is WorkloadKind.PROJECTION
+                else schema.names
             )
         return pa.concat_tables(batches, promote_options="default")

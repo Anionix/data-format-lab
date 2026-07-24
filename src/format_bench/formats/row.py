@@ -5,12 +5,13 @@ from typing import Any
 
 import pyarrow as pa
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.datasets import normalized_columns
 from format_bench.fair import Operation, apply_arrow, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, VerificationResult, write_artifact
 
 
 def _arrow_type_name(data_type: pa.DataType) -> str:
@@ -44,7 +45,7 @@ def _rows_payload(table: pa.Table) -> dict[str, Any]:
     }
 
 
-def _table_from_payload(payload: Any, manifest: dict) -> pa.Table:
+def _table_from_payload(payload: Any, manifest: AdapterManifest) -> pa.Table:
     if not isinstance(payload, dict) or payload.get("schema_version") != "1":
         raise ValueError("serialized row payload has an unsupported schema")
     rows = payload.get("rows")
@@ -98,7 +99,7 @@ class AvroAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         from fastavro import reader
 
         with path.open("rb") as handle:
@@ -110,10 +111,14 @@ class AvroAdapter:
         }
         return _table_from_payload(payload, manifest)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         spec = workload_for(operation, manifest)
         columns = (
             list(spec.columns)
@@ -182,13 +187,17 @@ class BinaryRowAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         return _table_from_payload(self._decode(path.read_bytes()), manifest)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         return apply_arrow(self.read(path, manifest), operation, manifest)
 
 

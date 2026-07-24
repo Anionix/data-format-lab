@@ -6,6 +6,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.csv as pacsv
 
+from .adapter_contract import VerificationResult
 from .arrow_compute import equal, greater
 from .datasets import load_manifest, normalized_columns, sha256_bytes
 from .json_contract import strict_json_dumps
@@ -112,7 +113,7 @@ def query_counts(table: pa.Table, manifest: dict | None = None) -> dict[str, int
 
 # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
 # Conformance must preserve source row order before advancing to ROUNDTRIP_VERIFIED.
-def verify_table(table: pa.Table, manifest: dict) -> dict:
+def verify_table(table: pa.Table, manifest: dict) -> VerificationResult:
     expected_schema = arrow_schema(manifest)
     if table.schema != expected_schema:
         raise ValueError(

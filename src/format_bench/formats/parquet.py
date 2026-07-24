@@ -6,11 +6,18 @@ from typing import Literal
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, arrow_filter, columns_for, limit_for
 from format_bench.model import Comparability, Lane
 
-from .base import Artifact, FormatDescription, parse_artifact, write_artifact
+from .base import (
+    Artifact,
+    FormatDescription,
+    VerificationResult,
+    parse_artifact,
+    write_artifact,
+)
 
 ParquetCompression = Literal["snappy", "gzip", "zstd"]
 
@@ -59,7 +66,7 @@ class ParquetAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         schema = arrow_schema(manifest)
         table = parse_artifact(
             lambda: pq.read_table(path, schema=schema),
@@ -67,10 +74,14 @@ class ParquetAdapter:
         )
         return table.select(schema.names)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         table = pq.read_table(
             path,
             columns=columns_for(operation, manifest),
