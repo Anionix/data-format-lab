@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import json
 import math
 import os
 import secrets
 import stat
+import sys
 from pathlib import Path
 from typing import BinaryIO, Never, TypedDict, Unpack, cast
 
@@ -20,6 +23,34 @@ class JsonDumpOptions(TypedDict, total=False):
 
 class _TemporaryOwnershipLost(ValueError):
     """The temporary basename no longer identifies this writer's inode."""
+
+
+def _darwin_has_extended_acl(directory_fd: int) -> bool:
+    if sys.platform != "darwin":
+        return False
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    acl_get_fd = libc.acl_get_fd_np
+    acl_get_fd.argtypes = (ctypes.c_int, ctypes.c_int)
+    acl_get_fd.restype = ctypes.c_void_p
+    acl_free = libc.acl_free
+    acl_free.argtypes = (ctypes.c_void_p,)
+    acl_free.restype = ctypes.c_int
+
+    # Darwin <sys/acl.h>: ACL_TYPE_EXTENDED = 0x00000100.
+    ctypes.set_errno(0)
+    acl = acl_get_fd(directory_fd, 0x00000100)
+    if not acl:
+        error = ctypes.get_errno()
+        if error in {errno.ENOENT, errno.EOPNOTSUPP}:
+            return False
+        raise OSError(error, os.strerror(error))
+    try:
+        return True
+    finally:
+        if acl_free(acl) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
 
 
 def _write_atomic_file(destination: BinaryIO, payload: bytes) -> None:
@@ -55,6 +86,10 @@ def _validate_publication_directory(directory_fd: int) -> None:
         raise PermissionError(
             "JSON destination directory must be owned by the effective user "
             "and not writable by group or other principals"
+        )
+    if _darwin_has_extended_acl(directory_fd):
+        raise PermissionError(
+            "JSON destination directory must not have a macOS extended ACL"
         )
 
 

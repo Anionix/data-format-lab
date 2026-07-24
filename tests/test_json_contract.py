@@ -3,6 +3,8 @@ import json
 import math
 import os
 import stat
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO, cast
@@ -251,6 +253,32 @@ def test_atomic_write_json_rejects_shared_writable_directory(
 
     with pytest.raises(PermissionError, match="not writable by group or other"):
         atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == previous
+    assert list(destination_dir.glob(".manifest.json.*.tmp")) == []
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS extended ACL contract")
+def test_atomic_write_json_rejects_macos_extended_acl(tmp_path: Path) -> None:
+    destination_dir = tmp_path / "acl"
+    destination_dir.mkdir(mode=0o700)
+    destination = destination_dir / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+    subprocess.run(
+        [
+            "/bin/chmod",
+            "+a",
+            "everyone allow add_file,delete_child,search",
+            str(destination_dir),
+        ],
+        check=True,
+    )
+    try:
+        with pytest.raises(PermissionError, match="extended ACL"):
+            atomic_write_json(destination, {"state": "REPORTED"})
+    finally:
+        subprocess.run(["/bin/chmod", "-N", str(destination_dir)], check=True)
 
     assert destination.read_bytes() == previous
     assert list(destination_dir.glob(".manifest.json.*.tmp")) == []
