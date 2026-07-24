@@ -141,7 +141,13 @@ def prepare_run(
                 f"expected {manifest['source_sha256']}, got {actual_source_sha256}"
             )
     destination = run_dir or _default_run_dir(root, dataset_id)
-    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if run_dir is None:
+        destination.parent.mkdir(mode=0o700, exist_ok=True)
+    destination.mkdir(
+        mode=0o700,
+        parents=run_dir is not None,
+        exist_ok=False,
+    )
     input_dir = destination / "input"
     input_dir.mkdir(mode=0o700)
 

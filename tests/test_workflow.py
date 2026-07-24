@@ -8,7 +8,7 @@ from pathlib import Path
 import pyarrow as pa
 import pytest
 
-from format_bench import cli
+from format_bench import cli, workflow
 from format_bench.artifact_digest import artifact_sha256
 from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
@@ -213,6 +213,34 @@ def test_prepare_run_creates_private_lifecycle_directories_under_open_umask(
     assert requested_modes["run/.size-observations/csv"] == 0o700
     assert (run_dir / "input" / "manifest.json").is_file()
     assert (run_dir / "manifest.json").is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
+def test_prepare_run_creates_missing_default_parent_privately(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mask: int,
+) -> None:
+    root = Path(__file__).parents[1]
+    destination_root = tmp_path / "root"
+    destination_root.mkdir(mode=0o700)
+    destination = destination_root / "runs" / "run"
+    monkeypatch.setattr(
+        workflow,
+        "_default_run_dir",
+        lambda _root, _dataset_id: destination,
+    )
+
+    previous_mask = os.umask(mask)
+    try:
+        prepared = prepare_run(root, DATASET, fixture=True, selected=())
+    finally:
+        os.umask(previous_mask)
+
+    assert prepared == destination
+    for directory in (destination.parent, destination):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
 
 
 def test_artifact_digest_rejects_root_symlink(tmp_path: Path) -> None:
