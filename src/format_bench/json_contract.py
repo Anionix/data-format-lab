@@ -52,38 +52,32 @@ def _create_temporary(
     directory_fd: int,
     destination_name: str,
     creation_mode: int,
-) -> tuple[int, int, str]:
-    cleanup_directory_fd = os.dup(directory_fd)
-    try:
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-        for _ in range(100):
-            name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
-            try:
-                descriptor = os.open(
-                    name,
-                    flags,
-                    creation_mode,
-                    dir_fd=cleanup_directory_fd,
-                )
-            except FileExistsError:
-                continue
-            return descriptor, cleanup_directory_fd, name
-        raise FileExistsError("could not create an exclusive temporary JSON file")
-    except BaseException:
-        os.close(cleanup_directory_fd)
-        raise
+) -> tuple[int, str]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    for _ in range(100):
+        name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(
+                name,
+                flags,
+                creation_mode,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            continue
+        return descriptor, name
+    raise FileExistsError("could not create an exclusive temporary JSON file")
 
 
 def _temporary_name(
     directory_fd: int,
-    cleanup_directory_fd: int,
     temporary_name: str,
     temporary_identity: tuple[int, int],
 ) -> str:
     try:
         entry = os.stat(
             temporary_name,
-            dir_fd=cleanup_directory_fd,
+            dir_fd=directory_fd,
             follow_symlinks=False,
         )
     except FileNotFoundError as error:
@@ -98,34 +92,7 @@ def _temporary_name(
         raise _TemporaryOwnershipLost(
             "temporary JSON file no longer identifies the opened entry"
         )
-    destination_directory = os.fstat(directory_fd)
-    temporary_directory = os.fstat(cleanup_directory_fd)
-    if (
-        destination_directory.st_dev != temporary_directory.st_dev
-        or destination_directory.st_ino != temporary_directory.st_ino
-    ):
-        raise ValueError(
-            "temporary JSON file must use the destination's same directory"
-        )
     return temporary_name
-
-
-def _unlink_owned_temporary(
-    cleanup_directory_fd: int,
-    temporary_name: str,
-    temporary_identity: tuple[int, int],
-) -> None:
-    try:
-        entry = os.stat(
-            temporary_name,
-            dir_fd=cleanup_directory_fd,
-            follow_symlinks=False,
-        )
-    except FileNotFoundError:
-        return
-    if entry.st_dev != temporary_identity[0] or entry.st_ino != temporary_identity[1]:
-        return
-    os.unlink(temporary_name, dir_fd=cleanup_directory_fd)
 
 
 def _replace_same_directory(
@@ -206,69 +173,48 @@ def atomic_write_json(path: Path, value: object) -> None:
         raise ValueError("JSON destination must name a regular file")
 
     directory_fd = -1
-    cleanup_directory_fd = -1
     descriptor = -1
-    temporary_name: str | None = None
-    temporary_identity: tuple[int, int] | None = None
     try:
         directory_fd = os.open(
             destination_parent,
             os.O_RDONLY | os.O_DIRECTORY,
         )
         mode = _destination_mode(directory_fd, destination_name)
-        descriptor, cleanup_directory_fd, temporary_name = _create_temporary(
+        descriptor, temporary_name = _create_temporary(
             directory_fd,
             destination_name,
             mode if mode is not None else 0o666,
         )
         opened_temporary = os.fstat(descriptor)
         temporary_identity = (opened_temporary.st_dev, opened_temporary.st_ino)
-        try:
-            temporary_name = _temporary_name(
-                directory_fd,
-                cleanup_directory_fd,
-                temporary_name,
-                temporary_identity,
-            )
-        except _TemporaryOwnershipLost:
-            temporary_name = None
-            temporary_identity = None
-            raise
-        if mode is not None:
-            os.fchmod(descriptor, mode)
+        temporary_name = _temporary_name(
+            directory_fd,
+            temporary_name,
+            temporary_identity,
+        )
+        final_mode = (
+            mode if mode is not None else stat.S_IMODE(opened_temporary.st_mode)
+        )
+        os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb") as stream:
             descriptor = -1
             _write_atomic_file(stream, payload)
             _flush_atomic_file(stream)
+            os.fchmod(stream.fileno(), final_mode)
+            os.fsync(stream.fileno())
         # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED ->
         # BENCHMARKED -> REPORTED becomes persistent only at this replace boundary.
         # os.replace is atomic on success; file fsync does not claim directory or
         # power-loss durability. See https://docs.python.org/3/library/os.html#os.replace
         _replace_same_directory(directory_fd, temporary_name, destination_name)
-        # LLM contract: TEMPORARY_OWNED -> PUBLISHED transfers the basename;
-        # this call must never clean a later entry that reuses the vacated name.
-        temporary_name = None
-        temporary_identity = None
+        # LLM contract: TEMPORARY_OWNED -> PUBLISHED | RETAINED_FAILED.
+        # Portable POSIX has no atomic compare-and-unlink operation. A failed
+        # write retains its narrowed temporary entry instead of risking deletion
+        # of an unrelated file that concurrently reuses the basename.
     finally:
         try:
             if descriptor >= 0:
                 os.close(descriptor)
         finally:
-            try:
-                if (
-                    temporary_name is not None
-                    and temporary_identity is not None
-                    and cleanup_directory_fd >= 0
-                ):
-                    _unlink_owned_temporary(
-                        cleanup_directory_fd,
-                        temporary_name,
-                        temporary_identity,
-                    )
-            finally:
-                try:
-                    if cleanup_directory_fd >= 0:
-                        os.close(cleanup_directory_fd)
-                finally:
-                    if directory_fd >= 0:
-                        os.close(directory_fd)
+            if directory_fd >= 0:
+                os.close(directory_fd)

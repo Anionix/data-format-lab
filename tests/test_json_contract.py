@@ -143,7 +143,7 @@ def test_atomic_write_json_never_creates_replacement_broader_than_destination(
     finally:
         os.umask(previous_mask)
 
-    assert len(observed_modes) == 1
+    assert len(observed_modes) == 2
     assert observed_modes[0] & ~mode == 0
     assert stat.S_IMODE(destination.stat().st_mode) == mode
 
@@ -165,7 +165,7 @@ def test_atomic_write_json_mode_failure_preserves_previous_document(
         atomic_write_json(destination, {"state": "BENCHMARKED"})
 
     assert destination.read_bytes() == previous
-    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+    assert len(list(tmp_path.glob(".manifest.json.*.tmp"))) == 1
 
 
 def test_atomic_write_json_serialization_failure_preserves_previous_document(
@@ -220,7 +220,7 @@ def test_atomic_write_json_failure_preserves_previous_document(
         atomic_write_json(destination, {"state": "BENCHMARKED"})
 
     assert destination.read_bytes() == previous
-    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+    assert len(list(tmp_path.glob(".manifest.json.*.tmp"))) == 1
 
 
 def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
@@ -304,19 +304,14 @@ def test_atomic_write_json_rejects_cross_directory_temp(
         directory_fd: int,
         destination_name: str,
         creation_mode: int,
-    ) -> tuple[int, int, str]:
+    ) -> tuple[int, str]:
         del directory_fd, destination_name, creation_mode
-        cleanup_directory_fd = os.open(
-            other_dir,
-            os.O_RDONLY | os.O_DIRECTORY,
-        )
         descriptor = os.open(
-            temporary_name,
+            other_dir / temporary_name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
             0o600,
-            dir_fd=cleanup_directory_fd,
         )
-        return descriptor, cleanup_directory_fd, temporary_name
+        return descriptor, temporary_name
 
     monkeypatch.setattr(
         json_contract,
@@ -324,11 +319,11 @@ def test_atomic_write_json_rejects_cross_directory_temp(
         cross_directory_temporary,
     )
 
-    with pytest.raises(ValueError, match="same directory"):
+    with pytest.raises(ValueError, match="no longer identifies"):
         atomic_write_json(destination, {"state": "BENCHMARKED"})
 
     assert destination.read_bytes() == previous
-    assert list(other_dir.iterdir()) == []
+    assert len(list(other_dir.iterdir())) == 1
     assert same_name_victim.read_bytes() == b"DO-NOT-DELETE"
 
 
@@ -359,7 +354,6 @@ def test_atomic_write_json_drops_temporary_name_after_replace(
     temporary_name = f".manifest.json.{token}.tmp"
     destination = tmp_path / "manifest.json"
     captured_directory_fds: list[int] = []
-    captured_cleanup_fds: list[int] = []
     real_create = json_contract._create_temporary
     real_replace = json_contract._replace_same_directory
 
@@ -367,10 +361,8 @@ def test_atomic_write_json_drops_temporary_name_after_replace(
         directory_fd: int,
         destination_name: str,
         creation_mode: int,
-    ) -> tuple[int, int, str]:
-        result = real_create(directory_fd, destination_name, creation_mode)
-        captured_cleanup_fds.append(result[1])
-        return result
+    ) -> tuple[int, str]:
+        return real_create(directory_fd, destination_name, creation_mode)
 
     def replace_and_reuse(
         directory_fd: int,
@@ -404,44 +396,44 @@ def test_atomic_write_json_drops_temporary_name_after_replace(
 
     assert destination.read_bytes() == b'{\n  "state": "REPORTED"\n}\n'
     assert (tmp_path / temporary_name).read_bytes() == b"REUSED"
-    for descriptor in captured_directory_fds + captured_cleanup_fds:
+    for descriptor in captured_directory_fds:
         with pytest.raises(OSError):
             os.fstat(descriptor)
 
 
-def test_atomic_write_json_closes_directories_when_cleanup_fails(
+def test_atomic_write_json_retains_failed_temp_without_unlink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     destination = tmp_path / "manifest.json"
     captured_directory_fds: list[int] = []
-    captured_cleanup_fds: list[int] = []
     real_create = json_contract._create_temporary
 
     def capture_create(
         directory_fd: int,
         destination_name: str,
         creation_mode: int,
-    ) -> tuple[int, int, str]:
+    ) -> tuple[int, str]:
         captured_directory_fds.append(directory_fd)
-        result = real_create(directory_fd, destination_name, creation_mode)
-        captured_cleanup_fds.append(result[1])
-        return result
+        return real_create(directory_fd, destination_name, creation_mode)
 
     def fail_write(_destination: BinaryIO, _payload: bytes) -> None:
         raise OSError("injected write failure")
 
-    def fail_cleanup(*_args: object, **_kwargs: object) -> None:
-        raise PermissionError("injected cleanup failure")
+    def reject_unlink(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("failed temporary entries must not be unlinked by name")
 
     monkeypatch.setattr(json_contract, "_create_temporary", capture_create)
     monkeypatch.setattr(json_contract, "_write_atomic_file", fail_write)
-    monkeypatch.setattr(json_contract.os, "unlink", fail_cleanup)
+    monkeypatch.setattr(json_contract.os, "unlink", reject_unlink)
 
-    with pytest.raises(PermissionError, match="injected cleanup failure"):
+    with pytest.raises(OSError, match="injected write failure"):
         atomic_write_json(destination, {"state": "REPORTED"})
 
-    for descriptor in captured_directory_fds + captured_cleanup_fds:
+    retained = list(tmp_path.glob(".manifest.json.*.tmp"))
+    assert len(retained) == 1
+    assert stat.S_IMODE(retained[0].stat().st_mode) == 0o600
+    for descriptor in captured_directory_fds:
         with pytest.raises(OSError):
             os.fstat(descriptor)
 
@@ -459,16 +451,15 @@ def test_atomic_write_json_preserves_name_reused_during_validation(
 
     def replace_before_validation(
         directory_fd: int,
-        cleanup_directory_fd: int,
         name: str,
         identity: tuple[int, int],
     ) -> str:
-        os.unlink(name, dir_fd=cleanup_directory_fd)
+        os.unlink(name, dir_fd=directory_fd)
         replacement = os.open(
             name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
             0o600,
-            dir_fd=cleanup_directory_fd,
+            dir_fd=directory_fd,
         )
         try:
             os.write(replacement, b"UNRELATED")
@@ -476,7 +467,6 @@ def test_atomic_write_json_preserves_name_reused_during_validation(
             os.close(replacement)
         return real_temporary_name(
             directory_fd,
-            cleanup_directory_fd,
             name,
             identity,
         )
