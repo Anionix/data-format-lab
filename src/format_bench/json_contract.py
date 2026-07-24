@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import math
 import os
+import secrets
 import stat
-import tempfile
 from pathlib import Path
 from typing import BinaryIO, Never, TypedDict, Unpack, cast
 
@@ -32,16 +32,37 @@ def _flush_atomic_file(destination: BinaryIO) -> None:
     os.fsync(destination.fileno())
 
 
-def _destination_mode(directory_fd: int, name: str) -> int:
+def _destination_mode(directory_fd: int, name: str) -> int | None:
     try:
         destination = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
     except FileNotFoundError:
-        return 0o644
+        return None
     if stat.S_ISLNK(destination.st_mode):
         raise ValueError("JSON destination must not be a symbolic link")
     if not stat.S_ISREG(destination.st_mode):
         raise ValueError("JSON destination must be a regular file")
     return stat.S_IMODE(destination.st_mode)
+
+
+def _create_temporary(
+    directory_fd: int,
+    directory: Path,
+    destination_name: str,
+) -> tuple[int, Path]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    for _ in range(100):
+        name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(
+                name,
+                flags,
+                0o666,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            continue
+        return descriptor, directory / name
+    raise FileExistsError("could not create an exclusive temporary JSON file")
 
 
 def _temporary_name(directory_fd: int, descriptor: int, temporary: Path) -> str:
@@ -150,14 +171,14 @@ def atomic_write_json(path: Path, value: object) -> None:
             os.O_RDONLY | os.O_DIRECTORY,
         )
         mode = _destination_mode(directory_fd, destination_name)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{destination.name}.",
-            suffix=".tmp",
-            dir=destination_parent,
+        descriptor, temporary = _create_temporary(
+            directory_fd,
+            destination_parent,
+            destination_name,
         )
-        temporary = Path(temporary_name)
         temporary_name = _temporary_name(directory_fd, descriptor, temporary)
-        os.fchmod(descriptor, mode)
+        if mode is not None:
+            os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as stream:
             descriptor = -1
             _write_atomic_file(stream, payload)

@@ -88,17 +88,32 @@ def test_atomic_write_json_creates_and_replaces_deterministic_document(
     assert destination.read_bytes() == b'{\n  "value": 2\n}\n'
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX evidence-mode contract")
-def test_atomic_write_json_declares_and_preserves_evidence_mode(
+@pytest.mark.skipif(os.name != "posix", reason="POSIX umask contract")
+@pytest.mark.parametrize(("mask", "expected"), ((0o022, 0o644), (0o077, 0o600)))
+def test_atomic_write_json_honors_umask_on_first_write(
     tmp_path: Path,
+    mask: int,
+    expected: int,
 ) -> None:
     destination = tmp_path / "manifest.json"
 
-    atomic_write_json(destination, {"value": 1})
-    assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+    previous_mask = os.umask(mask)
+    try:
+        atomic_write_json(destination, {"value": 1})
+    finally:
+        os.umask(previous_mask)
 
+    assert stat.S_IMODE(destination.stat().st_mode) == expected
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX evidence-mode contract")
+def test_atomic_write_json_preserves_existing_evidence_mode(tmp_path: Path) -> None:
+    destination = tmp_path / "manifest.json"
+    destination.write_bytes(b'{"value":1}\n')
     destination.chmod(0o640)
+
     atomic_write_json(destination, {"value": 2})
+
     assert stat.S_IMODE(destination.stat().st_mode) == 0o640
 
 
@@ -252,22 +267,47 @@ def test_atomic_write_json_rejects_cross_directory_temp(
     other_dir.mkdir()
     real_mkstemp = tempfile.mkstemp
 
-    def cross_directory_mkstemp(
-        *,
-        prefix: str,
-        suffix: str,
-        dir: str | Path,
-    ) -> tuple[int, str]:
-        del dir
-        return real_mkstemp(prefix=prefix, suffix=suffix, dir=other_dir)
+    def cross_directory_temporary(
+        directory_fd: int,
+        directory: Path,
+        destination_name: str,
+    ) -> tuple[int, Path]:
+        del directory_fd, directory
+        descriptor, name = real_mkstemp(
+            prefix=f".{destination_name}.",
+            suffix=".tmp",
+            dir=other_dir,
+        )
+        return descriptor, Path(name)
 
-    monkeypatch.setattr(json_contract.tempfile, "mkstemp", cross_directory_mkstemp)
+    monkeypatch.setattr(
+        json_contract,
+        "_create_temporary",
+        cross_directory_temporary,
+    )
 
     with pytest.raises(ValueError, match="same directory"):
         atomic_write_json(destination, {"state": "BENCHMARKED"})
 
     assert destination.read_bytes() == previous
     assert list(other_dir.iterdir()) == []
+
+
+def test_atomic_write_json_retries_exclusive_name_collision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collision = tmp_path / ".manifest.json.collision.tmp"
+    collision.write_bytes(b"DO-NOT-TOUCH")
+    tokens = iter(("collision", "fresh"))
+    monkeypatch.setattr(json_contract.secrets, "token_hex", lambda _size: next(tokens))
+
+    destination = tmp_path / "manifest.json"
+    atomic_write_json(destination, {"state": "ENCODED"})
+
+    assert collision.read_bytes() == b"DO-NOT-TOUCH"
+    assert destination.read_bytes() == b'{\n  "state": "ENCODED"\n}\n'
+    assert not (tmp_path / ".manifest.json.fresh.tmp").exists()
 
 
 @pytest.mark.parametrize(
