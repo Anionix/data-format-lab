@@ -9,6 +9,10 @@ from typing import TypeVar
 
 from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, capture_nyc_snapshot, fetch_dataset, load_manifest
+from .equivalence_admission import (
+    expected_size_observations,
+    validate_equivalence_admission,
+)
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
 from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
@@ -70,6 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     prepare.add_argument("--dataset", required=True)
     prepare.add_argument("--run-dir", type=Path)
     prepare.add_argument("--fixture", action="store_true")
+    prepare.add_argument("--size-observations", type=_positive_int, default=1)
 
     verify = subcommands.add_parser("verify")
     verify.add_argument("--run-dir", type=Path, required=True)
@@ -236,6 +241,10 @@ def _measurement_config(args: argparse.Namespace, run_dir: Path) -> MeasurementC
     )
 
 
+def _equivalence_size_observations(fixture: bool) -> int:
+    return expected_size_observations(fixture)
+
+
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     load_manifest(root, args.dataset)
     if args.run_dir is None or not args.run_dir.exists():
@@ -251,10 +260,19 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
             }
             registered = adapter_map()
             selected = tuple(registered[name] for name in sorted(names))
-        prepare_kwargs = {"fixture": args.fixture}
-        if selected is not None:
-            prepare_kwargs["selected"] = selected
-        run_dir = prepare_run(root, args.dataset, args.run_dir, **prepare_kwargs)
+        if selected is None:
+            run_dir = prepare_run(
+                root, args.dataset, args.run_dir, fixture=args.fixture
+            )
+        else:
+            run_dir = prepare_run(
+                root,
+                args.dataset,
+                args.run_dir,
+                fixture=args.fixture,
+                selected=selected,
+                size_observations=expected_size_observations(args.fixture),
+            )
         verify_run(run_dir)
         return run_dir
     if args.fixture:
@@ -265,6 +283,26 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("dataset_id") != args.dataset:
         raise ValueError("run directory dataset does not match --dataset")
+    if args.profile == "equivalence":
+        required = {
+            name
+            for pair in (args.pair or tuple(PAIR_SPECS))
+            for name in (
+                PAIR_SPECS[pair]["reference"],
+                *PAIR_SPECS[pair]["candidates"],
+            )
+        }
+        eligible = {
+            name
+            for name in required
+            if any(
+                isinstance(entry, dict)
+                and entry.get("format") == name
+                and entry.get("state") == ExecutionState.ROUNDTRIP_VERIFIED
+                for entry in manifest.get("formats", ())
+            )
+        }
+        validate_equivalence_admission(args.run_dir, manifest, eligible)
     return args.run_dir
 
 
@@ -290,7 +328,13 @@ def main(argv: list[str] | None = None) -> None:
                 args.user, args.output or Path(".data/captures")
             )
     elif args.command == "prepare":
-        path = prepare_run(root, args.dataset, args.run_dir, fixture=args.fixture)
+        path = prepare_run(
+            root,
+            args.dataset,
+            args.run_dir,
+            fixture=args.fixture,
+            size_observations=args.size_observations,
+        )
     elif args.command == "verify":
         path = verify_run(args.run_dir)
     elif args.command == "run":

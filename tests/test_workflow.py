@@ -1,13 +1,16 @@
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pyarrow as pa
 import pytest
 
 from format_bench import cli
+from format_bench.artifact_digest import artifact_sha256
 from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
+from format_bench.formats.lance import LanceAdapter
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
 from format_bench.model import Comparability, Lane
 from format_bench.runner import MeasurementConfig
@@ -49,26 +52,274 @@ class FalseVerificationAdapter(CsvAdapter):
         return {"passed": False}
 
 
+class UnsafeFormatAdapter(CsvAdapter):
+    def __init__(self, name: str, extension: str = ".unsafe") -> None:
+        self.unsafe_name = name
+        self.unsafe_extension = extension
+
+    def describe(self) -> FormatDescription:
+        description = super().describe()
+        return FormatDescription(
+            name=self.unsafe_name,
+            lane=description.lane,
+            comparability=description.comparability,
+            extension=self.unsafe_extension,
+            settings=description.settings,
+        )
+
+
+class WrongPathAdapter(CsvAdapter):
+    def __init__(self, returned_path: Path) -> None:
+        self.returned_path = returned_path
+
+    def encode(self, table: pa.Table, path: Path) -> Artifact:
+        artifact = super().encode(table, path)
+        return replace(artifact, path=self.returned_path)
+
+
+class SymlinkArtifactAdapter(CsvAdapter):
+    def __init__(self, target: Path) -> None:
+        self.target = target
+
+    def encode(self, table: pa.Table, path: Path) -> Artifact:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to(self.target, target_is_directory=True)
+        return Artifact(path, 1, 1, 0.0)
+
+
 def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> None:
     root = Path(__file__).parents[1]
     run_dir = tmp_path / "run"
     chosen = (CsvAdapter(), ObjectJsonlAdapter())
-    prepared = prepare_run(root, DATASET, run_dir, fixture=True, selected=chosen)
+    prepared = prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=chosen,
+        size_observations=2,
+    )
 
     manifest = json.loads((prepared / "manifest.json").read_text())
     assert manifest["state"] == "ENCODED"
     assert manifest["fixture"] is True
     assert manifest["rankable"] is False
-    assert all(not Path(entry["artifact"]).is_absolute() for entry in manifest["formats"])
+    assert all(
+        not Path(entry["artifact"]).is_absolute() for entry in manifest["formats"]
+    )
     assert {entry["state"] for entry in manifest["formats"]} == {"ENCODED"}
+    assert all(
+        entry["size_observations"]["completed"] == 2 for entry in manifest["formats"]
+    )
+    assert not (prepared / ".size-observations").exists()
 
     verify_run(prepared, {adapter.describe().name: adapter for adapter in chosen})
     verified = json.loads((prepared / "manifest.json").read_text())
     assert verified["state"] == "ROUNDTRIP_VERIFIED"
-    assert {entry["state"] for entry in verified["formats"]} == {
-        "ROUNDTRIP_VERIFIED"
-    }
+    assert {entry["state"] for entry in verified["formats"]} == {"ROUNDTRIP_VERIFIED"}
     assert all(entry["verification"]["passed"] for entry in verified["formats"])
+    assert all(
+        all(
+            attempt["roundtrip_verified"]
+            for attempt in entry["size_observations"]["attempts"]
+        )
+        for entry in verified["formats"]
+    )
+
+
+def test_artifact_digest_rejects_root_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "data.bin").write_bytes(b"data")
+    link = tmp_path / "link"
+    link.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        artifact_sha256(link)
+
+
+@pytest.mark.parametrize(
+    ("name", "extension", "message"),
+    [
+        ("../escape", ".bin", "format name"),
+        ("safe", "../escape", "format extension"),
+        ("/absolute", ".bin", "format name"),
+    ],
+)
+def test_prepare_rejects_unsafe_format_path_components(
+    tmp_path: Path, name: str, extension: str, message: str
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+
+    with pytest.raises(ValueError, match=message):
+        prepare_run(
+            root,
+            DATASET,
+            run_dir,
+            fixture=True,
+            selected=(UnsafeFormatAdapter(name, extension),),
+            size_observations=2,
+        )
+
+    assert not (tmp_path / "escape").exists()
+
+
+def test_prepare_rejects_adapter_returning_different_artifact_path(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[1]
+    returned_path = tmp_path / "outside.bin"
+    returned_path.write_bytes(b"must remain unchanged")
+    run_dir = tmp_path / "run"
+
+    prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=(WrongPathAdapter(returned_path),),
+    )
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["formats"][0]["state"] == "FAILED"
+    assert (
+        "different from the requested path" in manifest["formats"][0]["failure_reason"]
+    )
+    assert returned_path.read_bytes() == b"must remain unchanged"
+
+
+def test_prepare_unlinks_symlink_artifacts_without_touching_target(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[1]
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep", encoding="utf-8")
+    run_dir = tmp_path / "run"
+
+    prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=(SymlinkArtifactAdapter(outside),),
+    )
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["formats"][0]["state"] == "FAILED"
+    assert not (run_dir / "artifacts" / "csv.csv").exists()
+    assert (outside / "keep.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_prepare_hashes_lance_directory_size_observations(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    adapter = LanceAdapter()
+    run_dir = tmp_path / "run"
+
+    prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=(adapter,),
+        size_observations=2,
+    )
+    verify_run(run_dir, {adapter.describe().name: adapter})
+
+    entry = json.loads((run_dir / "manifest.json").read_text())["formats"][0]
+    attempts = entry["size_observations"]["attempts"]
+    assert entry["state"] == "ROUNDTRIP_VERIFIED"
+    assert (run_dir / entry["artifact"]).is_dir()
+    assert not (run_dir / ".size-observations").exists()
+    assert [attempt["status"] for attempt in attempts] == ["MEASURED", "MEASURED"]
+    assert all(len(attempt["artifact_sha256"]) == 64 for attempt in attempts)
+
+
+@pytest.mark.parametrize(("fixture", "expected"), [(True, 2), (False, 10)])
+def test_equivalence_size_observation_count_is_bounded(
+    fixture: bool, expected: int
+) -> None:
+    assert cli._equivalence_size_observations(fixture) == expected
+    args = cli.build_parser().parse_args(
+        ["prepare", "--dataset", DATASET, "--size-observations", str(expected)]
+    )
+    assert args.size_observations == expected
+
+
+@pytest.mark.parametrize(
+    ("fixture", "observations", "required", "malformed"),
+    [
+        (True, 1, 2, None),
+        (False, 2, 10, None),
+        (True, 2, 2, "digest"),
+        (False, 10, 10, "contract"),
+    ],
+)
+def test_existing_equivalence_run_rejects_invalid_size_evidence(
+    tmp_path: Path,
+    fixture: bool,
+    observations: int,
+    required: int,
+    malformed: str | None,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    attempts = [
+        {
+            "index": index,
+            "status": "MEASURED",
+            "native_bytes": 10,
+            "transport_zstd_bytes": 8,
+            "artifact_sha256": f"{index:064x}",
+            "roundtrip_verified": True,
+        }
+        for index in range(observations)
+    ]
+    if malformed == "digest":
+        attempts[-1]["artifact_sha256"] = "not-a-sha256"
+    evidence = {
+        "contract_version": "1",
+        "resampling_unit": "same_process_encode_invocation",
+        "attempted": observations,
+        "completed": observations,
+        "attempts": attempts,
+    }
+    if malformed == "contract":
+        evidence["contract_version"] = "0"
+    (run_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "dataset_id": DATASET,
+                "fixture": fixture,
+                "formats": [
+                    {
+                        "format": name,
+                        "state": "ROUNDTRIP_VERIFIED",
+                        "size_observations": evidence,
+                    }
+                    for name in ("csv", "tsv")
+                ],
+            }
+        )
+    )
+    args = cli.build_parser().parse_args(
+        [
+            "run",
+            "--profile",
+            "equivalence",
+            "--dataset",
+            DATASET,
+            "--run-dir",
+            str(run_dir),
+            "--pair",
+            "csv-tsv",
+        ]
+    )
+
+    with pytest.raises(ValueError, match=f"--size-observations {required}"):
+        cli._run_directory(root, args)
 
 
 @pytest.mark.parametrize(
@@ -87,8 +338,7 @@ def test_verify_run_does_not_pass_without_a_verified_adapter(
 ) -> None:
     root = Path(__file__).parents[1]
     adapters = tuple(
-        FailingAdapter(f"failure_{index}", error)
-        for index, error in enumerate(errors)
+        FailingAdapter(f"failure_{index}", error) for index, error in enumerate(errors)
     )
     run_dir = tmp_path / "run"
     prepare_run(root, DATASET, run_dir, fixture=True, selected=adapters)
@@ -185,9 +435,7 @@ def test_cli_run_prepares_and_verifies_new_explicit_destination(
     run_dir = tmp_path / "run"
     calls: list[tuple[str, Path]] = []
 
-    def prepare(
-        root: Path, dataset: str, destination: Path, *, fixture: bool
-    ) -> Path:
+    def prepare(root: Path, dataset: str, destination: Path, *, fixture: bool) -> Path:
         assert dataset == DATASET
         assert fixture is True
         destination.mkdir()
@@ -231,9 +479,7 @@ def test_cli_profile_dispatch_matches_runner_signatures(
     run_dir = tmp_path / "run"
     captured: list[object] = []
 
-    def prepare(
-        root: Path, dataset: str, destination: Path, *, fixture: bool
-    ) -> Path:
+    def prepare(root: Path, dataset: str, destination: Path, *, fixture: bool) -> Path:
         del root
         destination.mkdir()
         (destination / "manifest.json").write_text(
@@ -244,6 +490,7 @@ def test_cli_profile_dispatch_matches_runner_signatures(
     monkeypatch.setattr(cli, "prepare_run", prepare)
     monkeypatch.setattr(cli, "verify_run", lambda path: None)
     if profile == "fair":
+
         def run_fair(root: Path, path: Path, *, config: object) -> Path:
             del root
             captured.append(config)
@@ -251,6 +498,7 @@ def test_cli_profile_dispatch_matches_runner_signatures(
 
         monkeypatch.setattr(cli, runner_name, run_fair)
     else:
+
         def run_profile(root: Path, path: Path) -> Path:
             del root
             captured.append(profile)
@@ -331,7 +579,12 @@ def test_cli_timeout_preserves_fixture_sampling_defaults(
     cli.main(arguments)
 
     config = captured[0]
-    assert (config.fresh_processes, config.fresh_workers, config.warmups, config.iterations) == expected_sampling
+    assert (
+        config.fresh_processes,
+        config.fresh_workers,
+        config.warmups,
+        config.iterations,
+    ) == expected_sampling
     assert config.timeout_seconds == 7.5
 
 
@@ -355,11 +608,14 @@ def test_cli_explicit_fixture_sampling_flags_override_defaults(
 
     monkeypatch.setattr(cli, "prepare_run", prepare)
     monkeypatch.setattr(cli, "verify_run", lambda path: None)
+
     def run(*args, **kwargs):
         captured.append(kwargs["config"])
         return run_dir
 
-    monkeypatch.setattr(cli, "run_fair" if profile == "fair" else "run_equivalence", run)
+    monkeypatch.setattr(
+        cli, "run_fair" if profile == "fair" else "run_equivalence", run
+    )
     monkeypatch.chdir(root)
 
     arguments = [
@@ -387,7 +643,12 @@ def test_cli_explicit_fixture_sampling_flags_override_defaults(
     cli.main(arguments)
 
     config = captured[0]
-    assert (config.fresh_processes, config.fresh_workers, config.warmups, config.iterations) == (3, 2, 4, 6)
+    assert (
+        config.fresh_processes,
+        config.fresh_workers,
+        config.warmups,
+        config.iterations,
+    ) == (3, 2, 4, 6)
     assert config.timeout_seconds == 7.5
 
 
@@ -409,8 +670,15 @@ def test_cli_validates_robustness_profile_options() -> None:
         with pytest.raises(SystemExit):
             cli.build_parser().parse_args(
                 [
-                    "run", "--profile", "robustness", "--suite", "bounded",
-                    "--dataset", DATASET, option, value,
+                    "run",
+                    "--profile",
+                    "robustness",
+                    "--suite",
+                    "bounded",
+                    "--dataset",
+                    DATASET,
+                    option,
+                    value,
                 ]
             )
 
