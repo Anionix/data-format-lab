@@ -19,6 +19,7 @@ from format_bench.model import (
     robustness_verdict,
     transition,
 )
+from format_bench.workload_contract import ComparisonOperator
 
 
 def test_lifecycle_accepts_the_public_contract() -> None:
@@ -123,6 +124,20 @@ def test_workload_spec_rejects_incomplete_predicates() -> None:
         WorkloadSpec.from_mapping(
             "filter", {"kind": WorkloadKind.FILTER, "column": "value"}
         )
+
+
+def test_workload_spec_rejects_unsupported_direct_operator() -> None:
+    unsupported = cast(ComparisonOperator, "contains")
+    spec = WorkloadSpec(
+        "filter",
+        WorkloadKind.FILTER,
+        column="value",
+        operator=unsupported,
+        value="needle",
+    )
+
+    with pytest.raises(ValueError, match="supported predicate"):
+        spec.validate()
 
 
 @pytest.mark.parametrize("value", [1.5, "1.5"])
