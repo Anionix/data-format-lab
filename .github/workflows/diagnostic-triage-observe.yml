@@ -121,7 +121,9 @@ jobs:
           OBSERVED_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          input="$RUNNER_TEMP/github-actions-run.json"
+          workspace="$RUNNER_TEMP/diagnostic-triage-observer-workspace"
+          mkdir -p "$workspace"
+          input="$workspace/github-actions-run.json"
           set +o pipefail
           gh api \
             -H "Accept: application/vnd.github+json" \
@@ -151,10 +153,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          input="$RUNNER_TEMP/github-actions-run.json"
-          nix develop --command diagnostic-triage observe \
+          workspace="$RUNNER_TEMP/diagnostic-triage-observer-workspace"
+          nix develop --command diagnostic-triage \
+            --repository "$workspace" \
+            observe \
             --source github-actions \
-            --input "$input" \
+            --input github-actions-run.json \
             > "$RUNNER_TEMP/diagnostic-triage-observer.jsonl"
           jq -s -e '
             .[0].kind == "manifest"
@@ -180,6 +184,6 @@ jobs:
           name: diagnostic-triage-observe-${{ github.event.workflow_run.id }}
           path: |
             ${{ runner.temp }}/diagnostic-triage-observer.jsonl
-            ${{ runner.temp }}/github-actions-run.json
+            ${{ runner.temp }}/diagnostic-triage-observer-workspace/github-actions-run.json
           if-no-files-found: warn
           retention-days: 7

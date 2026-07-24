@@ -132,7 +132,11 @@ def test_observation_outputs_do_not_pollute_repository_identity() -> None:
 
     assert evidence_lines
     assert all(
-        "RUNNER_TEMP" in line or "runner.temp" in line for line in evidence_lines
+        "RUNNER_TEMP" in line
+        or "runner.temp" in line
+        or "$workspace/" in line
+        or "--input github-actions-run.json" in line
+        for line in evidence_lines
     )
 
 
@@ -168,9 +172,21 @@ def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None
     assert "contents: read" in completed_run
     assert "ref: ${{ github.event.repository.default_branch }}" in completed_run
     assert "persist-credentials: false" in completed_run
+    assert (
+        'workspace="$RUNNER_TEMP/diagnostic-triage-observer-workspace"' in completed_run
+    )
+    assert 'input="$workspace/github-actions-run.json"' in completed_run
     assert "head -c 16777217" in completed_run
     assert "16777216" in completed_run
     assert '.status == "completed" and .id == $observed_run_id' in completed_run
     assert "github.event.workflow_run.head_sha" not in workflow
     assert '"repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID"' in completed_run
-    assert '--input "$input"' in completed_run
+    observer_command = (
+        "nix develop --command diagnostic-triage \\\n"
+        '            --repository "$workspace" \\\n'
+        "            observe \\\n"
+        "            --source github-actions \\\n"
+        "            --input github-actions-run.json \\"
+    )
+    assert observer_command in completed_run
+    assert '--input "$input"' not in completed_run
