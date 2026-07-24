@@ -18,6 +18,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Callable, Literal, TypedDict, TypeVar
 
+from .json_contract import strict_json_loads
+
 
 _Measured = TypeVar("_Measured")
 
@@ -163,7 +165,7 @@ def _run_fresh_process(
             "reason": f"worker exited {completed.returncode}: {completed.stderr[-2000:]}",
         }
     try:
-        result = json.loads(completed.stdout.strip().splitlines()[-1])
+        result = strict_json_loads(completed.stdout.strip().splitlines()[-1])
         if not isinstance(result, dict):
             raise ValueError("worker JSON must be an object")
     except (json.JSONDecodeError, IndexError, ValueError) as error:

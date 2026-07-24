@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TypeAlias, cast
 
 from .artifact_digest import artifact_sha256
+from .json_contract import strict_json_dumps
 from .model import ExecutionState, transition
 
 JSONValue: TypeAlias = (
@@ -53,7 +54,7 @@ def _object_map(value: JSONValue, label: str) -> dict[str, JSONObject]:
 
 
 def _write_json(path: Path, value: JSONObject) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(strict_json_dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _safe_run_path(
@@ -268,14 +269,14 @@ def merge_equivalence_shards(
             }
         )
 
-    if len({json.dumps(value, sort_keys=True) for value in environments}) != 1:
+    if len({strict_json_dumps(value, sort_keys=True) for value in environments}) != 1:
         raise ValueError("shard environments do not match")
-    if len({json.dumps(value, sort_keys=True) for value in measurements}) != 1:
+    if len({strict_json_dumps(value, sort_keys=True) for value in measurements}) != 1:
         raise ValueError("shard measurement protocols do not match")
     if (
         len(
             {
-                json.dumps(value, sort_keys=True)
+                strict_json_dumps(value, sort_keys=True)
                 for value in equivalence_contracts
             }
         )

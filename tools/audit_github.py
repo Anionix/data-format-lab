@@ -73,10 +73,17 @@ class Mutation:
 
 class GitHubRest:
     def _call(self, args: list[str], payload: dict[str, object] | None, attempts: int) -> object:
+        try:
+            input_payload = (
+                json.dumps(payload, allow_nan=False) if payload else None
+            )
+        except (RecursionError, TypeError, ValueError) as error:
+            raise AuditError("gh api payload is not strict JSON") from error
         for attempt in range(attempts):
             try:
                 result = subprocess.run(
-                    ["gh", "api", *args], input=json.dumps(payload) if payload else None,
+                    ["gh", "api", *args],
+                    input=input_payload,
                     capture_output=True, text=True, check=False,
                 )
             except OSError as error:
@@ -382,7 +389,7 @@ def synchronized_registry(
     live: LiveState,
     state: SyncState,
 ) -> dict[str, object]:
-    updated = _obj(json.loads(json.dumps(registry)), "registry")
+    updated = _obj(json.loads(json.dumps(registry, allow_nan=False)), "registry")
     github = _obj(updated["github"], "github")
     github["sync_state"] = state
     updated["github"] = github

@@ -146,6 +146,11 @@ def test_process_bounds_drain_for_detached_descendant(tmp_path: Path) -> None:
 def test_runner_classifies_invalid_output_and_valid_roundtrip_failure(tmp_path: Path) -> None:
     invalid = _run(tmp_path / "invalid", "print('partial')")
     assert invalid["observed"] is ObservedOutcome.HARNESS_FAILED
+    nonfinite = _run(
+        tmp_path / "nonfinite",
+        "print('{\"observed\":\"ACCEPTED\",\"details\":{\"value\":NaN}}')",
+    )
+    assert nonfinite["observed"] is ObservedOutcome.HARNESS_FAILED
     wrong_shape = _run(
         tmp_path / "wrong-shape",
         "import json; print(json.dumps({'observed': 7, 'details': []}))",

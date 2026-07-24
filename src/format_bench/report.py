@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .model import Comparability, ExecutionState, Lane, RobustnessVerdict, transition
+from .json_contract import strict_json_dumps
 from .robustness.summary import summarize_cases
 
 
@@ -36,7 +37,7 @@ def _table(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> list[str
 
 def _package_versions(environment: dict) -> str:
     packages = environment.get("packages", {})
-    return json.dumps(
+    return strict_json_dumps(
         {name: value for name, value in sorted(packages.items()) if value},
         sort_keys=True,
         separators=(",", ":"),
@@ -116,7 +117,7 @@ def _sha256(path: Path) -> str:
 
 
 def _json_bytes(payload: dict) -> bytes:
-    return (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (strict_json_dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -166,7 +167,7 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
     format_settings = [
         [
             entry.get("format"),
-            json.dumps(
+            strict_json_dumps(
                 entry.get("settings", {}), sort_keys=True, separators=(",", ":")
             ),
         ]
@@ -200,7 +201,7 @@ def _provenance(run_dir: Path, manifest: dict, results: dict) -> list[str]:
         ["Rows / columns", dimensions],
         [
             "Expected counts",
-            json.dumps(
+            strict_json_dumps(
                 input_manifest.get("expected_counts", {}),
                 sort_keys=True,
                 separators=(",", ":"),

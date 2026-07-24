@@ -328,12 +328,14 @@ def main() -> None:
     }
     input_path = OUTPUT / "input" / "manifest.json"
     input_path.parent.mkdir(parents=True, exist_ok=True)
-    input_path.write_text(json.dumps(aggregate_input, indent=2, sort_keys=True) + "\n")
+    input_path.write_text(
+        json.dumps(aggregate_input, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    )
     (OUTPUT / "manifest.json").write_text(
-        json.dumps(aggregate_manifest, indent=2, sort_keys=True) + "\n"
+        json.dumps(aggregate_manifest, indent=2, sort_keys=True, allow_nan=False) + "\n"
     )
     (OUTPUT / "results.json").write_text(
-        json.dumps(aggregate_results, indent=2, sort_keys=True) + "\n"
+        json.dumps(aggregate_results, indent=2, sort_keys=True, allow_nan=False) + "\n"
     )
     rows = [
         "# Data Format Lab Equivalence Revalidation",

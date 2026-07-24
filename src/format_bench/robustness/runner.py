@@ -17,6 +17,7 @@ from format_bench.model import (
     RobustnessVerdict,
     robustness_verdict,
 )
+from format_bench.json_contract import strict_json_dumps, strict_json_loads
 from format_bench.robustness.paths import reject_symlink_tree
 
 MAX_WORKER_DETAILS_BYTES = 4096
@@ -89,7 +90,7 @@ def _string_field(value: dict[str, object], name: str) -> str:
 
 
 def _request_payload(path: Path) -> RequestPayload:
-    value: object = json.loads(path.read_text(encoding="utf-8"))
+    value = strict_json_loads(path.read_text(encoding="utf-8"))
     payload = _json_object(value, "request")
     return {
         "schema_version": _string_field(payload, "schema_version"),
@@ -103,7 +104,7 @@ def _request_payload(path: Path) -> RequestPayload:
 
 
 def _worker_response(stdout: str) -> WorkerResponse:
-    value: object = json.loads(stdout.strip())
+    value = strict_json_loads(stdout.strip())
     response = _json_object(value, "worker response")
     details: object = response.get("details", {})
     return {
@@ -114,7 +115,7 @@ def _worker_response(stdout: str) -> WorkerResponse:
 
 def _bounded_details(details: dict[str, object]) -> dict[str, object]:
     try:
-        encoded = (json.dumps(details, indent=2, sort_keys=True) + "\n").encode()
+        encoded = (strict_json_dumps(details, indent=2, sort_keys=True) + "\n").encode()
     except (RecursionError, TypeError, ValueError) as error:
         return {
             "truncated": True,

@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "tools"))
 
+import review_closeout as closeout
 from review_closeout import (
     MARKER,
     ReviewCloseoutError,
@@ -174,6 +175,22 @@ def test_review_priority_defaults_and_preserves_badge() -> None:
 def test_batch_threshold_is_inclusive() -> None:
     assert not batch_ready(9)
     assert batch_ready(10)
+
+
+def test_gh_client_rejects_nonfinite_payload_before_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = False
+
+    def unexpected_run(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("gh must not run for an invalid payload")
+
+    monkeypatch.setattr(closeout.subprocess, "run", unexpected_run)
+    with pytest.raises(ReviewCloseoutError, match="not strict JSON"):
+        closeout.GhClient().create_issue("repos/o/r/issues", {"value": float("nan")})
+    assert called is False
 
 
 def test_parse_page_preserves_cursor_for_large_repositories() -> None:

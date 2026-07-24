@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-import json
 import platform
 import zipfile
 from collections.abc import Iterable, Mapping
@@ -11,6 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from .contracts import normalized_columns
+from .json_contract import strict_json_dumps
 from .nyc_snapshot import CaptureState, fail_active_capture, finalize_capture, nyc_rows
 
 
@@ -156,7 +156,7 @@ def materialize_official(
         with output.open("rb") as source:
             source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
         materialization.write_text(
-            json.dumps(
+            strict_json_dumps(
                 {
                     "dataset_id": dataset_id,
                     "rows": row_count,

@@ -217,6 +217,24 @@ def test_sync_lifecycle_rejects_skips_and_reverse_transitions() -> None:
             raise AssertionError(f"accepted illegal transition: {current} -> {target}")
 
 
+def test_github_rest_rejects_nonfinite_payload_before_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = _module("audit_tracker")
+    github = _module("audit_github")
+    called = False
+
+    def unexpected_run(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("gh must not run for an invalid payload")
+
+    monkeypatch.setattr(github.subprocess, "run", unexpected_run)
+    with pytest.raises(tracker.AuditError, match="not strict JSON"):
+        github.GitHubRest()._call(["issues"], {"value": float("nan")}, 1)
+    assert called is False
+
+
 def test_project_contract_checks_identity_items_and_field_types(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

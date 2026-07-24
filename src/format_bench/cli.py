@@ -16,6 +16,7 @@ from .equivalence_admission import (
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
 from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
+from .json_contract import strict_json_dumps
 from .model import ExecutionState
 from .profile_run import run_claims, run_prompt
 from .release import package_run
@@ -443,7 +444,7 @@ def main(argv: list[str] | None = None) -> None:
             else Path("outputs") / f"implementation-audit-{args.dataset}.json"
         )
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        output.write_text(strict_json_dumps(payload, indent=2, sort_keys=True) + "\n")
         path = output
     elif args.command == "merge-equivalence-shards":
         path = merge_equivalence_shards(

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
@@ -33,3 +34,15 @@ def test_text_adapter_roundtrips_equal_arrow_content(tmp_path, fixture_contract,
     assert artifact.native_bytes == path.stat().st_size
     assert artifact.transport_zstd_bytes > 0
     assert adapter.verify_roundtrip(path, manifest)["passed"] is True
+
+
+def test_object_jsonl_nonfinite_failure_preserves_destination(tmp_path: Path) -> None:
+    path = tmp_path / "artifact.jsonl"
+    path.write_text("existing\n", encoding="utf-8")
+    table = pa.table({"value": [1.0, float("nan")]})
+
+    with pytest.raises(ValueError, match="not JSON compliant"):
+        ObjectJsonlAdapter().encode(table, path)
+
+    assert path.read_text(encoding="utf-8") == "existing\n"
+    assert [item.name for item in tmp_path.iterdir()] == ["artifact.jsonl"]

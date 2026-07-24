@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import random
 from dataclasses import dataclass
+
+from format_bench.json_contract import strict_json_dumps
 
 MutationValue = int | str
 
@@ -45,7 +46,7 @@ def mutation_recipes(size: int, seed: int, count: int) -> tuple[MutationRecipe, 
             parameters.update(offset=start, length=rng.randint(1, min(64, max(1, size - start))))
         elif operation == "append":
             parameters["hex"] = rng.randbytes(8).hex()
-        encoded = json.dumps([operation, parameters], sort_keys=True, separators=(",", ":")).encode()
+        encoded = strict_json_dumps([operation, parameters], sort_keys=True, separators=(",", ":")).encode()
         suffix = hashlib.sha256(encoded).hexdigest()[:10]
         recipes.append(
             MutationRecipe(

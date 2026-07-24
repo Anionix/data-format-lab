@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import random
 from dataclasses import dataclass
 from typing import Any
@@ -9,6 +8,7 @@ from typing import Any
 import pyarrow as pa
 
 from format_bench.model import RobustnessExpectation
+from format_bench.json_contract import strict_json_dumps
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ def generated_cases(seed: int, count: int) -> tuple[CaseSpec, ...]:
         rows = parameters["rows"]
         drawn_cardinality = rng.randint(1, max(rows, 1))
         parameters["cardinality"] = 0 if rows == 0 else drawn_cardinality
-        encoded = json.dumps(parameters, sort_keys=True, separators=(",", ":")).encode()
+        encoded = strict_json_dumps(parameters, sort_keys=True, separators=(",", ":")).encode()
         suffix = hashlib.sha256(encoded).hexdigest()[:10]
         cases.append(
             _case(f"generated-{index:03d}-{suffix}", "generated", **parameters)
