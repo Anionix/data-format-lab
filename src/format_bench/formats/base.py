@@ -3,11 +3,17 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Protocol,
+    TypeVar,
+)
 
 import pyarrow as pa
 import zstandard as zstd
 
+from format_bench.adapter_contract import AdapterManifest, VerificationResult
 from format_bench.model import Comparability, Lane
 
 if TYPE_CHECKING:
@@ -54,15 +60,26 @@ class Artifact:
 
 
 class FormatAdapter(Protocol):
+    # LLM contract: MANIFEST_VALIDATED -> ADAPTER_CALLED ->
+    # ROUNDTRIP_VERIFIED | FAILED.
     def describe(self) -> FormatDescription: ...
 
     def encode(self, table: pa.Table, path: Path) -> Artifact: ...
 
-    def read(self, path: Path, manifest: dict) -> pa.Table: ...
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table: ...
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict: ...
+    def verify_roundtrip(
+        self,
+        path: Path,
+        manifest: AdapterManifest,
+    ) -> VerificationResult: ...
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table: ...
+    def scan(
+        self,
+        path: Path,
+        manifest: AdapterManifest,
+        operation: Operation,
+    ) -> pa.Table: ...
 
 
 def write_artifact(path: Path, writer: Callable[[], None]) -> Artifact:

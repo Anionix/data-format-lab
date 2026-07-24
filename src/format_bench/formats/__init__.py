@@ -1,4 +1,10 @@
-from .base import Artifact, FormatAdapter, FormatDescription
+from .base import (
+    AdapterManifest,
+    Artifact,
+    FormatAdapter,
+    FormatDescription,
+    VerificationResult,
+)
 from .arrow_extra import FeatherV2Adapter, OrcAdapter
 from .arrow_ipc import ArrowIpcAdapter
 from .database import DuckDbAdapter, SqliteAdapter
@@ -11,6 +17,7 @@ from .vortex import VortexAdapter
 
 __all__ = [
     "Artifact",
+    "AdapterManifest",
     "ArrowIpcAdapter",
     "AvroAdapter",
     "CborAdapter",
@@ -31,4 +38,5 @@ __all__ = [
     "TsFileAdapter",
     "TsvAdapter",
     "VortexAdapter",
+    "VerificationResult",
 ]
