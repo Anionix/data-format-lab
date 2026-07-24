@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 
 from .canonical import canonical_hash, order_insensitive_hash
-from .model import WorkloadKind
+from .model import WorkloadKind, WorkloadSpec
 from .workloads import apply_workload, expected_workload_rows, load_workloads
 
 
@@ -57,7 +57,7 @@ def _operation_name(operation: Operation) -> str:
 
 def workload_for(
     operation: Operation, manifest: Mapping[str, object] | None = None
-):
+) -> WorkloadSpec:
     return load_workloads(manifest or {})[_operation_name(operation)]
 
 
@@ -70,7 +70,7 @@ def columns_for(
 
 def arrow_filter(
     operation: Operation, manifest: Mapping[str, object] | None = None
-):
+) -> ds.Expression | None:
     spec = workload_for(operation, manifest)
     if spec.kind.value != "filter":
         return None
@@ -117,7 +117,7 @@ def apply_arrow(
     return apply_workload(table, workload_for(operation, manifest))
 
 
-def expected_rows(operation: Operation, manifest: dict) -> int:
+def expected_rows(operation: Operation, manifest: Mapping[str, object]) -> int:
     workloads = load_workloads(manifest)
     name = _operation_name(operation)
     spec = workloads[name]

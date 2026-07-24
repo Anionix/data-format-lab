@@ -1,14 +1,23 @@
 import tomllib
 from pathlib import Path
-from typing import NotRequired, get_args, get_origin, get_type_hints
+from typing import Literal, NotRequired, get_args, get_origin, get_type_hints
 
 from format_bench.contracts import NormalizedColumn
 from format_bench.formats import (
     AdapterColumn,
     AdapterManifest,
+    ComparisonOperator,
+    FilterWorkload,
     FormatAdapter,
+    HeadWorkload,
+    ProjectionWorkload,
+    ReadAllWorkload,
     VerificationResult,
+    WorkloadDeclaration,
+    WorkloadDeclarations,
+    WorkloadScalar,
 )
+from format_bench.model import WorkloadSpec
 from format_bench.registry import adapters
 
 
@@ -42,6 +51,7 @@ def test_adapter_contract_keys_are_explicit() -> None:
         "workloads",
     }
     assert get_origin(manifest_hints["workloads"]) is NotRequired
+    assert get_args(manifest_hints["workloads"]) == (WorkloadDeclarations,)
     assert set(get_type_hints(VerificationResult)) == {
         "canonical_hash",
         "counts",
@@ -54,6 +64,32 @@ def test_adapter_contract_keys_are_explicit() -> None:
         "rows",
     }
     assert AdapterManifest.__optional_keys__ == {"workloads"}
+
+
+def test_workload_contract_is_explicit_and_discriminated() -> None:
+    assert get_args(ComparisonOperator) == ("eq", "gt", "gte", "lt", "lte")
+    assert set(get_args(WorkloadScalar)) == {str, int, float, bool}
+    assert set(get_args(WorkloadDeclaration)) == {
+        ReadAllWorkload,
+        ProjectionWorkload,
+        FilterWorkload,
+        HeadWorkload,
+    }
+    assert get_args(WorkloadDeclarations) == (str, WorkloadDeclaration)
+    assert get_type_hints(ReadAllWorkload)["kind"] == Literal["read_all"]
+    assert get_type_hints(ProjectionWorkload)["kind"] == Literal["projection"]
+    assert get_type_hints(FilterWorkload)["kind"] == Literal["filter"]
+    assert get_type_hints(HeadWorkload)["kind"] == Literal["head"]
+    assert get_type_hints(FilterWorkload)["operator"] == ComparisonOperator
+    assert get_type_hints(WorkloadSpec)["operator"] == ComparisonOperator | None
+    assert ReadAllWorkload.__required_keys__ == {"kind"}
+    assert ReadAllWorkload.__optional_keys__ == {"expected_rows"}
+    assert ProjectionWorkload.__required_keys__ == {"columns", "kind"}
+    assert ProjectionWorkload.__optional_keys__ == {"expected_rows"}
+    assert FilterWorkload.__required_keys__ == {"column", "kind", "operator", "value"}
+    assert FilterWorkload.__optional_keys__ == {"expected_rows"}
+    assert HeadWorkload.__required_keys__ == {"kind", "limit"}
+    assert HeadWorkload.__optional_keys__ == {"expected_rows"}
 
 
 def test_first_party_adapters_implement_the_named_contract() -> None:
@@ -75,4 +111,5 @@ def test_adapter_contract_is_in_the_blocking_strict_frontier() -> None:
     assert pyright["typeCheckingMode"] == "strict"
     assert "src/format_bench/adapter_contract.py" in pyright["include"]
     assert "src/format_bench/registry.py" in pyright["include"]
+    assert "src/format_bench/workload_contract.py" in pyright["include"]
     assert "tests/typecheck/adapter_manifest_normalized.py" in pyright["include"]

@@ -4,6 +4,16 @@ from format_bench.adapter_contract import (
     AdapterManifest,
     VerificationResult,
 )
+from format_bench.workload_contract import (
+    ComparisonOperator,
+    FilterWorkload,
+    HeadWorkload,
+    ProjectionWorkload,
+    ReadAllWorkload,
+    WorkloadDeclaration,
+    WorkloadDeclarations,
+    WorkloadScalar,
+)
 
 from .base import (
     Artifact,
@@ -28,16 +38,21 @@ __all__ = [
     "ArrowIpcAdapter",
     "AvroAdapter",
     "CborAdapter",
+    "ComparisonOperator",
     "CsvAdapter",
     "DuckDbAdapter",
     "FeatherV2Adapter",
+    "FilterWorkload",
     "FormatAdapter",
     "FormatDescription",
+    "HeadWorkload",
     "LanceAdapter",
     "MessagePackAdapter",
     "ObjectJsonlAdapter",
     "OrcAdapter",
     "ParquetAdapter",
+    "ProjectionWorkload",
+    "ReadAllWorkload",
     "SqliteAdapter",
     "build_fts",
     "lance_components",
@@ -46,4 +61,7 @@ __all__ = [
     "TsvAdapter",
     "VortexAdapter",
     "VerificationResult",
+    "WorkloadDeclaration",
+    "WorkloadDeclarations",
+    "WorkloadScalar",
 ]

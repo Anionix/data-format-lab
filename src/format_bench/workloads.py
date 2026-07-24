@@ -62,6 +62,8 @@ def load_workloads(manifest: Mapping[str, object]) -> dict[str, WorkloadSpec]:
         return _legacy_workloads()
     if not isinstance(raw, Mapping):
         raise ValueError("manifest workloads must be an object")
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # Parsing validates an ENCODED declaration; it does not advance evidence state.
     workloads: dict[str, WorkloadSpec] = {}
     for operation, payload in raw.items():
         operation, normalized_payload = normalized_workload_entry(operation, payload)
