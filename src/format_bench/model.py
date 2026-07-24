@@ -225,7 +225,7 @@ class WorkloadSpec:
         if self.kind is WorkloadKind.FILTER:
             if (
                 not self.column
-                or self.operator is None
+                or not is_comparison_operator(self.operator)
                 or self.value is None
             ):
                 raise ValueError(f"filter workload {self.operation} needs a supported predicate")
