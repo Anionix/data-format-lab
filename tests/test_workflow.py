@@ -260,6 +260,49 @@ def test_prepare_run_creates_each_missing_custom_ancestor_privately(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize(
+    ("raced_mode", "expected_error"),
+    ((0o700, None), (0o755, PermissionError)),
+)
+def test_missing_private_parent_validates_concurrent_creator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    raced_mode: int,
+    expected_error: type[Exception] | None,
+) -> None:
+    existing_parent = tmp_path / "existing"
+    existing_parent.mkdir(mode=0o700)
+    raced_parent = existing_parent / "runs"
+    destination = raced_parent / "run"
+    real_mkdir = Path.mkdir
+    raced = False
+
+    def race_mkdir(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        nonlocal raced
+        if path == raced_parent and not raced:
+            real_mkdir(path, mode=raced_mode)
+            path.chmod(raced_mode)
+            raced = True
+        real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", race_mkdir)
+
+    if expected_error is None:
+        workflow._create_missing_private_parents(destination)
+    else:
+        with pytest.raises(expected_error, match="not private"):
+            workflow._create_missing_private_parents(destination)
+
+    assert raced is True
+    assert stat.S_IMODE(raced_parent.stat().st_mode) == raced_mode
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
 @pytest.mark.parametrize("mask", (0o002, 0o000))
 def test_prepare_run_creates_missing_default_parent_privately(
     tmp_path: Path,
