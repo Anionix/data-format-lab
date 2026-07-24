@@ -48,6 +48,16 @@ def _destination_mode(directory_fd: int, name: str) -> int | None:
     return stat.S_IMODE(destination.st_mode)
 
 
+def _validate_publication_directory(directory_fd: int) -> None:
+    directory = os.fstat(directory_fd)
+    shared_write = directory.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    if directory.st_uid != os.geteuid() or shared_write:
+        raise PermissionError(
+            "JSON destination directory must be owned by the effective user "
+            "and not writable by group or other principals"
+        )
+
+
 def _create_temporary(
     directory_fd: int,
     destination_name: str,
@@ -179,6 +189,10 @@ def atomic_write_json(path: Path, value: object) -> None:
             destination_parent,
             os.O_RDONLY | os.O_DIRECTORY,
         )
+        # LLM contract: DIRECTORY_OPENED -> PRINCIPAL_BOUNDARY_VERIFIED.
+        # A basename can identify publication only while other OS principals
+        # cannot rename entries in the retained directory.
+        _validate_publication_directory(directory_fd)
         mode = _destination_mode(directory_fd, destination_name)
         descriptor, temporary_name = _create_temporary(
             directory_fd,

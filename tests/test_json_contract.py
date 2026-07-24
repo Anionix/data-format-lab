@@ -236,6 +236,26 @@ def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
     assert outside.read_bytes() == b'{"outside":true}\n'
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("directory_mode", (0o770, 0o707))
+def test_atomic_write_json_rejects_shared_writable_directory(
+    tmp_path: Path,
+    directory_mode: int,
+) -> None:
+    destination_dir = tmp_path / "shared"
+    destination_dir.mkdir()
+    destination = destination_dir / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+    destination_dir.chmod(directory_mode)
+
+    with pytest.raises(PermissionError, match="not writable by group or other"):
+        atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == previous
+    assert list(destination_dir.glob(".manifest.json.*.tmp")) == []
+
+
 def test_atomic_write_json_accepts_same_directory_with_parent_segments(
     tmp_path: Path,
 ) -> None:
