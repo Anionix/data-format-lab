@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -76,9 +78,7 @@ def _shard_results(pair: str, name: str) -> dict:
                 "interval_method": "bootstrap_percentile",
                 "coverage_claim": "none",
             },
-            "primary_endpoints": {
-                pair: {"scope": "storage", "metric": "native_bytes"}
-            },
+            "primary_endpoints": {pair: {"scope": "storage", "metric": "native_bytes"}},
             "multiplicity_control": {
                 "contract_version": "1",
                 "error_control_target": "FWER",
@@ -111,8 +111,11 @@ def _shard_results(pair: str, name: str) -> dict:
     }
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
 def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     tmp_path: Path,
+    mask: int,
 ) -> None:
     base = tmp_path / "base"
     _write(base / "input" / "manifest.json", {"rows": 4})
@@ -133,11 +136,24 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
         _write(shard / "manifest.json", shard_manifest)
         _write(shard / "results.json", _shard_results(pair, name))
 
-    output = tmp_path / "merged"
-    merge_equivalence_shards(base, shard_root, output)
+    output_parent = tmp_path / "missing" / "nested"
+    output = output_parent / "merged"
+    previous_mask = os.umask(mask)
+    try:
+        merge_equivalence_shards(base, shard_root, output)
+    finally:
+        os.umask(previous_mask)
 
     merged = json.loads((output / "results.json").read_text(encoding="utf-8"))
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    for directory in (
+        tmp_path / "missing",
+        output_parent,
+        output,
+        output / "input",
+        output / "artifacts",
+    ):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     assert merged["status"] == "MEASURED"
     assert set(merged["results"]) == {"arrow_ipc/read_all", "feather_v2/read_all"}
     assert set(merged["equivalence"]["pairs"]) == {"arrow-feather", "csv-tsv"}
@@ -145,9 +161,7 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
         "arrow-feather",
         "csv-tsv",
     }
-    assert merged["equivalence"]["multiplicity_control"][
-        "planned_comparisons"
-    ] == 2
+    assert merged["equivalence"]["multiplicity_control"]["planned_comparisons"] == 2
     assert merged["equivalence"]["storage_estimand"]["numerator"] == (
         "candidate_group_median"
     )
@@ -369,7 +383,9 @@ def test_merge_equivalence_shards_hashes_directory_artifacts(tmp_path: Path) -> 
     merge_equivalence_shards(base, tmp_path / "shards", tmp_path / "merged")
 
 
-def test_merge_equivalence_shards_rejects_artifact_kind_mismatch(tmp_path: Path) -> None:
+def test_merge_equivalence_shards_rejects_artifact_kind_mismatch(
+    tmp_path: Path,
+) -> None:
     base = tmp_path / "base"
     _write(base / "input" / "manifest.json", {"rows": 4})
     (base / "input" / "source.csv").write_text("id\n1\n", encoding="utf-8")

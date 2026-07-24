@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .model import Comparability, ExecutionState, Lane, RobustnessVerdict, transition
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json, strict_json_dumps
 from .robustness.summary import summarize_cases
 
 
@@ -780,6 +780,6 @@ def render_report(run_dir: Path) -> Path:
             payload["state"] = transition(
                 ExecutionState.BENCHMARKED, ExecutionState.REPORTED
             )
-        json_path.write_bytes(_json_bytes(payload))
+        atomic_write_json(json_path, payload)
     # LLM contract: transition in memory, then persist after durable report output.
     return path

@@ -10,7 +10,7 @@ from .artifact_digest import artifact_sha256
 from .canonical import canonical_hash, query_counts, read_csv, verify_table
 from .datasets import load_manifest
 from .formats.base import Artifact, FormatAdapter
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json
 from .model import ExecutionState, transition
 from .registry import adapter_map, adapters
 from .runner import environment_info
@@ -23,9 +23,7 @@ from .workflow_contract import (
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(
-        strict_json_dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    atomic_write_json(path, payload)
 
 
 def _sha256(path: Path) -> str:
@@ -143,9 +141,15 @@ def prepare_run(
                 f"expected {manifest['source_sha256']}, got {actual_source_sha256}"
             )
     destination = run_dir or _default_run_dir(root, dataset_id)
-    destination.mkdir(parents=True, exist_ok=False)
+    if run_dir is None:
+        destination.parent.mkdir(mode=0o700, exist_ok=True)
+    destination.mkdir(
+        mode=0o700,
+        parents=run_dir is not None,
+        exist_ok=False,
+    )
     input_dir = destination / "input"
-    input_dir.mkdir()
+    input_dir.mkdir(mode=0o700)
 
     table = read_csv(source, manifest)
     effective = _fixture_manifest(manifest, table, source) if fixture else manifest
@@ -155,9 +159,9 @@ def prepare_run(
 
     entries = []
     artifact_root = destination / "artifacts"
-    artifact_root.mkdir()
+    artifact_root.mkdir(mode=0o700)
     observation_root = destination / ".size-observations"
-    observation_root.mkdir()
+    observation_root.mkdir(mode=0o700)
     _ensure_contained(destination, artifact_root)
     _ensure_contained(destination, observation_root)
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
@@ -201,7 +205,7 @@ def prepare_run(
                     observation_dir = _ensure_contained(
                         destination, observation_root / format_name
                     )
-                    observation_dir.mkdir(exist_ok=True)
+                    observation_dir.mkdir(mode=0o700, exist_ok=True)
                     repeated_path = _ensure_contained(
                         destination,
                         observation_dir / f"{attempt_index}{format_extension}",

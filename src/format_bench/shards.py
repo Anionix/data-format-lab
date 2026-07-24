@@ -7,17 +7,11 @@ from pathlib import Path
 from typing import TypeAlias, cast
 
 from .artifact_digest import artifact_sha256
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json, strict_json_dumps
 from .model import ExecutionState, transition
 
 JSONValue: TypeAlias = (
-    None
-    | bool
-    | int
-    | float
-    | str
-    | list["JSONValue"]
-    | dict[str, "JSONValue"]
+    None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
 )
 JSONObject = dict[str, JSONValue]
 
@@ -54,7 +48,7 @@ def _object_map(value: JSONValue, label: str) -> dict[str, JSONObject]:
 
 
 def _write_json(path: Path, value: JSONObject) -> None:
-    path.write_text(strict_json_dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(path, value)
 
 
 def _safe_run_path(
@@ -66,12 +60,16 @@ def _safe_run_path(
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError(f"run path must be relative: {label}")
     candidate = run / relative
-    if candidate.is_symlink() or any(parent.is_symlink() for parent in candidate.parents):
+    if candidate.is_symlink() or any(
+        parent.is_symlink() for parent in candidate.parents
+    ):
         raise ValueError(f"run path must not resolve through a symlink: {label}")
     try:
         candidate.resolve(strict=not allow_missing).relative_to(run.resolve())
     except (FileNotFoundError, ValueError) as error:
-        raise ValueError(f"run path is missing or escapes run directory: {label}") from error
+        raise ValueError(
+            f"run path is missing or escapes run directory: {label}"
+        ) from error
     return candidate
 
 
@@ -127,7 +125,7 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
 def _hardlink_tree(source: Path, destination: Path) -> None:
     if source.is_symlink():
         raise ValueError(f"symlink is not allowed in shard input: {source}")
-    destination.mkdir(parents=True, exist_ok=True)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
     for entry in source.iterdir():
         target = destination / entry.name
         if entry.is_dir():
@@ -138,8 +136,26 @@ def _hardlink_tree(source: Path, destination: Path) -> None:
             raise ValueError(f"unsupported artifact entry: {entry}")
 
 
+def _mkdir_private_tree(destination: Path) -> None:
+    missing: list[Path] = []
+    current = destination
+    while not current.exists():
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            raise FileNotFoundError("shard output has no existing ancestor")
+        current = parent
+    if not current.is_dir():
+        raise NotADirectoryError(f"shard output ancestor is not a directory: {current}")
+    # LLM contract: ANCESTOR_DISCOVERED -> PRIVATE_CREATED | FAILED.
+    # Create each missing level explicitly so pathlib cannot apply umask-only
+    # parent creation before the private output leaf exists.
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+
+
 def _copy_run_files(base_run: Path, output_run: Path) -> None:
-    output_run.mkdir(parents=True)
+    _mkdir_private_tree(output_run)
     for name in ("artifacts", "input"):
         _hardlink_tree(base_run / name, output_run / name)
     shutil.copy2(base_run / "manifest.json", output_run / "manifest.json")
@@ -237,9 +253,7 @@ def merge_equivalence_shards(
             if pair in primary_endpoints and primary_endpoints[pair] != endpoint:
                 raise ValueError(f"conflicting primary endpoint: {pair}")
             primary_endpoints[pair] = endpoint
-        pairs = _object_map(
-            equivalence.get("pairs"), f"{shard}/equivalence.pairs"
-        )
+        pairs = _object_map(equivalence.get("pairs"), f"{shard}/equivalence.pairs")
         if not pairs:
             raise ValueError(f"shard has no equivalence pair evidence: {shard}")
         for job_id, evidence in _object_map(

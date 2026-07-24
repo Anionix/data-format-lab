@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import json
 import math
-from typing import Never, TypedDict, Unpack, cast
+import os
+import secrets
+import stat
+import sys
+from pathlib import Path
+from typing import BinaryIO, Never, TypedDict, Unpack, cast
 
 
 class JsonDumpOptions(TypedDict, total=False):
@@ -12,6 +19,139 @@ class JsonDumpOptions(TypedDict, total=False):
     indent: int | str | None
     separators: tuple[str, str] | None
     sort_keys: bool
+
+
+class _TemporaryOwnershipLost(ValueError):
+    """The temporary basename no longer identifies this writer's inode."""
+
+
+def _darwin_has_extended_acl(directory_fd: int) -> bool:
+    if sys.platform != "darwin":
+        return False
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    acl_get_fd = libc.acl_get_fd_np
+    acl_get_fd.argtypes = (ctypes.c_int, ctypes.c_int)
+    acl_get_fd.restype = ctypes.c_void_p
+    acl_free = libc.acl_free
+    acl_free.argtypes = (ctypes.c_void_p,)
+    acl_free.restype = ctypes.c_int
+
+    # Darwin <sys/acl.h>: ACL_TYPE_EXTENDED = 0x00000100.
+    ctypes.set_errno(0)
+    acl = acl_get_fd(directory_fd, 0x00000100)
+    if not acl:
+        error = ctypes.get_errno()
+        if error in {errno.ENOENT, errno.EOPNOTSUPP}:
+            return False
+        raise OSError(error, os.strerror(error))
+    try:
+        return True
+    finally:
+        if acl_free(acl) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+
+
+def _write_atomic_file(destination: BinaryIO, payload: bytes) -> None:
+    offset = 0
+    while offset < len(payload):
+        written = destination.write(payload[offset:])
+        if written <= 0:
+            raise OSError("temporary JSON file write made no progress")
+        offset += written
+
+
+def _flush_atomic_file(destination: BinaryIO) -> None:
+    destination.flush()
+    os.fsync(destination.fileno())
+
+
+def _destination_mode(directory_fd: int, name: str) -> int | None:
+    try:
+        destination = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(destination.st_mode):
+        raise ValueError("JSON destination must not be a symbolic link")
+    if not stat.S_ISREG(destination.st_mode):
+        raise ValueError("JSON destination must be a regular file")
+    return stat.S_IMODE(destination.st_mode)
+
+
+def _validate_publication_directory(directory_fd: int) -> None:
+    directory = os.fstat(directory_fd)
+    shared_write = directory.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    if directory.st_uid != os.geteuid() or shared_write:
+        raise PermissionError(
+            "JSON destination directory must be owned by the effective user "
+            "and not writable by group or other principals"
+        )
+    if _darwin_has_extended_acl(directory_fd):
+        raise PermissionError(
+            "JSON destination directory must not have a macOS extended ACL"
+        )
+
+
+def _create_temporary(
+    directory_fd: int,
+    destination_name: str,
+    creation_mode: int,
+) -> tuple[int, str]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    for _ in range(100):
+        name = f".{destination_name}.{secrets.token_hex(8)}.tmp"
+        try:
+            descriptor = os.open(
+                name,
+                flags,
+                creation_mode,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            continue
+        return descriptor, name
+    raise FileExistsError("could not create an exclusive temporary JSON file")
+
+
+def _temporary_name(
+    directory_fd: int,
+    temporary_name: str,
+    temporary_identity: tuple[int, int],
+) -> str:
+    try:
+        entry = os.stat(
+            temporary_name,
+            dir_fd=directory_fd,
+            follow_symlinks=False,
+        )
+    except FileNotFoundError as error:
+        raise _TemporaryOwnershipLost(
+            "temporary JSON file no longer identifies the opened entry"
+        ) from error
+    if (
+        not stat.S_ISREG(entry.st_mode)
+        or entry.st_dev != temporary_identity[0]
+        or entry.st_ino != temporary_identity[1]
+    ):
+        raise _TemporaryOwnershipLost(
+            "temporary JSON file no longer identifies the opened entry"
+        )
+    return temporary_name
+
+
+def _replace_same_directory(
+    directory_fd: int,
+    temporary_name: str,
+    destination_name: str,
+) -> None:
+    _destination_mode(directory_fd, destination_name)
+    os.replace(
+        temporary_name,
+        destination_name,
+        src_dir_fd=directory_fd,
+        dst_dir_fd=directory_fd,
+    )
 
 
 def _reject_nonfinite(token: str) -> Never:
@@ -64,3 +204,72 @@ def strict_json_dumps(value: object, **kwargs: Unpack[JsonDumpOptions]) -> str:
     if "allow_nan" in kwargs:
         raise TypeError("allow_nan is fixed to False")
     return json.dumps(value, allow_nan=False, **kwargs)
+
+
+def atomic_write_json(path: Path, value: object) -> None:
+    """Write one deterministic JSON document through a same-directory replace."""
+    payload = (strict_json_dumps(value, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+    destination = path.absolute()
+    destination_parent = destination.parent.resolve(strict=True)
+    destination_name = destination.name
+    if not destination_name or destination_name in {".", ".."}:
+        raise ValueError("JSON destination must name a regular file")
+
+    directory_fd = -1
+    descriptor = -1
+    try:
+        directory_fd = os.open(
+            destination_parent,
+            os.O_RDONLY | os.O_DIRECTORY,
+        )
+        # LLM contract: DIRECTORY_OPENED -> PRINCIPAL_BOUNDARY_VERIFIED.
+        # A basename can identify publication only while other OS principals
+        # cannot rename entries in the retained directory.
+        _validate_publication_directory(directory_fd)
+        mode = _destination_mode(directory_fd, destination_name)
+        descriptor, temporary_name = _create_temporary(
+            directory_fd,
+            destination_name,
+            mode if mode is not None else 0o666,
+        )
+        opened_temporary = os.fstat(descriptor)
+        temporary_identity = (opened_temporary.st_dev, opened_temporary.st_ino)
+        temporary_name = _temporary_name(
+            directory_fd,
+            temporary_name,
+            temporary_identity,
+        )
+        final_mode = (
+            mode if mode is not None else stat.S_IMODE(opened_temporary.st_mode)
+        )
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = -1
+            _write_atomic_file(stream, payload)
+            _flush_atomic_file(stream)
+            # LLM contract: PRIVATE_COMPLETE -> PUBLISHED_PRIVATE ->
+            # PUBLISHED_INTENDED_MODE. The complete unpublished payload stays
+            # private even when replace fails in a searchable directory.
+            _replace_same_directory(
+                directory_fd,
+                temporary_name,
+                destination_name,
+            )
+            # A mode-restoration failure is post-publication: new bytes remain
+            # installed at 0600. A later fsync failure may occur after the
+            # intended mode is installed; neither failure restores old bytes.
+            os.fchmod(stream.fileno(), final_mode)
+            os.fsync(stream.fileno())
+        # LLM contract: TEMPORARY_OWNED -> PUBLISHED | RETAINED_FAILED.
+        # Portable POSIX has no atomic compare-and-unlink operation. A failed
+        # write retains its narrowed temporary entry instead of risking deletion
+        # of an unrelated file that concurrently reuses the basename.
+    finally:
+        try:
+            if descriptor >= 0:
+                os.close(descriptor)
+        finally:
+            if directory_fd >= 0:
+                os.close(directory_fd)

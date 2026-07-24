@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from .fair import expected_rows, operations_for
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json
 from .model import ExecutionState, Lane, transition
 from .runner import Job, MeasurementConfig, measurement_metadata, new_results, run_jobs
 
@@ -56,9 +56,7 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
     # LLM contract precondition: estimand metadata is durable before
     # ROUNDTRIP_VERIFIED -> BENCHMARKED.
     run_manifest["measurement"] = measurement_record
-    manifest_path.write_text(
-        strict_json_dumps(run_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    atomic_write_json(manifest_path, run_manifest)
     measured = run_jobs(jobs, measurement, root)
     successful_entries = 0
     failed_entries = 0
@@ -99,8 +97,8 @@ def run_fair(root: Path, run_dir: Path, config: MeasurementConfig | None = None)
         }
     )
     results_path = run_dir / "results.json"
-    results_path.write_text(strict_json_dumps(results, indent=2, sort_keys=True) + "\n")
+    atomic_write_json(results_path, results)
     run_manifest["state"] = run_state
     run_manifest["profile"] = "fair"
-    manifest_path.write_text(strict_json_dumps(run_manifest, indent=2, sort_keys=True) + "\n")
+    atomic_write_json(manifest_path, run_manifest)
     return results_path

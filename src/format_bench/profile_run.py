@@ -9,7 +9,7 @@ from .claims.fastlanes import run_fastlanes_claim
 from .claims.tsfile import run_tsfile_claim
 from .claims.vortex import run_vortex_stress
 from .formats.lance import build_fts, query_fts
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json
 from .model import Comparability, ExecutionState, Lane, TargetTier, transition
 from .prompt import token_metrics, write_prompt_artifacts
 from .research import load_research_records
@@ -38,12 +38,10 @@ def _finish(root: Path, run_dir: Path, run: dict, profile: Lane, evidence: dict)
         "results": evidence,
     }
     path = run_dir / "results.json"
-    path.write_text(strict_json_dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(path, results)
     run["state"] = transition(ExecutionState.ROUNDTRIP_VERIFIED, ExecutionState.BENCHMARKED)
     run["profile"] = profile
-    (run_dir / "manifest.json").write_text(
-        strict_json_dumps(run, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    atomic_write_json(run_dir / "manifest.json", run)
     return path
 
 

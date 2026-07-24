@@ -1,12 +1,14 @@
 import json
+import os
 import shutil
+import stat
 from dataclasses import replace
 from pathlib import Path
 
 import pyarrow as pa
 import pytest
 
-from format_bench import cli
+from format_bench import cli, workflow
 from format_bench.artifact_digest import artifact_sha256
 from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
@@ -167,6 +169,78 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
         )
         for entry in verified["formats"]
     )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
+def test_prepare_run_creates_private_lifecycle_directories_under_open_umask(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mask: int,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    requested_modes: dict[str, int] = {}
+    real_mkdir = Path.mkdir
+
+    def record_mode(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if path == run_dir or run_dir in path.parents:
+            requested_modes.setdefault(str(path.relative_to(run_dir.parent)), mode)
+        real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", record_mode)
+    previous_mask = os.umask(mask)
+    try:
+        prepare_run(
+            root,
+            DATASET,
+            run_dir,
+            fixture=True,
+            selected=(CsvAdapter(),),
+            size_observations=2,
+        )
+    finally:
+        os.umask(previous_mask)
+
+    for directory in (run_dir, run_dir / "input", run_dir / "artifacts"):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert requested_modes["run/.size-observations"] == 0o700
+    assert requested_modes["run/.size-observations/csv"] == 0o700
+    assert (run_dir / "input" / "manifest.json").is_file()
+    assert (run_dir / "manifest.json").is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
+def test_prepare_run_creates_missing_default_parent_privately(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mask: int,
+) -> None:
+    root = Path(__file__).parents[1]
+    destination_root = tmp_path / "root"
+    destination_root.mkdir(mode=0o700)
+    destination = destination_root / "runs" / "run"
+    monkeypatch.setattr(
+        workflow,
+        "_default_run_dir",
+        lambda _root, _dataset_id: destination,
+    )
+
+    previous_mask = os.umask(mask)
+    try:
+        prepared = prepare_run(root, DATASET, fixture=True, selected=())
+    finally:
+        os.umask(previous_mask)
+
+    assert prepared == destination
+    for directory in (destination.parent, destination):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
 
 
 def test_artifact_digest_rejects_root_symlink(tmp_path: Path) -> None:
