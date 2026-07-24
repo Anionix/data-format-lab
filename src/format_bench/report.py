@@ -505,6 +505,24 @@ def _robustness(results: dict) -> list[str]:
     if not isinstance(target_summary, dict) or not target_summary:
         target_summary = summarize_cases(evidence["cases"])
         evidence["target_summary"] = target_summary
+    # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+    # Mutation counts are descriptive report evidence only; they never affect ranking or gates.
+    mutation_rows = []
+    for target, item in sorted(target_summary.items()):
+        mutation = item.get("artifact_mutation", {})
+        mutation_rows.append(
+            [
+                target,
+                mutation.get("denominator", 0),
+                mutation.get("completed", 0),
+                mutation.get("failures", 0),
+                mutation.get("crashes", 0),
+                mutation.get("timeouts", 0),
+                mutation.get("unsupported", 0),
+                mutation.get("incomplete", 0),
+                mutation.get("completed_pct"),
+            ]
+        )
     target_rows = [
         [
             target,
@@ -561,6 +579,25 @@ def _robustness(results: dict) -> list[str]:
                 "Duration p50 ms",
             ],
             target_rows,
+        ),
+        "",
+        "### Artifact Mutation Coverage",
+        "",
+        "Artifact mutation counts cover only generated cases with a persisted mutation recipe identity; named boundary cases are excluded. This is descriptive reliability evidence, not a mutation score, and has no ranking or gate effect.",
+        "",
+        *_table(
+            [
+                "Target",
+                "Denominator",
+                "Completed",
+                "Failures",
+                "Crashes",
+                "Timeouts",
+                "Unsupported",
+                "Incomplete",
+                "Completed %",
+            ],
+            mutation_rows,
         ),
         "",
         "### Evidence Identities",

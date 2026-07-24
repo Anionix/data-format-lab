@@ -23,8 +23,66 @@ TargetSummary = TypedDict(
         "duration_ms_p50": float | None,
         "artifact_sha256": list[str],
         "source_identities": list[str],
+        "artifact_mutation": "ArtifactMutationSummary",
     },
 )
+
+ArtifactMutationSummary = TypedDict(
+    "ArtifactMutationSummary",
+    {
+        "denominator": int,
+        "completed": int,
+        "failures": int,
+        "crashes": int,
+        "timeouts": int,
+        "unsupported": int,
+        "incomplete": int,
+        "completed_pct": float | None,
+    },
+)
+
+
+@dataclass
+class _ArtifactMutationAccumulator:
+    denominator: int = 0
+    completed: int = 0
+    failures: int = 0
+    crashes: int = 0
+    timeouts: int = 0
+    unsupported: int = 0
+    incomplete: int = 0
+
+    def observe(self, verdict: str, observed: str) -> None:
+        self.denominator += 1
+        if verdict in {"PASS", "FAIL"}:
+            self.completed += 1
+        if verdict == "FAIL":
+            self.failures += 1
+        if observed == "CRASHED":
+            self.crashes += 1
+        elif observed == "TIMED_OUT":
+            self.timeouts += 1
+        elif observed == "UNSUPPORTED":
+            self.unsupported += 1
+        if verdict == "INCOMPLETE":
+            self.incomplete += 1
+
+    def emit(self) -> ArtifactMutationSummary:
+        percentage = (
+            round(100 * self.completed / self.denominator, 3)
+            if self.denominator
+            else None
+        )
+        return {
+            "denominator": self.denominator,
+            "completed": self.completed,
+            "failures": self.failures,
+            "crashes": self.crashes,
+            "timeouts": self.timeouts,
+            "unsupported": self.unsupported,
+            "incomplete": self.incomplete,
+            "completed_pct": percentage,
+        }
 
 
 @dataclass
@@ -43,6 +101,9 @@ class _TargetAccumulator:
     durations: list[float] = field(default_factory=list)
     artifact_sha256: set[str] = field(default_factory=set)
     source_identities: set[str] = field(default_factory=set)
+    artifact_mutation: _ArtifactMutationAccumulator = field(
+        default_factory=_ArtifactMutationAccumulator
+    )
 
     def observe_outcome(self, observed: str) -> None:
         if observed == "CRASHED":
@@ -74,6 +135,7 @@ class _TargetAccumulator:
             ),
             "artifact_sha256": sorted(self.artifact_sha256),
             "source_identities": sorted(self.source_identities),
+            "artifact_mutation": self.artifact_mutation.emit(),
         }
 
 
@@ -110,6 +172,10 @@ def summarize_cases(cases: Sequence[Mapping[str, object]]) -> dict[str, TargetSu
         group.cases += 1
         verdict = _value(case.get("verdict"))
         observed = _value(case.get("observed"))
+        mutation = case.get("mutation")
+        recipe_id = mutation.get("recipe_id") if isinstance(mutation, Mapping) else None
+        if isinstance(recipe_id, str) and recipe_id:
+            group.artifact_mutation.observe(verdict, observed)
         if verdict != "NOT_APPLICABLE":
             group.applicable += 1
         if verdict == "PASS":
