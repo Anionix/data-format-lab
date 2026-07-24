@@ -18,6 +18,10 @@ class JsonDumpOptions(TypedDict, total=False):
     sort_keys: bool
 
 
+class _TemporaryOwnershipLost(ValueError):
+    """The temporary basename no longer identifies this writer's inode."""
+
+
 def _write_atomic_file(destination: BinaryIO, payload: bytes) -> None:
     offset = 0
     while offset < len(payload):
@@ -73,9 +77,27 @@ def _create_temporary(
 def _temporary_name(
     directory_fd: int,
     cleanup_directory_fd: int,
-    descriptor: int,
     temporary_name: str,
+    temporary_identity: tuple[int, int],
 ) -> str:
+    try:
+        entry = os.stat(
+            temporary_name,
+            dir_fd=cleanup_directory_fd,
+            follow_symlinks=False,
+        )
+    except FileNotFoundError as error:
+        raise _TemporaryOwnershipLost(
+            "temporary JSON file no longer identifies the opened entry"
+        ) from error
+    if (
+        not stat.S_ISREG(entry.st_mode)
+        or entry.st_dev != temporary_identity[0]
+        or entry.st_ino != temporary_identity[1]
+    ):
+        raise _TemporaryOwnershipLost(
+            "temporary JSON file no longer identifies the opened entry"
+        )
     destination_directory = os.fstat(directory_fd)
     temporary_directory = os.fstat(cleanup_directory_fd)
     if (
@@ -85,24 +107,25 @@ def _temporary_name(
         raise ValueError(
             "temporary JSON file must use the destination's same directory"
         )
+    return temporary_name
+
+
+def _unlink_owned_temporary(
+    cleanup_directory_fd: int,
+    temporary_name: str,
+    temporary_identity: tuple[int, int],
+) -> None:
     try:
         entry = os.stat(
             temporary_name,
             dir_fd=cleanup_directory_fd,
             follow_symlinks=False,
         )
-    except FileNotFoundError as error:
-        raise ValueError(
-            "temporary JSON file must use the destination's same directory"
-        ) from error
-    opened = os.fstat(descriptor)
-    if (
-        not stat.S_ISREG(entry.st_mode)
-        or entry.st_dev != opened.st_dev
-        or entry.st_ino != opened.st_ino
-    ):
-        raise ValueError("temporary JSON file must be a regular same-directory entry")
-    return temporary_name
+    except FileNotFoundError:
+        return
+    if entry.st_dev != temporary_identity[0] or entry.st_ino != temporary_identity[1]:
+        return
+    os.unlink(temporary_name, dir_fd=cleanup_directory_fd)
 
 
 def _replace_same_directory(
@@ -186,6 +209,7 @@ def atomic_write_json(path: Path, value: object) -> None:
     cleanup_directory_fd = -1
     descriptor = -1
     temporary_name: str | None = None
+    temporary_identity: tuple[int, int] | None = None
     try:
         directory_fd = os.open(
             destination_parent,
@@ -197,12 +221,19 @@ def atomic_write_json(path: Path, value: object) -> None:
             destination_name,
             mode if mode is not None else 0o666,
         )
-        temporary_name = _temporary_name(
-            directory_fd,
-            cleanup_directory_fd,
-            descriptor,
-            temporary_name,
-        )
+        opened_temporary = os.fstat(descriptor)
+        temporary_identity = (opened_temporary.st_dev, opened_temporary.st_ino)
+        try:
+            temporary_name = _temporary_name(
+                directory_fd,
+                cleanup_directory_fd,
+                temporary_name,
+                temporary_identity,
+            )
+        except _TemporaryOwnershipLost:
+            temporary_name = None
+            temporary_identity = None
+            raise
         if mode is not None:
             os.fchmod(descriptor, mode)
         with os.fdopen(descriptor, "wb") as stream:
@@ -217,17 +248,23 @@ def atomic_write_json(path: Path, value: object) -> None:
         # LLM contract: TEMPORARY_OWNED -> PUBLISHED transfers the basename;
         # this call must never clean a later entry that reuses the vacated name.
         temporary_name = None
+        temporary_identity = None
     finally:
         try:
             if descriptor >= 0:
                 os.close(descriptor)
         finally:
             try:
-                if temporary_name is not None and cleanup_directory_fd >= 0:
-                    try:
-                        os.unlink(temporary_name, dir_fd=cleanup_directory_fd)
-                    except FileNotFoundError:
-                        pass
+                if (
+                    temporary_name is not None
+                    and temporary_identity is not None
+                    and cleanup_directory_fd >= 0
+                ):
+                    _unlink_owned_temporary(
+                        cleanup_directory_fd,
+                        temporary_name,
+                        temporary_identity,
+                    )
             finally:
                 try:
                     if cleanup_directory_fd >= 0:

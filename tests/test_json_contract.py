@@ -437,6 +437,51 @@ def test_atomic_write_json_closes_directories_when_cleanup_fails(
             os.fstat(descriptor)
 
 
+def test_atomic_write_json_preserves_name_reused_during_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    token = "reused"
+    temporary_name = f".manifest.json.{token}.tmp"
+    destination = tmp_path / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+    real_temporary_name = json_contract._temporary_name
+
+    def replace_before_validation(
+        directory_fd: int,
+        cleanup_directory_fd: int,
+        name: str,
+        identity: tuple[int, int],
+    ) -> str:
+        os.unlink(name, dir_fd=cleanup_directory_fd)
+        replacement = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=cleanup_directory_fd,
+        )
+        try:
+            os.write(replacement, b"UNRELATED")
+        finally:
+            os.close(replacement)
+        return real_temporary_name(
+            directory_fd,
+            cleanup_directory_fd,
+            name,
+            identity,
+        )
+
+    monkeypatch.setattr(json_contract.secrets, "token_hex", lambda _size: token)
+    monkeypatch.setattr(json_contract, "_temporary_name", replace_before_validation)
+
+    with pytest.raises(ValueError, match="no longer identifies"):
+        atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == previous
+    assert (tmp_path / temporary_name).read_bytes() == b"UNRELATED"
+
+
 @pytest.mark.parametrize(
     "token",
     ("NaN", "Infinity", "-Infinity", "1e9999", "-1e9999"),
