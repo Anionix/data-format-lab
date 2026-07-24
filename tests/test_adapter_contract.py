@@ -2,6 +2,7 @@ import tomllib
 from pathlib import Path
 from typing import NotRequired, get_args, get_origin, get_type_hints
 
+from format_bench.contracts import NormalizedColumn
 from format_bench.formats import (
     AdapterColumn,
     AdapterManifest,
@@ -29,7 +30,10 @@ def test_adapter_contract_keys_are_explicit() -> None:
     assert get_origin(column_hints["nullable"]) is NotRequired
     assert AdapterColumn.__required_keys__ == {"arrow_type", "name"}
     assert AdapterColumn.__optional_keys__ == {"nullable"}
-    assert get_args(manifest_hints["columns"]) == (AdapterColumn,)
+    assert set(get_args(manifest_hints["columns"])) == {
+        list[AdapterColumn],
+        list[NormalizedColumn],
+    }
     assert set(manifest_hints) == {
         "canonical_hash",
         "columns",
@@ -71,3 +75,4 @@ def test_adapter_contract_is_in_the_blocking_strict_frontier() -> None:
     assert pyright["typeCheckingMode"] == "strict"
     assert "src/format_bench/adapter_contract.py" in pyright["include"]
     assert "src/format_bench/registry.py" in pyright["include"]
+    assert "tests/typecheck/adapter_manifest_normalized.py" in pyright["include"]

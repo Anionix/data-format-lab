@@ -1,5 +1,6 @@
 from format_bench.adapter_contract import (
     AdapterColumn,
+    AdapterColumns,
     AdapterManifest,
     VerificationResult,
 )
@@ -22,6 +23,7 @@ from .vortex import VortexAdapter
 __all__ = [
     "Artifact",
     "AdapterColumn",
+    "AdapterColumns",
     "AdapterManifest",
     "ArrowIpcAdapter",
     "AvroAdapter",
