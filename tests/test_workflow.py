@@ -217,6 +217,50 @@ def test_prepare_run_creates_private_lifecycle_directories_under_open_umask(
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
 @pytest.mark.parametrize("mask", (0o002, 0o000))
+def test_prepare_run_creates_each_missing_custom_ancestor_privately(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mask: int,
+) -> None:
+    root = Path(__file__).parents[1]
+    existing_parent = tmp_path / "existing"
+    existing_parent.mkdir(mode=0o700)
+    first_ancestor = existing_parent / "first"
+    second_ancestor = first_ancestor / "second"
+    run_dir = second_ancestor / "run"
+    created_levels = (first_ancestor, second_ancestor, run_dir)
+    requested_modes: dict[Path, int] = {}
+    real_mkdir = Path.mkdir
+
+    def record_mode(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if path in created_levels:
+            requested_modes[path] = mode
+            assert parents is False
+        real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", record_mode)
+
+    previous_mask = os.umask(mask)
+    try:
+        prepared = prepare_run(root, DATASET, run_dir, fixture=True, selected=())
+    finally:
+        os.umask(previous_mask)
+
+    assert prepared == run_dir
+    assert requested_modes == {directory: 0o700 for directory in created_levels}
+    for directory in created_levels:
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert (run_dir / "input" / "manifest.json").is_file()
+    assert (run_dir / "manifest.json").is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
 def test_prepare_run_creates_missing_default_parent_privately(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

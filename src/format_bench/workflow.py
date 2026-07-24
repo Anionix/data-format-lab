@@ -49,6 +49,20 @@ def _default_run_dir(root: Path, dataset_id: str) -> Path:
     return root / "runs" / f"{dataset_id}-{stamp}"
 
 
+def _create_missing_private_parents(destination: Path) -> None:
+    missing: list[Path] = []
+    parent = destination.parent
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+
+    # LLM contract: EXISTING_ANCESTOR -> PRIVATE_ANCESTORS_READY | FAILED.
+    # Create shallow-to-deep without parents=True so every new level requests
+    # 0700; any mkdir failure stops before the private run leaf is created.
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+
+
 def _safe_format_component(
     value: object, label: str, *, extension: bool = False
 ) -> str:
@@ -143,11 +157,9 @@ def prepare_run(
     destination = run_dir or _default_run_dir(root, dataset_id)
     if run_dir is None:
         destination.parent.mkdir(mode=0o700, exist_ok=True)
-    destination.mkdir(
-        mode=0o700,
-        parents=run_dir is not None,
-        exist_ok=False,
-    )
+    else:
+        _create_missing_private_parents(destination)
+    destination.mkdir(mode=0o700, exist_ok=False)
     input_dir = destination / "input"
     input_dir.mkdir(mode=0o700)
 
