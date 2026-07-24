@@ -61,21 +61,68 @@ def _default_run_dir(root: Path, dataset_id: str) -> Path:
     return root / "runs" / f"{dataset_id}-{stamp}"
 
 
+def _safe_format_component(
+    value: object, label: str, *, extension: bool = False
+) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label} must be a non-empty path component")
+    if (
+        value in {".", ".."}
+        or "/" in value
+        or "\\" in value
+        or "\x00" in value
+        or (extension and (not value.startswith(".") or value == "."))
+    ):
+        raise ValueError(f"{label} must be a safe path component")
+    return value
+
+
+def _ensure_contained(
+    root: Path, candidate: Path, *, allow_leaf_symlink: bool = False
+) -> Path:
+    if root.is_symlink():
+        raise ValueError(f"path root must not be a symlink: {root}")
+    if any(
+        parent.is_symlink() for parent in candidate.parents if parent != root.parent
+    ):
+        raise ValueError(f"path must not resolve through a symlink: {candidate}")
+    if candidate.is_symlink():
+        if not allow_leaf_symlink:
+            raise ValueError(f"path must not resolve through a symlink: {candidate}")
+        try:
+            candidate.parent.resolve(strict=False).relative_to(root.resolve())
+        except ValueError as error:
+            raise ValueError(f"path escapes root: {candidate}") from error
+        return candidate
+    try:
+        candidate.resolve(strict=False).relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError(f"path escapes root: {candidate}") from error
+    return candidate
+
+
 def _measured_size_attempt(
-    index: int, artifact: Artifact, *, verified: bool
+    index: int, artifact: Artifact, expected_path: Path, *, verified: bool
 ) -> SizeAttempt:
+    if artifact.path != expected_path:
+        raise ValueError(
+            "adapter returned an artifact path different from the requested path"
+        )
     return {
         "index": index,
         "status": "MEASURED",
         "native_bytes": artifact.native_bytes,
         "transport_zstd_bytes": artifact.transport_zstd_bytes,
-        "artifact_sha256": artifact_sha256(artifact.path),
+        "artifact_sha256": artifact_sha256(expected_path),
         "roundtrip_verified": verified,
     }
 
 
-def _remove_artifact(path: Path) -> None:
-    if path.is_dir():
+def _remove_artifact(root: Path, path: Path) -> None:
+    _ensure_contained(root, path, allow_leaf_symlink=True)
+    if path.is_symlink():
+        path.unlink(missing_ok=True)
+    elif path.is_dir():
         shutil.rmtree(path)
     else:
         path.unlink(missing_ok=True)
@@ -117,14 +164,24 @@ def prepare_run(
     _write_json(input_dir / "manifest.json", effective)
 
     entries = []
+    artifact_root = destination / "artifacts"
+    artifact_root.mkdir()
     observation_root = destination / ".size-observations"
+    observation_root.mkdir()
+    _ensure_contained(destination, artifact_root)
+    _ensure_contained(destination, observation_root)
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
     # Active evidence may terminate as UNSUPPORTED or FAILED; terminal evidence never ranks.
     try:
         for adapter in adapters() if selected is None else selected:
             description = adapter.describe()
-            artifact_path = destination / "artifacts" / (
-                description.name + description.extension
+            format_name = _safe_format_component(description.name, "format name")
+            format_extension = _safe_format_component(
+                description.extension, "format extension", extension=True
+            )
+            artifact_path = _ensure_contained(
+                destination,
+                artifact_root / f"{format_name}{format_extension}",
             )
             observations: SizeObservations = {
                 "contract_version": "1",
@@ -147,12 +204,17 @@ def prepare_run(
             try:
                 artifact = adapter.encode(table, artifact_path)
                 observations["attempts"].append(
-                    _measured_size_attempt(0, artifact, verified=False)
+                    _measured_size_attempt(0, artifact, artifact_path, verified=False)
                 )
                 observations["completed"] += 1
                 for attempt_index in range(1, size_observations):
-                    repeated_path = observation_root / description.name / (
-                        f"{attempt_index}{description.extension}"
+                    observation_dir = _ensure_contained(
+                        destination, observation_root / format_name
+                    )
+                    observation_dir.mkdir(exist_ok=True)
+                    repeated_path = _ensure_contained(
+                        destination,
+                        observation_dir / f"{attempt_index}{format_extension}",
                     )
                     try:
                         repeated = adapter.encode(table, repeated_path)
@@ -161,12 +223,15 @@ def prepare_run(
                             raise ValueError("repeated encoding round-trip did not pass")
                         observations["attempts"].append(
                             _measured_size_attempt(
-                                attempt_index, repeated, verified=True
+                                attempt_index,
+                                repeated,
+                                repeated_path,
+                                verified=True,
                             )
                         )
                         observations["completed"] += 1
                     finally:
-                        _remove_artifact(repeated_path)
+                        _remove_artifact(destination, repeated_path)
                 entry.update(
                     {
                         "state": transition(
@@ -178,7 +243,7 @@ def prepare_run(
                     }
                 )
             except (ImportError, ModuleNotFoundError) as error:
-                _remove_artifact(artifact_path)
+                _remove_artifact(destination, artifact_path)
                 observations["attempts"].append(
                     {
                         "index": attempt_index,
@@ -189,8 +254,9 @@ def prepare_run(
                 entry.update(
                     state=ExecutionState.UNSUPPORTED, failure_reason=str(error)
                 )
-            except Exception as error:  # Evidence must preserve adapter failures verbatim.
-                _remove_artifact(artifact_path)
+            # Evidence must preserve adapter failures verbatim.
+            except Exception as error:
+                _remove_artifact(destination, artifact_path)
                 observations["attempts"].append(
                     {
                         "index": attempt_index,
@@ -204,8 +270,8 @@ def prepare_run(
                 )
             entries.append(entry)
     finally:
-        if observation_root.exists():
-            shutil.rmtree(observation_root)
+        if observation_root.exists() or observation_root.is_symlink():
+            _remove_artifact(destination, observation_root)
 
     run_manifest = {
         "schema_version": "1",

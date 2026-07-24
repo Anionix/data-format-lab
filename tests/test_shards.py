@@ -63,6 +63,19 @@ def _shard_results(pair: str, name: str) -> dict:
         "equivalence": {
             "contract_version": "2",
             "bounds": {"size_ratio": 0.02},
+            "storage_estimand": {
+                "metric": "native_bytes",
+                "grouping": "format",
+                "numerator": "candidate_group_median",
+                "denominator": "reference_group_median",
+                "point_estimator": (
+                    "candidate_group_median_divided_by_reference_group_median"
+                ),
+                "interval_estimator": "unpaired_ratio_of_medians",
+                "resampling_unit": "same_process_encode_invocation",
+                "interval_method": "bootstrap_percentile",
+                "coverage_claim": "none",
+            },
             "primary_endpoints": {
                 pair: {"scope": "storage", "metric": "native_bytes"}
             },
@@ -135,6 +148,9 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
     assert merged["equivalence"]["multiplicity_control"][
         "planned_comparisons"
     ] == 2
+    assert merged["equivalence"]["storage_estimand"]["numerator"] == (
+        "candidate_group_median"
+    )
     assert manifest["state"] == "BENCHMARKED"
     assert not any(path.is_symlink() for path in output.rglob("*"))
 

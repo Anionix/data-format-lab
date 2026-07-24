@@ -9,6 +9,10 @@ from typing import TypeVar
 
 from .canonical import load_dataset, read_csv
 from .datasets import capture_github_stars, capture_nyc_snapshot, fetch_dataset, load_manifest
+from .equivalence_admission import (
+    expected_size_observations,
+    validate_equivalence_admission,
+)
 from .equivalence_run import PAIR_SPECS, run_equivalence
 from .fair_run import run_fair
 from .implementation_audit import EXPECTED_ADAPTER_LANES, audit_implementation
@@ -237,45 +241,7 @@ def _measurement_config(args: argparse.Namespace, run_dir: Path) -> MeasurementC
 
 
 def _equivalence_size_observations(fixture: bool) -> int:
-    return 2 if fixture else 10
-
-
-def _has_repeated_size_observations(entry: dict, expected: int) -> bool:
-    evidence = entry.get("size_observations")
-    if not isinstance(evidence, dict) or not isinstance(
-        evidence.get("attempts"), list
-    ):
-        return False
-    if (
-        evidence.get("contract_version") != "1"
-        or evidence.get("resampling_unit") != "same_process_encode_invocation"
-    ):
-        return False
-    attempts = evidence["attempts"]
-    if not (
-        evidence.get("attempted") == evidence.get("completed") == len(attempts)
-        and len(attempts) == expected
-    ):
-        return False
-    for index, attempt in enumerate(attempts):
-        if not isinstance(attempt, dict):
-            return False
-        digest = attempt.get("artifact_sha256")
-        sizes = (attempt.get("native_bytes"), attempt.get("transport_zstd_bytes"))
-        if (
-            attempt.get("index") != index
-            or attempt.get("status") != "MEASURED"
-            or attempt.get("roundtrip_verified") is not True
-            or not isinstance(digest, str)
-            or len(digest) != 64
-            or any(character not in "0123456789abcdef" for character in digest)
-            or any(
-                isinstance(value, bool) or not isinstance(value, int) or value <= 0
-                for value in sizes
-            )
-        ):
-            return False
-    return True
+    return expected_size_observations(fixture)
 
 
 def _run_directory(root: Path, args: argparse.Namespace) -> Path:
@@ -304,7 +270,7 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
                 args.run_dir,
                 fixture=args.fixture,
                 selected=selected,
-                size_observations=_equivalence_size_observations(args.fixture),
+                size_observations=expected_size_observations(args.fixture),
             )
         verify_run(run_dir)
         return run_dir
@@ -317,9 +283,6 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
     if manifest.get("dataset_id") != args.dataset:
         raise ValueError("run directory dataset does not match --dataset")
     if args.profile == "equivalence":
-        expected_observations = _equivalence_size_observations(
-            bool(manifest.get("fixture"))
-        )
         required = {
             name
             for pair in (args.pair or tuple(PAIR_SPECS))
@@ -328,26 +291,17 @@ def _run_directory(root: Path, args: argparse.Namespace) -> Path:
                 *PAIR_SPECS[pair]["candidates"],
             )
         }
-        formats = {
-            entry.get("format"): entry
-            for entry in manifest.get("formats", ())
-            if isinstance(entry, dict)
-        }
-        incomplete = sorted(
+        eligible = {
             name
             for name in required
-            if name in formats
-            and formats[name].get("state") == ExecutionState.ROUNDTRIP_VERIFIED
-            and not _has_repeated_size_observations(
-                formats[name], expected_observations
+            if any(
+                isinstance(entry, dict)
+                and entry.get("format") == name
+                and entry.get("state") == ExecutionState.ROUNDTRIP_VERIFIED
+                for entry in manifest.get("formats", ())
             )
-        )
-        if incomplete:
-            raise ValueError(
-                "equivalence run needs repeated size observations for: "
-                f"{', '.join(incomplete)}; prepare with --size-observations "
-                f"{expected_observations}"
-            )
+        }
+        validate_equivalence_admission(args.run_dir, manifest, eligible)
     return args.run_dir
 
 

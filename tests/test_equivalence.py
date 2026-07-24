@@ -16,6 +16,7 @@ from format_bench.equivalence import (
 )
 from format_bench.equivalence_compare import (
     PAIR_SPECS,
+    STORAGE_ESTIMAND,
     compare_candidate,
     multiplicity_control,
     pair_contract,
@@ -157,6 +158,10 @@ def test_registered_pair_candidate_family_uses_bonferroni_control() -> None:
     assert control["cross_pair_inference"] == "simultaneous"
     assert control["error_control_target"] == "FWER"
     assert control["status"] == "PREREGISTERED_NO_COVERAGE"
+
+
+def test_storage_estimand_is_fixed_in_pair_contract() -> None:
+    assert pair_contract(PAIR_SPECS["csv-tsv"])["storage_estimand"] == STORAGE_ESTIMAND
 
 
 @pytest.mark.parametrize(
@@ -331,6 +336,7 @@ def test_storage_comparison_uses_repeated_encode_bootstrap_evidence() -> None:
     primary = comparison["primary_endpoint"]
     assert primary["interval_method"] == "bootstrap_percentile"
     assert primary["coverage_claim"] == "none"
+    assert primary["storage_estimand"] == STORAGE_ESTIMAND
     assert primary["bootstrap"]["resampling_unit"] == ("same_process_encode_invocation")
     assert primary["bootstrap"]["reference_observations"] == 2
     assert primary["bootstrap"]["candidate_observations"] == 2
@@ -355,9 +361,9 @@ def test_missing_repeated_storage_evidence_is_not_applicable() -> None:
 
     assert comparison["verdict"] is EquivalenceVerdict.NOT_APPLICABLE
     assert (
-        comparison["primary_endpoint"]["verdict"]
-        is EquivalenceVerdict.NOT_APPLICABLE
+        comparison["primary_endpoint"]["verdict"] is EquivalenceVerdict.NOT_APPLICABLE
     )
+    assert comparison["primary_endpoint"]["storage_estimand"] == STORAGE_ESTIMAND
     assert comparison["storage"]["failure_reason"] == (
         "incomplete repeated encoding observations"
     )
@@ -367,9 +373,7 @@ def test_missing_repeated_storage_evidence_is_not_applicable() -> None:
     ("field", "value"),
     [("index", 0), ("artifact_sha256", "not-a-sha256")],
 )
-def test_malformed_size_provenance_is_not_applicable(
-    field: str, value: object
-) -> None:
+def test_malformed_size_provenance_is_not_applicable(field: str, value: object) -> None:
     reference = _measured_format(100, 80, {})
     candidate = _measured_format(101, 81, {})
     candidate["size_observations"]["attempts"][1][field] = value

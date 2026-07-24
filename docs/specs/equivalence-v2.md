@@ -27,6 +27,28 @@ equivalent storage footprint. It is available for every registered pair.
 Transport compression and operation latency depend on additional configured
 systems, so they remain secondary.
 
+The machine-readable `storage_estimand` metadata is identical in the run
+contract, pair contract, and primary-endpoint evidence:
+
+```json
+{
+  "metric": "native_bytes",
+  "grouping": "format",
+  "numerator": "candidate_group_median",
+  "denominator": "reference_group_median",
+  "point_estimator": "candidate_group_median_divided_by_reference_group_median",
+  "interval_estimator": "unpaired_ratio_of_medians",
+  "resampling_unit": "same_process_encode_invocation",
+  "interval_method": "bootstrap_percentile",
+  "coverage_claim": "none"
+}
+```
+
+The point estimate is the candidate group median divided by the reference
+group median. The interval estimator is an unpaired ratio-of-medians, using
+same-process encode invocation resampling and a percentile bootstrap interval.
+This storage interval has no coverage claim.
+
 This ordering adapts the endpoint-family principle in the FDA's
 [Multiple Endpoints in Clinical Trials guidance](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/multiple-endpoints-clinical-trials):
 one prespecified endpoint supports the primary conclusion, while secondary
@@ -45,7 +67,8 @@ Operations, transport size, p50, and p95 are descriptive secondary evidence
 and do not support confirmatory conclusions. Pair verdicts are shown together,
 so the primary family is simultaneous across pairs rather than pair-local.
 
-`native_bytes` uses a percentile interval over repeated encoding invocations.
+`native_bytes` uses the `bootstrap_percentile` interval method over repeated
+encoding invocations, as declared by `storage_estimand`.
 Automatically created fixture runs record two observations per format and
 standard runs record ten. A separate `prepare` workflow must pass
 `--size-observations 2` or `10`; an existing equivalence run with fewer

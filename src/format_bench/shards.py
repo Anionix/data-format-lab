@@ -219,6 +219,10 @@ def merge_equivalence_shards(
                 "bounds": _object(
                     equivalence.get("bounds", {}), f"{shard}/equivalence.bounds"
                 ),
+                "storage_estimand": _object(
+                    equivalence.get("storage_estimand", {}),
+                    f"{shard}/equivalence.storage_estimand",
+                ),
                 "multiplicity_control": _object(
                     equivalence.get("multiplicity_control", {}),
                     f"{shard}/equivalence.multiplicity_control",

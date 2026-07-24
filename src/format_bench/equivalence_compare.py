@@ -22,6 +22,18 @@ class PrimaryEndpoint(TypedDict):
     operation: NotRequired[str]
 
 
+class StorageEstimand(TypedDict):
+    metric: Literal["native_bytes"]
+    grouping: Literal["format"]
+    numerator: Literal["candidate_group_median"]
+    denominator: Literal["reference_group_median"]
+    point_estimator: Literal["candidate_group_median_divided_by_reference_group_median"]
+    interval_estimator: Literal["unpaired_ratio_of_medians"]
+    resampling_unit: Literal["same_process_encode_invocation"]
+    interval_method: Literal["bootstrap_percentile"]
+    coverage_claim: Literal["none"]
+
+
 class MultiplicityControl(TypedDict):
     contract_version: Literal["1"]
     error_control_target: Literal["FWER"]
@@ -63,6 +75,18 @@ PRIMARY_ENDPOINT: PrimaryEndpoint = {
     "metric": "native_bytes",
 }
 FAMILY_ALPHA = 0.05
+
+STORAGE_ESTIMAND: StorageEstimand = {
+    "metric": "native_bytes",
+    "grouping": "format",
+    "numerator": "candidate_group_median",
+    "denominator": "reference_group_median",
+    "point_estimator": "candidate_group_median_divided_by_reference_group_median",
+    "interval_estimator": "unpaired_ratio_of_medians",
+    "resampling_unit": "same_process_encode_invocation",
+    "interval_method": "bootstrap_percentile",
+    "coverage_claim": "none",
+}
 
 
 PAIR_SPECS: dict[str, PairSpec] = {
@@ -172,6 +196,7 @@ def pair_contract(spec: PairSpec) -> dict[str, object]:
     contract: dict[str, object] = {
         "primary_endpoint": dict(spec["primary_endpoint"]),
         "verdict_basis": "primary_endpoint",
+        "storage_estimand": STORAGE_ESTIMAND.copy(),
         "multiplicity_control": multiplicity_control(),
     }
     if "comparison_scope" in spec:
@@ -211,11 +236,18 @@ def _interval_json(interval: RatioInterval) -> dict[str, object]:
     return payload
 
 
+def _primary_endpoint_contract(primary_endpoint: PrimaryEndpoint) -> dict[str, object]:
+    payload = dict(primary_endpoint)
+    if primary_endpoint["scope"] == "storage":
+        payload["storage_estimand"] = STORAGE_ESTIMAND.copy()
+    return payload
+
+
 def _not_applicable(reason: str, primary_endpoint: PrimaryEndpoint) -> dict:
     return {
         "verdict": EquivalenceVerdict.NOT_APPLICABLE,
         "verdict_basis": "primary_endpoint",
-        "primary_endpoint": primary_endpoint,
+        "primary_endpoint": _primary_endpoint_contract(primary_endpoint),
         "failure_reason": reason,
         "storage": {},
         "operations": {},
@@ -443,7 +475,7 @@ def compare_candidate(
             "verdict": unavailable,
             "verdict_basis": "primary_endpoint",
             "primary_endpoint": {
-                **primary_endpoint,
+                **_primary_endpoint_contract(primary_endpoint),
                 "verdict": unavailable,
             },
             "failure_reason": "primary endpoint has insufficient observations",
@@ -451,21 +483,20 @@ def compare_candidate(
             "operations": operation_results,
         }
     primary_verdict = classify_interval(primary, bounds)
+    primary_evidence = {
+        **_primary_endpoint_contract(primary_endpoint),
+        **_interval_json(primary),
+        "verdict": primary_verdict,
+        "comparison_alpha": comparison_alpha,
+        "interval_method": "bootstrap_percentile",
+        "coverage_claim": (
+            "none" if primary_endpoint["scope"] == "storage" else "familywise_target"
+        ),
+    }
     return {
         "verdict": primary_verdict,
         "verdict_basis": "primary_endpoint",
-        "primary_endpoint": {
-            **primary_endpoint,
-            **_interval_json(primary),
-            "verdict": primary_verdict,
-            "comparison_alpha": comparison_alpha,
-            "interval_method": "bootstrap_percentile",
-            "coverage_claim": (
-                "none"
-                if primary_endpoint["scope"] == "storage"
-                else "familywise_target"
-            ),
-        },
+        "primary_endpoint": primary_evidence,
         "failure_reason": None,
         "storage": storage,
         "operations": operation_results,
