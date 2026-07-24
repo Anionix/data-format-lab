@@ -60,8 +60,11 @@ include = ["src/format_bench", "tools"]
 
 [tool.pyright]
 include = [
+  "src/format_bench/contracts.py",
+  "src/format_bench/json_contract.py",
   "src/format_bench/model.py",
   "src/format_bench/nyc_snapshot.py",
+  "src/format_bench/research.py",
   "src/format_bench/robustness/evidence.py",
   "src/format_bench/robustness/mutations.py",
   "src/format_bench/robustness/paths.py",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any, Never, TypedDict, Unpack
+from typing import Never, TypedDict, Unpack, cast
 
 
 class JsonDumpOptions(TypedDict, total=False):
@@ -29,12 +29,15 @@ def _parse_finite_float(token: str) -> float:
     return value
 
 
-def strict_json_loads(value: str) -> Any:
+def strict_json_loads(value: str) -> object:
     """Parse RFC 8259 JSON without Python's NaN and Infinity extensions."""
-    return json.loads(
-        value,
-        parse_constant=_reject_nonfinite,
-        parse_float=_parse_finite_float,
+    return cast(
+        object,
+        json.loads(
+            value,
+            parse_constant=_reject_nonfinite,
+            parse_float=_parse_finite_float,
+        ),
     )
 
 
