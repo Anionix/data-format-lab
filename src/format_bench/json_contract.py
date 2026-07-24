@@ -47,6 +47,7 @@ def _destination_mode(directory_fd: int, name: str) -> int | None:
 def _create_temporary(
     directory_fd: int,
     destination_name: str,
+    creation_mode: int,
 ) -> tuple[int, int, str]:
     cleanup_directory_fd = os.dup(directory_fd)
     try:
@@ -57,7 +58,7 @@ def _create_temporary(
                 descriptor = os.open(
                     name,
                     flags,
-                    0o666,
+                    creation_mode,
                     dir_fd=cleanup_directory_fd,
                 )
             except FileExistsError:
@@ -194,6 +195,7 @@ def atomic_write_json(path: Path, value: object) -> None:
         descriptor, cleanup_directory_fd, temporary_name = _create_temporary(
             directory_fd,
             destination_name,
+            mode if mode is not None else 0o666,
         )
         temporary_name = _temporary_name(
             directory_fd,

@@ -116,6 +116,38 @@ def test_atomic_write_json_preserves_existing_evidence_mode(tmp_path: Path) -> N
     assert stat.S_IMODE(destination.stat().st_mode) == 0o640
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX evidence-mode contract")
+@pytest.mark.parametrize(
+    ("mode", "mask"), ((0o600, 0o022), (0o640, 0o022), (0o660, 0o077))
+)
+def test_atomic_write_json_never_creates_replacement_broader_than_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+    mask: int,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    destination.write_bytes(b'{"value":1}\n')
+    destination.chmod(mode)
+    observed_modes: list[int] = []
+    real_fchmod = os.fchmod
+
+    def inspect_initial_mode(descriptor: int, requested_mode: int) -> None:
+        observed_modes.append(stat.S_IMODE(os.fstat(descriptor).st_mode))
+        real_fchmod(descriptor, requested_mode)
+
+    monkeypatch.setattr(json_contract.os, "fchmod", inspect_initial_mode)
+    previous_mask = os.umask(mask)
+    try:
+        atomic_write_json(destination, {"value": 2})
+    finally:
+        os.umask(previous_mask)
+
+    assert len(observed_modes) == 1
+    assert observed_modes[0] & ~mode == 0
+    assert stat.S_IMODE(destination.stat().st_mode) == mode
+
+
 def test_atomic_write_json_mode_failure_preserves_previous_document(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -271,8 +303,9 @@ def test_atomic_write_json_rejects_cross_directory_temp(
     def cross_directory_temporary(
         directory_fd: int,
         destination_name: str,
+        creation_mode: int,
     ) -> tuple[int, int, str]:
-        del directory_fd, destination_name
+        del directory_fd, destination_name, creation_mode
         cleanup_directory_fd = os.open(
             other_dir,
             os.O_RDONLY | os.O_DIRECTORY,
@@ -331,8 +364,9 @@ def test_atomic_write_json_drops_temporary_name_after_replace(
     def capture_create(
         directory_fd: int,
         destination_name: str,
+        creation_mode: int,
     ) -> tuple[int, int, str]:
-        result = real_create(directory_fd, destination_name)
+        result = real_create(directory_fd, destination_name, creation_mode)
         captured_cleanup_fds.append(result[1])
         return result
 
@@ -378,9 +412,10 @@ def test_atomic_write_json_closes_directories_when_cleanup_fails(
     def capture_create(
         directory_fd: int,
         destination_name: str,
+        creation_mode: int,
     ) -> tuple[int, int, str]:
         captured_directory_fds.append(directory_fd)
-        result = real_create(directory_fd, destination_name)
+        result = real_create(directory_fd, destination_name, creation_mode)
         captured_cleanup_fds.append(result[1])
         return result
 
