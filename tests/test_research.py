@@ -7,9 +7,13 @@ from format_bench.research import load_research_records
 
 
 def _write_research_record(tmp_path: Path, value: object) -> None:
+    _write_raw_research_record(tmp_path, json.dumps(value))
+
+
+def _write_raw_research_record(tmp_path: Path, value: str) -> None:
     destination = tmp_path / "research" / "formats" / "case.json"
     destination.parent.mkdir(parents=True)
-    destination.write_text(json.dumps(value), encoding="utf-8")
+    destination.write_text(value, encoding="utf-8")
 
 
 def test_negative_research_records_are_pinned_and_unranked() -> None:
@@ -99,4 +103,19 @@ def test_research_records_reject_untyped_boundary_shapes(
     _write_research_record(tmp_path, value)
 
     with pytest.raises(ValueError, match=message):
+        load_research_records(tmp_path)
+
+
+def test_research_records_reject_duplicate_source_commit_keys(
+    tmp_path: Path,
+) -> None:
+    raw = (
+        '{"name":"case","comparability":"PARTIAL","state":"FAILED",'
+        '"source_commits":{"core":7,"core":"'
+        + "0" * 40
+        + '"},"claim_summary":"bounded failure"}'
+    )
+    _write_raw_research_record(tmp_path, raw)
+
+    with pytest.raises(json.JSONDecodeError, match="duplicate JSON object key: core"):
         load_research_records(tmp_path)

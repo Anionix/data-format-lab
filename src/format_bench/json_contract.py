@@ -29,6 +29,21 @@ def _parse_finite_float(token: str) -> float:
     return value
 
 
+def _reject_duplicate_keys(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise json.JSONDecodeError(
+                f"duplicate JSON object key: {key}",
+                key,
+                0,
+            )
+        result[key] = value
+    return result
+
+
 def strict_json_loads(value: str) -> object:
     """Parse RFC 8259 JSON without Python's NaN and Infinity extensions."""
     return cast(
@@ -37,6 +52,7 @@ def strict_json_loads(value: str) -> object:
             value,
             parse_constant=_reject_nonfinite,
             parse_float=_parse_finite_float,
+            object_pairs_hook=_reject_duplicate_keys,
         ),
     )
 
