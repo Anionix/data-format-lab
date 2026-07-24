@@ -9,37 +9,29 @@ on:
     workflows: [CI]
     types: [completed]
 
-permissions:
-  actions: read
-  contents: read
+permissions: {}
 
 concurrency:
   group: diagnostic-triage-observe-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  observe:
+  diagnostics:
+    if: github.event_name != 'workflow_run'
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out triggering revision
-        if: github.event_name != 'workflow_run'
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
-      # workflow_run may originate from untrusted pull-request code. Execute only
-      # the observer implementation on the trusted default branch:
-      # https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#workflow_run
-      - name: Check out trusted observer revision
-        if: github.event_name == 'workflow_run'
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
 
       - name: Run pinned repository diagnostics
-        if: github.event_name != 'workflow_run'
         id: diagnostics
         shell: bash
         run: |
@@ -68,30 +60,11 @@ jobs:
           esac
           printf 'exit_code=%s\nverdict=%s\n' "$status" "$verdict" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch completed CI run
-        if: github.event_name == 'workflow_run'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OBSERVED_RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          set -euo pipefail
-          input="$RUNNER_TEMP/github-actions-run.json"
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID" > "$input"
-          jq -e '.status == "completed"' "$input" >/dev/null
-
-      # LLM contract: completed run DISCOVERED -> NORMALIZED -> REPORTED;
-      # missing or malformed source evidence terminates FAILED without inference.
       - name: Run the offline GitHub Actions Observer
         shell: bash
         run: |
           set -euo pipefail
           input="tests/fixtures/diagnostic-triage/github-actions-success.json"
-          if test "${{ github.event_name }}" = "workflow_run"; then
-            input="$RUNNER_TEMP/github-actions-run.json"
-          fi
           nix develop --command diagnostic-triage observe \
             --source github-actions \
             --input "$input" \
@@ -102,33 +75,101 @@ jobs:
             and .[-1].status == "COMPLETE"
           ' "$RUNNER_TEMP/diagnostic-triage-observer.jsonl" >/dev/null
 
-      - name: Record observation summary
+      - name: Record diagnostic summary
+        run: |
+          {
+            echo "### Diagnostic Triage"
+            echo "- Verdict: \`${{ steps.diagnostics.outputs.verdict }}\`"
+            echo "- Exit code: \`${{ steps.diagnostics.outputs.exit_code }}\`"
+            echo "- Enforcement: observe-only"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bounded diagnostic evidence
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: diagnostic-triage-diagnostics-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/diagnostic-triage-report.json
+            ${{ runner.temp }}/diagnostic-triage-observer.jsonl
+          if-no-files-found: warn
+          retention-days: 7
+
+  # workflow_run may originate from untrusted pull-request code. Execute only
+  # the observer implementation on the trusted default branch:
+  # https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#workflow_run
+  completed-run:
+    if: github.event_name == 'workflow_run'
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out trusted observer revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Fetch completed CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBSERVED_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/github-actions-run.json"
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID" > "$input"
+          byte_count="$(stat -c %s "$input")"
+          if test "$byte_count" -gt 16777216; then
+            echo "Completed-run input exceeds the 16 MiB observer limit" >&2
+            exit 2
+          fi
+          jq -e \
+            --argjson observed_run_id "$OBSERVED_RUN_ID" \
+            '.status == "completed" and .id == $observed_run_id' \
+            "$input" >/dev/null
+
+      # LLM contract: completed run DISCOVERED -> NORMALIZED -> REPORTED;
+      # missing, oversized, or malformed source evidence terminates FAILED.
+      - name: Observe the completed run offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/github-actions-run.json"
+          nix develop --command diagnostic-triage observe \
+            --source github-actions \
+            --input "$input" \
+            > "$RUNNER_TEMP/diagnostic-triage-observer.jsonl"
+          jq -s -e '
+            .[0].kind == "manifest"
+            and .[-1].kind == "completion"
+            and .[-1].status == "COMPLETE"
+          ' "$RUNNER_TEMP/diagnostic-triage-observer.jsonl" >/dev/null
+
+      - name: Record completed-run summary
         env:
           OBSERVED_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          if test "${{ github.event_name }}" = "workflow_run"; then
-            {
-              echo "### Diagnostic Triage"
-              echo "- Completed CI run: \`$OBSERVED_RUN_ID\`"
-              echo "- Source: explicit GitHub Actions REST input"
-              echo "- Enforcement: observe-only"
-            } >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "### Diagnostic Triage"
-              echo "- Verdict: \`${{ steps.diagnostics.outputs.verdict }}\`"
-              echo "- Exit code: \`${{ steps.diagnostics.outputs.exit_code }}\`"
-              echo "- Enforcement: observe-only"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+          {
+            echo "### Diagnostic Triage"
+            echo "- Completed CI run: \`$OBSERVED_RUN_ID\`"
+            echo "- Source: explicit GitHub Actions REST input"
+            echo "- Enforcement: observe-only"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload bounded observation evidence
+      - name: Upload bounded completed-run evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: diagnostic-triage-observe-${{ github.event.workflow_run.id || github.sha }}
+          name: diagnostic-triage-observe-${{ github.event.workflow_run.id }}
           path: |
-            ${{ runner.temp }}/diagnostic-triage-report.json
             ${{ runner.temp }}/diagnostic-triage-observer.jsonl
             ${{ runner.temp }}/github-actions-run.json
           if-no-files-found: warn
