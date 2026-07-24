@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TypeAlias, cast
 
 from .artifact_digest import artifact_sha256
-from .json_contract import strict_json_dumps
+from .json_contract import atomic_write_json, strict_json_dumps
 from .model import ExecutionState, transition
 
 JSONValue: TypeAlias = (
@@ -54,7 +54,7 @@ def _object_map(value: JSONValue, label: str) -> dict[str, JSONObject]:
 
 
 def _write_json(path: Path, value: JSONObject) -> None:
-    path.write_text(strict_json_dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(path, value)
 
 
 def _safe_run_path(

@@ -1,13 +1,19 @@
 import ast
 import json
 import math
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import BinaryIO, cast
 
 import pytest
 
-from format_bench.json_contract import strict_json_dumps, strict_json_loads
+from format_bench import json_contract
+from format_bench.json_contract import (
+    atomic_write_json,
+    strict_json_dumps,
+    strict_json_loads,
+)
 
 
 def _unsafe_json_writer_lines(source: str, filename: str) -> list[int]:
@@ -66,6 +72,117 @@ def test_strict_json_dumps_cannot_be_weakened_by_callers() -> None:
 
 def test_strict_json_dumps_accepts_finite_numbers() -> None:
     assert strict_json_dumps({"value": 1.25}) == '{"value": 1.25}'
+
+
+def test_atomic_write_json_creates_and_replaces_deterministic_document(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "manifest.json"
+
+    atomic_write_json(destination, {"value": 1})
+    assert destination.read_bytes() == b'{\n  "value": 1\n}\n'
+
+    atomic_write_json(destination, {"value": 2})
+    assert destination.read_bytes() == b'{\n  "value": 2\n}\n'
+
+
+def test_atomic_write_json_serialization_failure_preserves_previous_document(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+
+    with pytest.raises(ValueError, match="Out of range float values"):
+        atomic_write_json(destination, {"value": math.nan})
+
+    assert destination.read_bytes() == previous
+    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+
+
+def test_atomic_file_writer_completes_short_writes() -> None:
+    class ShortWriter:
+        def __init__(self) -> None:
+            self.payload = bytearray()
+
+        def write(self, payload: bytes) -> int:
+            accepted = min(2, len(payload))
+            self.payload.extend(payload[:accepted])
+            return accepted
+
+    destination = ShortWriter()
+    json_contract._write_atomic_file(cast(BinaryIO, destination), b"evidence")
+
+    assert destination.payload == b"evidence"
+
+
+@pytest.mark.parametrize("fault", ("write", "flush", "replace"))
+def test_atomic_write_json_failure_preserves_previous_document(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fault: str,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    previous = b'{"state":"ROUNDTRIP_VERIFIED"}\n'
+    destination.write_bytes(previous)
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise OSError(f"injected {fault} failure")
+
+    if fault == "replace":
+        monkeypatch.setattr(json_contract.os, "replace", fail)
+    else:
+        monkeypatch.setattr(json_contract, f"_{fault}_atomic_file", fail)
+
+    with pytest.raises(OSError, match=f"injected {fault} failure"):
+        atomic_write_json(destination, {"state": "BENCHMARKED"})
+
+    assert destination.read_bytes() == previous
+    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+
+
+def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(b'{"outside":true}\n')
+    destination = tmp_path / "manifest.json"
+    destination.symlink_to(outside)
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        atomic_write_json(destination, {"outside": False})
+
+    assert destination.is_symlink()
+    assert outside.read_bytes() == b'{"outside":true}\n'
+
+
+def test_atomic_write_json_rejects_cross_directory_temp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination_dir = tmp_path / "destination"
+    destination_dir.mkdir()
+    destination = destination_dir / "manifest.json"
+    previous = b'{"state":"ENCODED"}\n'
+    destination.write_bytes(previous)
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+    real_mkstemp = tempfile.mkstemp
+
+    def cross_directory_mkstemp(
+        *,
+        prefix: str,
+        suffix: str,
+        dir: str | Path,
+    ) -> tuple[int, str]:
+        del dir
+        return real_mkstemp(prefix=prefix, suffix=suffix, dir=other_dir)
+
+    monkeypatch.setattr(json_contract.tempfile, "mkstemp", cross_directory_mkstemp)
+
+    with pytest.raises(ValueError, match="same directory"):
+        atomic_write_json(destination, {"state": "BENCHMARKED"})
+
+    assert destination.read_bytes() == previous
+    assert list(other_dir.iterdir()) == []
 
 
 @pytest.mark.parametrize(
