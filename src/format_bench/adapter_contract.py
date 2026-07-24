@@ -1,4 +1,6 @@
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
+
+from .contracts import NormalizedColumn
 
 
 class AdapterColumn(TypedDict):
@@ -7,9 +9,12 @@ class AdapterColumn(TypedDict):
     nullable: NotRequired[bool]
 
 
+AdapterColumns: TypeAlias = list[AdapterColumn] | list[NormalizedColumn]
+
+
 class AdapterManifest(TypedDict):
     rows: int
-    columns: list[AdapterColumn]
+    columns: AdapterColumns
     canonical_hash: str
     expected_counts: dict[str, int]
     workloads: NotRequired[dict[str, object]]

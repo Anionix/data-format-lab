@@ -63,6 +63,7 @@ include = [
   "src/format_bench/adapter_contract.py",
   "src/format_bench/artifact_digest.py",
   "src/format_bench/registry.py",
+  "tests/typecheck/adapter_manifest_normalized.py",
   "src/format_bench/contracts.py",
   "src/format_bench/equivalence.py",
   "src/format_bench/json_contract.py",
