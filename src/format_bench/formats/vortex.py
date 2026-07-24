@@ -5,11 +5,18 @@ from pathlib import Path
 import pyarrow as pa
 import vortex
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, arrow_filter, columns_for, limit_for
 from format_bench.model import Comparability, Lane
 
-from .base import Artifact, FormatDescription, parse_artifact, write_artifact
+from .base import (
+    Artifact,
+    FormatDescription,
+    VerificationResult,
+    parse_artifact,
+    write_artifact,
+)
 
 
 class VortexAdapter:
@@ -39,7 +46,7 @@ class VortexAdapter:
 
         return write_artifact(path, write)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         schema = arrow_schema(manifest)
 
         def read_native() -> pa.Table:
@@ -50,10 +57,14 @@ class VortexAdapter:
             read_native, (pa.ArrowException, OSError, RuntimeError, ValueError)
         )
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         dataset = vortex.open(str(path)).to_dataset()
         limit = limit_for(operation, manifest["rows"], manifest)
         columns = columns_for(operation, manifest)

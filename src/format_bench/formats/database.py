@@ -6,11 +6,12 @@ from typing import Any
 
 import pyarrow as pa
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, columns_for, workload_for
 from format_bench.model import Comparability, Lane, WorkloadKind
 
-from .base import Artifact, FormatDescription, write_artifact
+from .base import Artifact, FormatDescription, VerificationResult, write_artifact
 
 
 _ROW_ID = "__format_bench_row_id"
@@ -43,7 +44,9 @@ def _rows(table: pa.Table) -> list[tuple[Any, ...]]:
 
 
 def _table_from_rows(
-    rows: list[tuple[Any, ...]], manifest: dict, columns: list[str] | None = None
+    rows: list[tuple[Any, ...]],
+    manifest: AdapterManifest,
+    columns: list[str] | None = None,
 ) -> pa.Table:
     full_schema = arrow_schema(manifest)
     schema = (
@@ -63,7 +66,7 @@ def _table_from_rows(
 
 
 def _query_parts(
-    manifest: dict, operation: Operation
+    manifest: AdapterManifest, operation: Operation
 ) -> tuple[str, list[Any], list[str]]:
     schema_names = set(arrow_schema(manifest).names)
     spec = workload_for(operation, manifest)
@@ -78,7 +81,9 @@ def _query_parts(
         assert spec.operator is not None
         if spec.column not in schema_names:
             raise ValueError(f"workload {operation} filters an unknown column")
-        operator = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[spec.operator]
+        operator = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[
+            spec.operator
+        ]
         query += f" WHERE {_quote(spec.column)} {operator} ?"
         parameters.append(spec.value)
     if spec.kind is WorkloadKind.HEAD:
@@ -125,15 +130,21 @@ class SqliteAdapter:
         finally:
             connection.close()
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         columns = ", ".join(_quote(name) for name in arrow_schema(manifest).names)
-        rows = self._fetch(path, f"SELECT {columns} FROM data ORDER BY {_quote(_ROW_ID)}", [])
+        rows = self._fetch(
+            path, f"SELECT {columns} FROM data ORDER BY {_quote(_ROW_ID)}", []
+        )
         return _table_from_rows(rows, manifest)
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         query, parameters, columns = _query_parts(manifest, operation)
         return _table_from_rows(self._fetch(path, query, parameters), manifest, columns)
 

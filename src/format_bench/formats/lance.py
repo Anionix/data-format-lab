@@ -10,12 +10,13 @@ import lance
 import pyarrow as pa
 import zstandard as zstd
 
+from format_bench.adapter_contract import AdapterManifest
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, columns_for, lance_filter, limit_for
 from format_bench.model import Comparability, Lane
 from format_bench.runner import stats_ms
 
-from .base import Artifact, FormatDescription, parse_artifact
+from .base import Artifact, FormatDescription, VerificationResult, parse_artifact
 
 
 def _logical_size(path: Path) -> int:
@@ -58,7 +59,9 @@ def _write_lance(table: pa.Table, path: Path) -> Artifact:
     started = time.perf_counter_ns()
     lance.write_dataset(table, path, mode="overwrite", data_storage_version="stable")
     elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000
-    return Artifact(path, _logical_size(path), _transport_size(path), round(elapsed_ms, 3))
+    return Artifact(
+        path, _logical_size(path), _transport_size(path), round(elapsed_ms, 3)
+    )
 
 
 class LanceAdapter:
@@ -74,17 +77,21 @@ class LanceAdapter:
     def encode(self, table: pa.Table, path: Path) -> Artifact:
         return _write_lance(table, path)
 
-    def read(self, path: Path, manifest: dict) -> pa.Table:
+    def read(self, path: Path, manifest: AdapterManifest) -> pa.Table:
         schema = arrow_schema(manifest)
         return parse_artifact(
             lambda: lance.dataset(path).to_table(columns=schema.names).cast(schema),
             (pa.ArrowException, OSError, RuntimeError, ValueError),
         )
 
-    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+    def verify_roundtrip(
+        self, path: Path, manifest: AdapterManifest
+    ) -> VerificationResult:
         return verify_table(self.read(path, manifest), manifest)
 
-    def scan(self, path: Path, manifest: dict, operation: Operation) -> pa.Table:
+    def scan(
+        self, path: Path, manifest: AdapterManifest, operation: Operation
+    ) -> pa.Table:
         return lance.dataset(path).to_table(
             columns=columns_for(operation, manifest),
             filter=lance_filter(operation, manifest),
@@ -95,7 +102,10 @@ class LanceAdapter:
 def _search_table(table: pa.Table) -> pa.Table:
     rows = table.to_pylist()
     text = [
-        " ".join(str(row.get(name) or "") for name in ("full_name", "description", "topics", "matched_terms"))
+        " ".join(
+            str(row.get(name) or "")
+            for name in ("full_name", "description", "topics", "matched_terms")
+        )
         for row in rows
     ]
     return table.append_column("search_text", pa.array(text, pa.string()))
@@ -122,11 +132,15 @@ def build_fts(table: pa.Table, path: Path) -> dict:
     }
 
 
-def query_fts(path: Path, table: pa.Table, query: str, *, warmups: int = 5, iterations: int = 30) -> dict:
+def query_fts(
+    path: Path, table: pa.Table, query: str, *, warmups: int = 5, iterations: int = 30
+) -> dict:
     dataset = lance.dataset(path)
 
     def invoke() -> list[str]:
-        result = dataset.to_table(columns=["full_name"], full_text_query=query, limit=20)
+        result = dataset.to_table(
+            columns=["full_name"], full_text_query=query, limit=20
+        )
         return result["full_name"].to_pylist()
 
     for _ in range(warmups):
@@ -138,7 +152,8 @@ def query_fts(path: Path, table: pa.Table, query: str, *, warmups: int = 5, iter
         samples.append((time.perf_counter_ns() - started) / 1_000_000)
     corpus = {
         row["full_name"]: " ".join(
-            str(row.get(name) or "") for name in ("full_name", "description", "topics", "matched_terms")
+            str(row.get(name) or "")
+            for name in ("full_name", "description", "topics", "matched_terms")
         ).casefold()
         for row in table.to_pylist()
     }

@@ -1,9 +1,13 @@
-from .base import (
+from format_bench.adapter_contract import (
+    AdapterColumn,
     AdapterManifest,
+    VerificationResult,
+)
+
+from .base import (
     Artifact,
     FormatAdapter,
     FormatDescription,
-    VerificationResult,
 )
 from .arrow_extra import FeatherV2Adapter, OrcAdapter
 from .arrow_ipc import ArrowIpcAdapter
@@ -17,6 +21,7 @@ from .vortex import VortexAdapter
 
 __all__ = [
     "Artifact",
+    "AdapterColumn",
     "AdapterManifest",
     "ArrowIpcAdapter",
     "AvroAdapter",
