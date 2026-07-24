@@ -249,13 +249,18 @@ def atomic_write_json(path: Path, value: object) -> None:
             descriptor = -1
             _write_atomic_file(stream, payload)
             _flush_atomic_file(stream)
+            # LLM contract: PRIVATE_COMPLETE -> PUBLISHED_PRIVATE ->
+            # PUBLISHED_INTENDED_MODE. The complete unpublished payload stays
+            # private even when replace fails in a searchable directory.
+            _replace_same_directory(
+                directory_fd,
+                temporary_name,
+                destination_name,
+            )
+            # A later failure is post-publication: new bytes remain installed
+            # at the restrictive mode instead of exposing unpublished evidence.
             os.fchmod(stream.fileno(), final_mode)
             os.fsync(stream.fileno())
-        # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED ->
-        # BENCHMARKED -> REPORTED becomes persistent only at this replace boundary.
-        # os.replace is atomic on success; file fsync does not claim directory or
-        # power-loss durability. See https://docs.python.org/3/library/os.html#os.replace
-        _replace_same_directory(directory_fd, temporary_name, destination_name)
         # LLM contract: TEMPORARY_OWNED -> PUBLISHED | RETAINED_FAILED.
         # Portable POSIX has no atomic compare-and-unlink operation. A failed
         # write retains its narrowed temporary entry instead of risking deletion

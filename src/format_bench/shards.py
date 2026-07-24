@@ -11,13 +11,7 @@ from .json_contract import atomic_write_json, strict_json_dumps
 from .model import ExecutionState, transition
 
 JSONValue: TypeAlias = (
-    None
-    | bool
-    | int
-    | float
-    | str
-    | list["JSONValue"]
-    | dict[str, "JSONValue"]
+    None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
 )
 JSONObject = dict[str, JSONValue]
 
@@ -66,12 +60,16 @@ def _safe_run_path(
     if relative.is_absolute() or ".." in relative.parts:
         raise ValueError(f"run path must be relative: {label}")
     candidate = run / relative
-    if candidate.is_symlink() or any(parent.is_symlink() for parent in candidate.parents):
+    if candidate.is_symlink() or any(
+        parent.is_symlink() for parent in candidate.parents
+    ):
         raise ValueError(f"run path must not resolve through a symlink: {label}")
     try:
         candidate.resolve(strict=not allow_missing).relative_to(run.resolve())
     except (FileNotFoundError, ValueError) as error:
-        raise ValueError(f"run path is missing or escapes run directory: {label}") from error
+        raise ValueError(
+            f"run path is missing or escapes run directory: {label}"
+        ) from error
     return candidate
 
 
@@ -139,7 +137,7 @@ def _hardlink_tree(source: Path, destination: Path) -> None:
 
 
 def _copy_run_files(base_run: Path, output_run: Path) -> None:
-    output_run.mkdir(parents=True)
+    output_run.mkdir(mode=0o700, parents=True)
     for name in ("artifacts", "input"):
         _hardlink_tree(base_run / name, output_run / name)
     shutil.copy2(base_run / "manifest.json", output_run / "manifest.json")
@@ -237,9 +235,7 @@ def merge_equivalence_shards(
             if pair in primary_endpoints and primary_endpoints[pair] != endpoint:
                 raise ValueError(f"conflicting primary endpoint: {pair}")
             primary_endpoints[pair] = endpoint
-        pairs = _object_map(
-            equivalence.get("pairs"), f"{shard}/equivalence.pairs"
-        )
+        pairs = _object_map(equivalence.get("pairs"), f"{shard}/equivalence.pairs")
         if not pairs:
             raise ValueError(f"shard has no equivalence pair evidence: {shard}")
         for job_id, evidence in _object_map(

@@ -1,5 +1,7 @@
 import json
+import os
 import shutil
+import stat
 from dataclasses import replace
 from pathlib import Path
 
@@ -167,6 +169,26 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
         )
         for entry in verified["formats"]
     )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX directory-mode contract")
+@pytest.mark.parametrize("mask", (0o002, 0o000))
+def test_prepare_run_creates_private_lifecycle_directories_under_open_umask(
+    tmp_path: Path,
+    mask: int,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    previous_mask = os.umask(mask)
+    try:
+        prepare_run(root, DATASET, run_dir, fixture=True, selected=())
+    finally:
+        os.umask(previous_mask)
+
+    for directory in (run_dir, run_dir / "input"):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert (run_dir / "input" / "manifest.json").is_file()
+    assert (run_dir / "manifest.json").is_file()
 
 
 def test_artifact_digest_rejects_root_symlink(tmp_path: Path) -> None:

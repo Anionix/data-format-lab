@@ -141,9 +141,9 @@ def prepare_run(
                 f"expected {manifest['source_sha256']}, got {actual_source_sha256}"
             )
     destination = run_dir or _default_run_dir(root, dataset_id)
-    destination.mkdir(parents=True, exist_ok=False)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=False)
     input_dir = destination / "input"
-    input_dir.mkdir()
+    input_dir.mkdir(mode=0o700)
 
     table = read_csv(source, manifest)
     effective = _fixture_manifest(manifest, table, source) if fixture else manifest

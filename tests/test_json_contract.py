@@ -223,6 +223,71 @@ def test_atomic_write_json_failure_preserves_previous_document(
 
     assert destination.read_bytes() == previous
     assert len(list(tmp_path.glob(".manifest.json.*.tmp"))) == 1
+    assert (
+        stat.S_IMODE(next(tmp_path.glob(".manifest.json.*.tmp")).stat().st_mode)
+        == 0o600
+    )
+
+
+def test_atomic_write_json_widens_mode_only_after_replace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    destination.write_bytes(b'{"state":"ENCODED"}\n')
+    destination.chmod(0o644)
+    real_replace = json_contract._replace_same_directory
+
+    def inspect_private_completed_temp(
+        directory_fd: int,
+        temporary_name: str,
+        destination_name: str,
+    ) -> None:
+        temporary = os.stat(
+            temporary_name,
+            dir_fd=directory_fd,
+            follow_symlinks=False,
+        )
+        assert stat.S_IMODE(temporary.st_mode) == 0o600
+        real_replace(directory_fd, temporary_name, destination_name)
+
+    monkeypatch.setattr(
+        json_contract,
+        "_replace_same_directory",
+        inspect_private_completed_temp,
+    )
+
+    atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == b'{\n  "state": "REPORTED"\n}\n'
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+
+
+def test_atomic_write_json_post_publish_mode_failure_stays_private(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    destination.write_bytes(b'{"state":"ENCODED"}\n')
+    destination.chmod(0o644)
+    calls = 0
+    real_fchmod = os.fchmod
+
+    def fail_final_mode(descriptor: int, mode: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected final mode failure")
+        real_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(json_contract.os, "fchmod", fail_final_mode)
+
+    with pytest.raises(OSError, match="injected final mode failure"):
+        atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == b'{\n  "state": "REPORTED"\n}\n'
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
 
 
 def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
