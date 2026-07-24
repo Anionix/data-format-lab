@@ -154,6 +154,21 @@ def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
     assert outside.read_bytes() == b'{"outside":true}\n'
 
 
+def test_atomic_write_json_accepts_same_directory_with_parent_segments(
+    tmp_path: Path,
+) -> None:
+    destination_dir = tmp_path / "destination"
+    nested = destination_dir / "nested"
+    nested.mkdir(parents=True)
+    destination = nested / ".." / "manifest.json"
+
+    atomic_write_json(destination, {"state": "ENCODED"})
+
+    assert (destination_dir / "manifest.json").read_bytes() == (
+        b'{\n  "state": "ENCODED"\n}\n'
+    )
+
+
 def test_atomic_write_json_rejects_cross_directory_temp(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

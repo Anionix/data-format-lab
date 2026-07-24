@@ -32,7 +32,7 @@ def _flush_atomic_file(destination: BinaryIO) -> None:
 
 
 def _replace_same_directory(temporary: Path, destination: Path) -> None:
-    if temporary.parent != destination.parent:
+    if not temporary.parent.samefile(destination.parent):
         raise ValueError(
             "temporary JSON file must use the destination's same directory"
         )
