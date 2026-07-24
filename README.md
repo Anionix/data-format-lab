@@ -22,7 +22,7 @@ The equivalence expansion also carries small, non-rankable contract fixtures for
 
 Results never rank across lanes or hardware runs. Only `FULL_COMPARABLE` evidence can enter an ordering inside its own lane. DuckDB is treated as a query engine, not as a file format.
 
-The equivalence lane compares only named pairs. It records native bytes, external zstd bytes, p50/p95 ratio intervals, IQR, and maximum RSS. A size interval inside +/-2%, p50 inside +/-5%, and p95 inside +/-10% is `PRACTICALLY_EQUIVALENT`; an interval crossing a boundary is `INCONCLUSIVE`. The pair is not a claim that all workloads or datasets behave the same way.
+The equivalence lane compares only named pairs. It records native bytes, external zstd bytes, p50/p95 ratio intervals, IQR, and maximum RSS. A size interval inside ±2%, p50 inside ±5%, and p95 inside ±10% is `PRACTICALLY_EQUIVALENT`; an interval wholly outside a boundary is `MEANINGFUL_DIFFERENCE`, and an interval crossing a boundary is `INCONCLUSIVE`. Missing or failed evidence is `NOT_APPLICABLE`; `INCONCLUSIVE` and `NOT_APPLICABLE` do not rank. The pair is not a claim that all workloads or datasets behave the same way.
 
 Arrow IPC codec variants (`none`, `lz4`, and `zstd`) remain in the `fair` lane and share the same Arrow schema, round-trip gate, and query-result contract. They are codec variants, not separate formats or a cross-lane score.
 

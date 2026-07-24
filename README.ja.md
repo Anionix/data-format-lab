@@ -12,15 +12,15 @@ equivalence拡張では、UCI Online Retail II、UCI Bank Marketing、NYC 311、
 
 | lane | 検証する問い | 例 |
 | --- | --- | --- |
-| `fair` | 同じArrowテーブルを保存し、同じ検索結果を返すときの容量と速度 | CSV、JSONL、Arrow IPC、Parquet、Lance、Vortex、適応TsFile |
+| `fair` | 同じ型付きArrowテーブルを保存し、同じ行を返すときの容量と速度 | CSV、JSONL、Arrow IPC、Parquet、Lance、Vortex、適応TsFile |
 | `claims` | 公式が主張する強みを、適したワークロードで再現できるか | Lance FTS、Vortex scan、適応TsFile時系列、実験FastLanes証拠 |
-| `prompt` | 同じ7項目をLLMへ渡すときの正確なtoken数 | Compact TSV、object JSONL、array JSONL |
+| `prompt` | 同じ7つの投影フィールドをLLMへ渡すときの正確なtoken数 | Compact TSV、object JSONL、array JSONL |
 | `equivalence` | 一般には同等に見える形式が、このデータとworkloadでも同等か | CSV対TSV、Arrow IPC対Feather、Parquet対ORC、JSONL対row serializer |
 | `engine_container` | SQL engineが固有のdatabase fileを操作するときにどう異なるか | SQLite、DuckDB |
 
 異なるlaneや異なる機種の結果は順位比較しません。同一laneの`FULL_COMPARABLE`だけが順位対象です。DuckDBはファイル形式ではなくSQL実行エンジンとして扱います。
 
-equivalence laneは登録済みのpairだけを比較します。native bytes、外部zstd bytes、p50/p95比の区間、IQR、最大RSSを記録します。容量比の区間が±2%、p50が±5%、p95が±10%の境界内なら`PRACTICALLY_EQUIVALENT`、区間が境界をまたぐ場合は`INCONCLUSIVE`です。この判定は、すべてのdatasetやworkloadで同等だという主張ではありません。
+equivalence laneは登録済みのpairだけを比較します。native bytes、外部zstd bytes、p50/p95比の区間、IQR、最大RSSを記録します。容量比の区間が±2%、p50が±5%、p95が±10%の境界内なら`PRACTICALLY_EQUIVALENT`、区間全体が境界外なら`MEANINGFUL_DIFFERENCE`、境界をまたぐ場合は`INCONCLUSIVE`です。証拠が欠落または失敗している場合は`NOT_APPLICABLE`とし、`INCONCLUSIVE`と`NOT_APPLICABLE`は順位対象にしません。この判定は、すべてのdatasetやworkloadで同等だという主張ではありません。
 
 Arrow IPCのcodec variant（`none`、`lz4`、`zstd`）は同じArrow schema、往復検証、検索結果契約を使う`fair` lane内の比較です。別形式やlane横断のscoreとしては扱いません。
 
