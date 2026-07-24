@@ -20,7 +20,7 @@ equivalence拡張では、UCI Online Retail II、UCI Bank Marketing、NYC 311、
 
 異なるlaneや異なる機種の結果は順位比較しません。同一laneの`FULL_COMPARABLE`だけが順位対象です。DuckDBはファイル形式ではなくSQL実行エンジンとして扱います。
 
-equivalence laneは登録済みのpairだけを比較します。native bytes、外部zstd bytes、p50/p95比の区間、IQR、最大RSSを記録します。容量比の区間が±2%、p50が±5%、p95が±10%の境界内なら`PRACTICALLY_EQUIVALENT`、区間全体が境界外なら`MEANINGFUL_DIFFERENCE`、境界をまたぐ場合は`INCONCLUSIVE`です。証拠が欠落または失敗している場合は`NOT_APPLICABLE`とし、`INCONCLUSIVE`と`NOT_APPLICABLE`は順位対象にしません。この判定は、すべてのdatasetやworkloadで同等だという主張ではありません。
+equivalence laneは登録済みのpairだけを比較します。事前登録したprimary endpointは`storage/native_bytes`です。その区間が±2%以内なら`PRACTICALLY_EQUIVALENT`、境界の完全な外側なら`MEANINGFUL_DIFFERENCE`、境界をまたぐ場合は`INCONCLUSIVE`です。p50とp95の比区間では±5%と±10%を記録しますが、これらは説明用のsecondary evidenceでありprimary verdictを変更しません。primary evidenceが欠落または失敗している場合は`NOT_APPLICABLE`とし、`INCONCLUSIVE`と`NOT_APPLICABLE`は順位対象にしません。外部zstd bytes、IQR、最大RSSも説明用です。この判定は、すべてのdatasetやworkloadで同等だという主張ではありません。
 
 Arrow IPCのcodec variant（`none`、`lz4`、`zstd`）は同じArrow schema、往復検証、検索結果契約を使う`fair` lane内の比較です。別形式やlane横断のscoreとしては扱いません。
 

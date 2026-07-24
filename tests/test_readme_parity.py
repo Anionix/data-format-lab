@@ -119,6 +119,14 @@ def test_english_and_japanese_readmes_expose_the_same_equivalence_contract() -> 
     ):
         assert token in _section(english, "Benchmark lanes")
         assert token in _section(japanese, "ベンチマークlane")
+    english_lane = _section(english, "Benchmark lanes")
+    japanese_lane = _section(japanese, "ベンチマークlane")
+    assert "`storage/native_bytes`" in english_lane
+    assert "descriptive secondary evidence" in english_lane
+    assert "cannot change the primary verdict" in english_lane
+    assert "`storage/native_bytes`" in japanese_lane
+    assert "説明用のsecondary evidence" in japanese_lane
+    assert "primary verdictを変更しません" in japanese_lane
 
 
 def test_markdown_examples_do_not_change_section_lane_rows() -> None:
