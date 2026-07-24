@@ -21,13 +21,18 @@ jobs:
         run: nix develop --command uv sync --frozen
 
       # coverage.py branch measurement: https://coverage.readthedocs.io/en/7.10.7/branch.html
+      # Importable source identity: https://coverage.readthedocs.io/en/7.10.7/source.html
+      # Empty-data gate: https://coverage.readthedocs.io/en/7.10.7/commands/cmd_report.html
       # uv --with contract: https://docs.astral.sh/uv/reference/cli/#uv-run--with
+      # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
+      # Coverage is descriptive code-quality evidence; it never advances benchmark
+      # lifecycle state or changes ranking eligibility.
       - name: Run branch coverage
-        run: nix develop --command uv run --frozen --with coverage==7.10.7 coverage run --branch --source=src -m pytest
+        run: nix develop --command uv run --frozen --with coverage==7.10.7 coverage run --branch --source=format_bench -m pytest
 
       - name: Write coverage reports
         run: |
-          nix develop --command uv run --frozen --with coverage==7.10.7 coverage report
+          nix develop --command uv run --frozen --with coverage==7.10.7 coverage report --fail-under=1
           nix develop --command uv run --frozen --with coverage==7.10.7 coverage xml -o coverage.xml
           nix develop --command uv run --frozen --with coverage==7.10.7 coverage html
 
