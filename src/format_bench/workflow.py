@@ -10,13 +10,14 @@ from typing import Iterable
 from .canonical import canonical_hash, query_counts, read_csv, verify_table
 from .datasets import load_manifest
 from .formats.base import FormatAdapter
+from .json_contract import strict_json_dumps
 from .model import ExecutionState, transition
 from .registry import adapter_map, adapters
 from .runner import environment_info
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(strict_json_dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _sha256(path: Path) -> str:

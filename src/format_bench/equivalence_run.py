@@ -14,6 +14,7 @@ from .equivalence_compare import (
     pair_evidence,
 )
 from .fair import expected_rows, operations_for
+from .json_contract import strict_json_dumps
 from .model import Comparability, ExecutionState, transition
 from .runner import (
     Job,
@@ -26,7 +27,7 @@ from .runner import (
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(strict_json_dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def run_equivalence(

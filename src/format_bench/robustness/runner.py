@@ -17,6 +17,7 @@ from format_bench.model import (
     RobustnessVerdict,
     robustness_verdict,
 )
+from format_bench.json_contract import strict_json_dumps
 from format_bench.robustness.paths import reject_symlink_tree
 
 MAX_WORKER_DETAILS_BYTES = 4096
@@ -114,7 +115,7 @@ def _worker_response(stdout: str) -> WorkerResponse:
 
 def _bounded_details(details: dict[str, object]) -> dict[str, object]:
     try:
-        encoded = (json.dumps(details, indent=2, sort_keys=True) + "\n").encode()
+        encoded = (strict_json_dumps(details, indent=2, sort_keys=True) + "\n").encode()
     except (RecursionError, TypeError, ValueError) as error:
         return {
             "truncated": True,

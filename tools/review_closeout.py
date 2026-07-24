@@ -75,7 +75,8 @@ class GitHubClient(Protocol):
 class GhClient:
     def _call(self, args: list[str], payload: dict[str, object] | None = None) -> object:
         result = subprocess.run(
-            ["gh", "api", *args], input=json.dumps(payload) if payload is not None else None,
+            ["gh", "api", *args],
+            input=json.dumps(payload, allow_nan=False) if payload is not None else None,
             capture_output=True, text=True, check=False,
         )
         if result.returncode != 0:
@@ -512,7 +513,13 @@ def main() -> int:
     if "/" not in args.repo or args.min_merged_with_threads < 1:
         parser.error("--repo must be owner/name and the threshold must be positive")
     try:
-        print(json.dumps(run(GhClient(), args.repo, args.min_merged_with_threads), indent=2))
+        print(
+            json.dumps(
+                run(GhClient(), args.repo, args.min_merged_with_threads),
+                indent=2,
+                allow_nan=False,
+            )
+        )
     except ReviewCloseoutError as error:
         print(f"review closeout failed: {error}")
         return 1

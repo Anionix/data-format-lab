@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import os
 import shutil
@@ -19,6 +18,7 @@ from format_bench.model import (
     TargetTier,
     robustness_verdict,
 )
+from format_bench.json_contract import strict_json_dumps
 from format_bench.profile_run import _finish, _load
 from format_bench.robustness.evidence import ArtifactBudgetExceeded, EvidenceStore
 from format_bench.robustness.runner import _process
@@ -98,7 +98,7 @@ NATIVE_TARGETS = (
 
 
 def _json(value: object) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return (strict_json_dumps(value, indent=2, sort_keys=True) + "\n").encode()
 
 
 def _fuzz_seconds(duration_seconds: float) -> int:

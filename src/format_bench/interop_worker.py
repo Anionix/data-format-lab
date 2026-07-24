@@ -10,6 +10,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 
 from .canonical import verify_table
+from .json_contract import strict_json_dumps
 
 
 def _schema(table: pa.Table) -> list[dict[str, object]]:
@@ -66,7 +67,7 @@ def main() -> None:
             "error_type": type(error).__name__,
             "error": str(error)[-500:],
         }
-    print(json.dumps(result, sort_keys=True))
+    print(strict_json_dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":

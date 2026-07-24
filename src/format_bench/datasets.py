@@ -16,6 +16,7 @@ import zstandard as zstd
 from .model import WorkloadSpec
 from .contracts import normalized_columns, normalized_workload_entry
 from .dataset_sources import materialize_official
+from .json_contract import strict_json_dumps
 from .workloads import validated_expected_counts
 
 
@@ -196,7 +197,7 @@ def capture_github_stars(
     destination.mkdir(parents=True, exist_ok=False)
     endpoint = f"https://api.github.com/users/{quote(user)}/starred?per_page=100"
     (destination / "raw.json").write_text(
-        json.dumps(records, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        strict_json_dumps(records, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     metadata = {
         "schema_version": "1",
@@ -207,6 +208,6 @@ def capture_github_stars(
         "authenticated": bool(os.environ.get("GITHUB_TOKEN")),
     }
     (destination / "capture.json").write_text(
-        json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+        strict_json_dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
     return destination

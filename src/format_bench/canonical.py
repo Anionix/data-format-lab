@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import pyarrow as pa
@@ -9,6 +8,7 @@ import pyarrow.csv as pacsv
 
 from .arrow_compute import equal, greater
 from .datasets import load_manifest, normalized_columns, sha256_bytes
+from .json_contract import strict_json_dumps
 from .workloads import apply_workload, load_workloads
 
 
@@ -62,7 +62,7 @@ def _normalize_row(row: dict, column_names: list[str]) -> dict:
 
 
 def _canonical_json(value: object) -> str:
-    return json.dumps(
+    return strict_json_dumps(
         value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
     )
 

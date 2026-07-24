@@ -170,7 +170,9 @@ def load_registry(path: Path = REGISTRY) -> dict[str, object]:
 
 def write_registry(path: Path, registry: dict[str, object]) -> None:
     temporary = path.with_suffix(f"{path.suffix}.tmp")
-    temporary.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n")
+    temporary.write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    )
     temporary.replace(path)
 
 
@@ -299,7 +301,11 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     canonical_github["project"] = canonical_project
     github_digest = hashlib.sha256(
         json.dumps(
-            canonical_github, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            canonical_github,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
         ).encode()
     ).hexdigest()
     if github_digest != GITHUB_PLAN_DIGEST:
@@ -309,7 +315,9 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
         raise AuditError("audit IDs must be contiguous from 001 to 174")
     immutable = [[item.id, item.criterion, item.score, item.evidence] for item in items]
     digest = hashlib.sha256(
-        json.dumps(immutable, ensure_ascii=False, separators=(",", ":")).encode()
+        json.dumps(
+            immutable, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ).encode()
     ).hexdigest()
     if digest != SOURCE_DIGEST or registry.get("source_digest") != SOURCE_DIGEST:
         raise AuditError("immutable audit source digest differs")
@@ -398,7 +406,11 @@ def validate_registry(registry: dict[str, object]) -> list[AuditItem]:
     }
     triage_digest = hashlib.sha256(
         json.dumps(
-            triage, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            triage,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
         ).encode()
     ).hexdigest()
     if triage_digest != TRIAGE_DIGEST:
@@ -478,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
                             for mutation in plan
                         ],
                         indent=2,
+                        allow_nan=False,
                     )
                 )
             elif args.command == "apply":

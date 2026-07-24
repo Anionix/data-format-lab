@@ -12,6 +12,8 @@ from typing import cast
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from .json_contract import strict_json_dumps
+
 
 class CaptureState(StrEnum):
     STARTED = "CAPTURE_STARTED"
@@ -56,7 +58,7 @@ def _sha256(data: bytes) -> str:
 
 def _persist_capture(destination: Path, evidence: dict[str, object]) -> None:
     (destination / "capture.json").write_text(
-        json.dumps(evidence, indent=2) + "\n", encoding="utf-8"
+        strict_json_dumps(evidence, indent=2) + "\n", encoding="utf-8"
     )
 
 

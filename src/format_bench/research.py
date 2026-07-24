@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .json_contract import strict_json_dumps
 from .model import Comparability, ExecutionState
 
 
@@ -22,7 +23,7 @@ def load_research_records(root: Path) -> dict[str, dict]:
             raise ValueError(f"research commit is not a full SHA: {name}")
         if not isinstance(record.get("claim_summary"), str) or not record["claim_summary"]:
             raise ValueError(f"research claim summary is missing: {name}")
-        if str(root) in json.dumps(record):
+        if str(root) in strict_json_dumps(record):
             raise ValueError(f"research evidence leaks a local path: {name}")
         records[name] = record
     return records

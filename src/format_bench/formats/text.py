@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pyarrow as pa
@@ -9,6 +8,7 @@ import pyarrow.json as pajson
 
 from format_bench.canonical import arrow_schema, verify_table
 from format_bench.fair import Operation, apply_arrow, workload_for
+from format_bench.json_contract import strict_json_dumps
 from format_bench.model import Comparability, Lane, WorkloadKind
 
 from .base import Artifact, FormatDescription, ParserRejection, parse_artifact, write_artifact
@@ -103,7 +103,7 @@ class ObjectJsonlAdapter:
         def write() -> None:
             with path.open("w", encoding="utf-8") as handle:
                 for row in table.to_pylist():
-                    handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+                    handle.write(strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
 
         return write_artifact(path, write)
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from format_bench.model import ObservedOutcome, RobustnessVerdict, TargetTier
+from format_bench.json_contract import strict_json_dumps
 
 
 JsonObject = dict[str, object]
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> None:
     if not core_cases or blockers:
         print(
             "core robustness gate blocked: "
-            + json.dumps(
+            + strict_json_dumps(
                 blockers or [{"reason": "no CORE cases"}],
                 sort_keys=True,
                 ensure_ascii=True,

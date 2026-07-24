@@ -12,6 +12,7 @@ import vortex
 import zstandard as zstd
 
 from format_bench.canonical import arrow_schema
+from format_bench.json_contract import strict_json_dumps
 from format_bench.formats.base import (
     Artifact,
     FormatAdapter,
@@ -160,7 +161,7 @@ def _text_malformed(data: bytes, target: str, kind: str) -> bytes:
                 row.pop("description", None)
             elif kind == "extra_column":
                 row["unexpected"] = "x"
-            lines[0] = json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
+            lines[0] = strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n"
             return "".join(lines).encode("utf-8")
     raise ValueError(f"unsupported text target or malformed case: {target}/{kind}")
 

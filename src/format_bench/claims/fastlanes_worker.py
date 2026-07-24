@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+from format_bench.json_contract import strict_json_dumps
 
 
 MIXED_COLUMNS = (
@@ -73,7 +74,7 @@ def _input(directory: Path, case: str, rows: int) -> tuple[Path, Path, bytes]:
         raise ValueError(f"unknown FastLanes case: {case}")
     schema = directory / "schema.json"
     csv_path = directory / "data.csv"
-    schema.write_text(json.dumps({"columns": columns}, sort_keys=True), encoding="utf-8")
+    schema.write_text(strict_json_dumps({"columns": columns}, sort_keys=True), encoding="utf-8")
     data = ("\n".join(lines) + "\n").encode("utf-8")
     csv_path.write_bytes(data)
     return schema, csv_path, data
@@ -128,7 +129,7 @@ def main() -> None:
             "error_type": type(error).__name__,
             "error": str(error)[-500:],
         }
-    print(json.dumps(result, sort_keys=True))
+    print(strict_json_dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":

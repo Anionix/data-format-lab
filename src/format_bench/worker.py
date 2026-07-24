@@ -9,6 +9,7 @@ import pyarrow as pa
 
 from .canonical import read_csv
 from .fair import Operation, apply_arrow, expected_rows, result_evidence
+from .json_contract import strict_json_dumps
 from .registry import adapter_map
 from .runner import measure_callable
 
@@ -71,7 +72,7 @@ def main() -> None:
     parser.add_argument("--format", required=True)
     parser.add_argument("--operation", required=True)
     args = parser.parse_args()
-    print(json.dumps(run_fair_worker(args.run_dir, args.format, args.operation)))
+    print(strict_json_dumps(run_fair_worker(args.run_dir, args.format, args.operation)))
 
 
 if __name__ == "__main__":

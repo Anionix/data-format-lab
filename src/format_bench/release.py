@@ -10,6 +10,7 @@ from pathlib import Path
 
 import zstandard as zstd
 
+from .json_contract import strict_json_dumps
 from .model import ExecutionState
 
 RELEASE_ZSTD_LEVEL = 3
@@ -277,7 +278,7 @@ def _archive_document(document: dict, run_id: str) -> bytes | None:
     normalized = _archive_relative_references(document, run_id)
     if normalized == document:
         return None
-    return (json.dumps(normalized, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (strict_json_dumps(normalized, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
 def _archive_report(report: str, digests: dict[str, str]) -> bytes | None:

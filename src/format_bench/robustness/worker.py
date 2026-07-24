@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from format_bench.model import ObservedOutcome, RobustnessExpectation
+from format_bench.json_contract import strict_json_dumps
 from format_bench.registry import adapter_map
 from format_bench.robustness.paths import reject_symlink_tree
 from format_bench.robustness.targets import (
@@ -135,7 +136,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--request", type=Path, required=True)
     args = parser.parse_args()
-    print(json.dumps(run_request(args.request), separators=(",", ":")))
+    print(strict_json_dumps(run_request(args.request), separators=(",", ":")))
 
 
 if __name__ == "__main__":

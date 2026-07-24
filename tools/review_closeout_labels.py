@@ -109,7 +109,13 @@ def main() -> int:
     except AuditError as error:
         print(f"review-closeout label sync failed: {error}")
         return 2
-    print(json.dumps({repository: len(plan) for repository, plan in plans.items()}, sort_keys=True))
+    print(
+        json.dumps(
+            {repository: len(plan) for repository, plan in plans.items()},
+            sort_keys=True,
+            allow_nan=False,
+        )
+    )
     return 0 if args.apply or not any(plans.values()) else 1
 
 

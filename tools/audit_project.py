@@ -188,7 +188,7 @@ def read_project(
         raise AuditError("Project Audit ID item content differs")
 
     query = (
-        "query { user(login:" + json.dumps(owner) + ") { projectV2(number:"
+        "query { user(login:" + json.dumps(owner, allow_nan=False) + ") { projectV2(number:"
         + str(number)
         + ") { repositories(first:100) { nodes { nameWithOwner } } "
         + "fields(first:100) { nodes { __typename "
@@ -395,6 +395,6 @@ def issue_map(
 def write_issue_map(path: Path, value: dict[str, object]) -> None:
     temporary = path.with_suffix(f"{path.suffix}.tmp")
     temporary.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
     temporary.replace(path)

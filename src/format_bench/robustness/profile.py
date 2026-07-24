@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -9,6 +8,7 @@ from pathlib import Path
 import pyarrow as pa
 
 from format_bench.canonical import canonical_hash, query_counts, read_csv
+from format_bench.json_contract import strict_json_dumps
 from format_bench.model import (
     ExecutionState,
     Lane,
@@ -34,7 +34,7 @@ _PER_CASE_OUTPUT_BUDGET_BYTES = 1024 * 1024
 
 
 def _json(value: object) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return (strict_json_dumps(value, indent=2, sort_keys=True) + "\n").encode()
 
 
 def _manifest(dataset: dict, table: pa.Table) -> dict:

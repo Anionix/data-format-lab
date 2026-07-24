@@ -13,6 +13,7 @@ from typing import TypeGuard
 import pyarrow as pa
 
 from .formats.arrow_ipc import ArrowIpcAdapter
+from .json_contract import strict_json_dumps
 from .runner import environment_info
 
 
@@ -45,7 +46,7 @@ def _consume(
     expected_null_positions: dict[str, list[int]],
 ) -> dict[str, object]:
     manifest_path = path.parent / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    manifest_path.write_text(strict_json_dumps(manifest, sort_keys=True), encoding="utf-8")
     process = subprocess.run(
         [
             sys.executable,
@@ -185,7 +186,7 @@ def run_arrow_ipc_interoperability(
         }
         evidence_path = stage / "arrow-ipc-interoperability.json"
         evidence_path.write_text(
-            json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            strict_json_dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         (stage / "arrow-ipc-interoperability.md").write_text(
             _markdown(evidence), encoding="utf-8"

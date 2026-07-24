@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
 import tiktoken
+
+from .json_contract import strict_json_dumps
 
 
 PROMPT_COLUMNS = (
@@ -48,7 +49,7 @@ def _taxonomy_rows(taxonomy: list[tuple]) -> list[tuple]:
 
 
 def _compact_schema_text() -> str:
-    return json.dumps(COMPACT_SCHEMA, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return strict_json_dumps(COMPACT_SCHEMA, ensure_ascii=False, separators=(",", ":")) + "\n"
 
 
 def _compact_tsv_text(records: list[dict[str, Any]]) -> str:
@@ -123,15 +124,15 @@ def write_prompt_artifacts(table: pa.Table, directory: Path) -> dict[str, Path]:
     paths["compact_tsv"].write_text(_compact_tsv_text(records), encoding="utf-8")
     with paths["object_jsonl"].open("w", encoding="utf-8") as handle:
         for row in records:
-            handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+            handle.write(strict_json_dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
     with paths["array_jsonl"].open("w", encoding="utf-8") as handle:
         for row in records:
             handle.write(
-                json.dumps([row[name] for name in PROMPT_COLUMNS], ensure_ascii=False, separators=(",", ":"))
+                strict_json_dumps([row[name] for name in PROMPT_COLUMNS], ensure_ascii=False, separators=(",", ":"))
                 + "\n"
             )
     paths["array_schema"].write_text(
-        json.dumps(PROMPT_COLUMNS, ensure_ascii=False, separators=(",", ":")) + "\n",
+        strict_json_dumps(PROMPT_COLUMNS, ensure_ascii=False, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
     paths["compact_schema"].write_text(_compact_schema_text(), encoding="utf-8")
