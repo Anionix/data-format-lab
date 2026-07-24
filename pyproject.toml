@@ -61,7 +61,6 @@ include = ["src/format_bench", "tools"]
 [tool.pyright]
 include = [
   "src/format_bench/artifact_digest.py",
-  "src/format_bench/arrow_compute.py",
   "src/format_bench/contracts.py",
   "src/format_bench/equivalence.py",
   "src/format_bench/json_contract.py",
