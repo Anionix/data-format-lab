@@ -40,11 +40,7 @@ def _unsafe_json_writer_lines(source: str, filename: str) -> list[int]:
         if not direct_writer:
             continue
         allow_nan = next(
-            (
-                keyword.value
-                for keyword in call.keywords
-                if keyword.arg == "allow_nan"
-            ),
+            (keyword.value for keyword in call.keywords if keyword.arg == "allow_nan"),
             None,
         )
         if not (isinstance(allow_nan, ast.Constant) and allow_nan.value is False):
@@ -52,9 +48,13 @@ def _unsafe_json_writer_lines(source: str, filename: str) -> list[int]:
     return violations
 
 
-@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, {"nested": [math.nan]}])
+@pytest.mark.parametrize(
+    "value", [math.nan, math.inf, -math.inf, {"nested": [math.nan]}]
+)
 def test_strict_json_dumps_rejects_nonfinite_numbers(value: object) -> None:
-    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+    with pytest.raises(
+        ValueError, match="Out of range float values are not JSON compliant"
+    ):
         strict_json_dumps(value)
 
 
@@ -79,6 +79,15 @@ def test_strict_json_loads_rejects_nonfinite_numbers(token: str) -> None:
 
 def test_strict_json_loads_accepts_finite_numbers() -> None:
     assert strict_json_loads('{"value":1.25}') == {"value": 1.25}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ('{"value":1,"value":2}', '{"nested":{"value":1,"value":2}}'),
+)
+def test_strict_json_loads_rejects_duplicate_object_keys(payload: str) -> None:
+    with pytest.raises(json.JSONDecodeError, match="duplicate JSON object key: value"):
+        strict_json_loads(payload)
 
 
 def test_direct_json_writers_declare_nonfinite_policy() -> None:
