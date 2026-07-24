@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -58,9 +59,19 @@ def _create_missing_private_parents(destination: Path) -> None:
 
     # LLM contract: EXISTING_ANCESTOR -> PRIVATE_ANCESTORS_READY | FAILED.
     # Create shallow-to-deep without parents=True so every new level requests
-    # 0700; any mkdir failure stops before the private run leaf is created.
+    # 0700. A concurrent private creator is safe; every other mkdir failure
+    # stops before the private run leaf is created.
     for directory in reversed(missing):
-        directory.mkdir(mode=0o700)
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError as error:
+            existing_mode = directory.stat(follow_symlinks=False).st_mode
+            if not stat.S_ISDIR(existing_mode):
+                raise
+            if stat.S_IMODE(existing_mode) & 0o077:
+                raise PermissionError(
+                    f"concurrently created run ancestor is not private: {directory}"
+                ) from error
 
 
 def _safe_format_component(
