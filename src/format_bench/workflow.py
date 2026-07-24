@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Literal, NotRequired, TypedDict
 
+from .artifact_digest import artifact_sha256
 from .canonical import canonical_hash, query_counts, read_csv, verify_table
 from .datasets import load_manifest
 from .formats.base import Artifact, FormatAdapter
@@ -68,7 +69,7 @@ def _measured_size_attempt(
         "status": "MEASURED",
         "native_bytes": artifact.native_bytes,
         "transport_zstd_bytes": artifact.transport_zstd_bytes,
-        "artifact_sha256": _sha256(artifact.path),
+        "artifact_sha256": artifact_sha256(artifact.path),
         "roundtrip_verified": verified,
     }
 
@@ -249,7 +250,7 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
                 raise ValueError("round-trip verification did not pass")
             if "size_observations" in entry:
                 first_attempt = entry["size_observations"]["attempts"][0]
-                if first_attempt.get("artifact_sha256") != _sha256(
+                if first_attempt.get("artifact_sha256") != artifact_sha256(
                     run_dir / entry["artifact"]
                 ):
                     raise ValueError(

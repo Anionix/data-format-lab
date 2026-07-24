@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import shutil
 from pathlib import Path
 from typing import TypeAlias, cast
 
+from .artifact_digest import artifact_sha256
 from .model import ExecutionState, transition
 
 JSONValue: TypeAlias = (
@@ -74,41 +74,6 @@ def _safe_run_path(
     return candidate
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-
-    def frame(kind: bytes, value: bytes = b"") -> None:
-        digest.update(kind)
-        digest.update(len(value).to_bytes(8, "big"))
-        digest.update(value)
-
-    def add_file(file_path: Path) -> None:
-        digest.update(file_path.stat().st_size.to_bytes(8, "big"))
-        with file_path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-
-    if path.is_file():
-        frame(b"root-file")
-        add_file(path)
-    elif path.is_dir():
-        frame(b"root-directory")
-        for child in sorted(path.rglob("*"), key=lambda item: item.as_posix()):
-            relative = child.relative_to(path).as_posix().encode("utf-8")
-            if child.is_symlink():
-                raise ValueError(f"artifact directory contains a symlink: {child}")
-            if child.is_dir():
-                frame(b"directory-entry", relative)
-            elif child.is_file():
-                frame(b"file-entry", relative)
-                add_file(child)
-            else:
-                raise ValueError(f"unsupported artifact entry: {child}")
-    else:
-        raise ValueError(f"artifact path is neither a file nor directory: {path}")
-    return digest.hexdigest()
-
-
 def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]:
     formats = manifest.get("formats")
     if not isinstance(formats, list):
@@ -153,7 +118,7 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
             "native_bytes": entry.get("native_bytes"),
             "transport_zstd_bytes": entry.get("transport_zstd_bytes"),
             "size_observations": entry.get("size_observations"),
-            "artifact_sha256": _sha256(artifact) if artifact.exists() else None,
+            "artifact_sha256": artifact_sha256(artifact) if artifact.exists() else None,
         }
     return identities
 
@@ -199,7 +164,7 @@ def merge_equivalence_shards(
     base_source = _safe_run_path(base_run, "input/source.csv", "input/source.csv")
     base_input_manifest = _read_json(base_input_manifest_path)
     base_formats = _format_identities(base_run, base_manifest)
-    base_source_sha256 = _sha256(base_source)
+    base_source_sha256 = artifact_sha256(base_source)
     merged_results: JSONObject = {}
     merged_pairs: JSONObject = {}
     shared_job_ids: list[JSONValue] = []
@@ -220,7 +185,7 @@ def merge_equivalence_shards(
         if _read_json(shard_input_manifest_path) != base_input_manifest:
             raise ValueError(f"input manifest mismatch in shard: {shard}")
         shard_source = _safe_run_path(shard, "input/source.csv", "input/source.csv")
-        if _sha256(shard_source) != base_source_sha256:
+        if artifact_sha256(shard_source) != base_source_sha256:
             raise ValueError(f"input source mismatch in shard: {shard}")
         if _format_identities(shard, manifest) != base_formats:
             raise ValueError(f"format artifact identity mismatch in shard: {shard}")

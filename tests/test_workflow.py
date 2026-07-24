@@ -6,8 +6,10 @@ import pyarrow as pa
 import pytest
 
 from format_bench import cli
+from format_bench.artifact_digest import artifact_sha256
 from format_bench.fair import Operation
 from format_bench.formats.base import Artifact, FormatDescription
+from format_bench.formats.lance import LanceAdapter
 from format_bench.formats.text import CsvAdapter, ObjectJsonlAdapter
 from format_bench.model import Comparability, Lane
 from format_bench.runner import MeasurementConfig
@@ -87,6 +89,41 @@ def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> 
         )
         for entry in verified["formats"]
     )
+
+
+def test_artifact_digest_rejects_root_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "data.bin").write_bytes(b"data")
+    link = tmp_path / "link"
+    link.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="must not be a symlink"):
+        artifact_sha256(link)
+
+
+def test_prepare_hashes_lance_directory_size_observations(tmp_path: Path) -> None:
+    root = Path(__file__).parents[1]
+    adapter = LanceAdapter()
+    run_dir = tmp_path / "run"
+
+    prepare_run(
+        root,
+        DATASET,
+        run_dir,
+        fixture=True,
+        selected=(adapter,),
+        size_observations=2,
+    )
+    verify_run(run_dir, {adapter.describe().name: adapter})
+
+    entry = json.loads((run_dir / "manifest.json").read_text())["formats"][0]
+    attempts = entry["size_observations"]["attempts"]
+    assert entry["state"] == "ROUNDTRIP_VERIFIED"
+    assert (run_dir / entry["artifact"]).is_dir()
+    assert not (run_dir / ".size-observations").exists()
+    assert [attempt["status"] for attempt in attempts] == ["MEASURED", "MEASURED"]
+    assert all(len(attempt["artifact_sha256"]) == 64 for attempt in attempts)
 
 
 @pytest.mark.parametrize(("fixture", "expected"), [(True, 2), (False, 10)])
