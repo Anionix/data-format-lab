@@ -502,7 +502,14 @@ def _robustness(results: dict) -> list[str]:
         for item in evidence["cases"]
     ]
     target_summary = evidence.get("target_summary")
-    if not isinstance(target_summary, dict) or not target_summary:
+    if (
+        not isinstance(target_summary, dict)
+        or not target_summary
+        or any(
+            not isinstance(item, dict) or "artifact_mutation" not in item
+            for item in target_summary.values()
+        )
+    ):
         target_summary = summarize_cases(evidence["cases"])
         evidence["target_summary"] = target_summary
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.

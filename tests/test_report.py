@@ -457,6 +457,8 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
                     "NOT_APPLICABLE": 0,
                     "INCOMPLETE": 0,
                 },
+                # A pre-mutation-metrics summary must be refreshed from persisted cases.
+                "target_summary": {"csv": {"tier": "CORE"}},
                 "cases": [
                     {
                         "target": "csv", "tier": "CORE", "details": {"engine": "coverage-guided"}, "case_id": "rows-1",
