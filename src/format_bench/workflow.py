@@ -153,9 +153,9 @@ def prepare_run(
 
     entries = []
     artifact_root = destination / "artifacts"
-    artifact_root.mkdir()
+    artifact_root.mkdir(mode=0o700)
     observation_root = destination / ".size-observations"
-    observation_root.mkdir()
+    observation_root.mkdir(mode=0o700)
     _ensure_contained(destination, artifact_root)
     _ensure_contained(destination, observation_root)
     # LLM contract: DISCOVERED -> ENCODED -> ROUNDTRIP_VERIFIED -> BENCHMARKED -> REPORTED.
@@ -199,7 +199,7 @@ def prepare_run(
                     observation_dir = _ensure_contained(
                         destination, observation_root / format_name
                     )
-                    observation_dir.mkdir(exist_ok=True)
+                    observation_dir.mkdir(mode=0o700, exist_ok=True)
                     repeated_path = _ensure_contained(
                         destination,
                         observation_dir / f"{attempt_index}{format_extension}",

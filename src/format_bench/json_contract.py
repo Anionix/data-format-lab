@@ -257,8 +257,9 @@ def atomic_write_json(path: Path, value: object) -> None:
                 temporary_name,
                 destination_name,
             )
-            # A later failure is post-publication: new bytes remain installed
-            # at the restrictive mode instead of exposing unpublished evidence.
+            # A mode-restoration failure is post-publication: new bytes remain
+            # installed at 0600. A later fsync failure may occur after the
+            # intended mode is installed; neither failure restores old bytes.
             os.fchmod(stream.fileno(), final_mode)
             os.fsync(stream.fileno())
         # LLM contract: TEMPORARY_OWNED -> PUBLISHED | RETAINED_FAILED.

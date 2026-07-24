@@ -290,6 +290,33 @@ def test_atomic_write_json_post_publish_mode_failure_stays_private(
     assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
 
 
+def test_atomic_write_json_post_publish_fsync_failure_keeps_intended_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "manifest.json"
+    destination.write_bytes(b'{"state":"ENCODED"}\n')
+    destination.chmod(0o644)
+    calls = 0
+    real_fsync = os.fsync
+
+    def fail_final_fsync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected final fsync failure")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(json_contract.os, "fsync", fail_final_fsync)
+
+    with pytest.raises(OSError, match="injected final fsync failure"):
+        atomic_write_json(destination, {"state": "REPORTED"})
+
+    assert destination.read_bytes() == b'{\n  "state": "REPORTED"\n}\n'
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+    assert list(tmp_path.glob(".manifest.json.*.tmp")) == []
+
+
 def test_atomic_write_json_rejects_symlink_destination(tmp_path: Path) -> None:
     outside = tmp_path / "outside.json"
     outside.write_bytes(b'{"outside":true}\n')

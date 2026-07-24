@@ -125,7 +125,7 @@ def _format_identities(run: Path, manifest: JSONObject) -> dict[str, JSONObject]
 def _hardlink_tree(source: Path, destination: Path) -> None:
     if source.is_symlink():
         raise ValueError(f"symlink is not allowed in shard input: {source}")
-    destination.mkdir(parents=True, exist_ok=True)
+    destination.mkdir(mode=0o700, parents=True, exist_ok=True)
     for entry in source.iterdir():
         target = destination / entry.name
         if entry.is_dir():

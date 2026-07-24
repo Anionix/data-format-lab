@@ -145,7 +145,8 @@ def test_merge_equivalence_shards_reuses_artifacts_and_unions_results(
 
     merged = json.loads((output / "results.json").read_text(encoding="utf-8"))
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-    assert stat.S_IMODE(output.stat().st_mode) == 0o700
+    for directory in (output, output / "input", output / "artifacts"):
+        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     assert merged["status"] == "MEASURED"
     assert set(merged["results"]) == {"arrow_ipc/read_all", "feather_v2/read_all"}
     assert set(merged["equivalence"]["pairs"]) == {"arrow-feather", "csv-tsv"}
