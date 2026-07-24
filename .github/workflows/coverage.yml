@@ -1,0 +1,41 @@
+name: Manual branch coverage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+
+      - name: Synchronize frozen Python environment
+        run: nix develop --command uv sync --frozen
+
+      # coverage.py branch measurement: https://coverage.readthedocs.io/en/7.10.7/branch.html
+      # uv --with contract: https://docs.astral.sh/uv/reference/cli/#uv-run--with
+      - name: Run branch coverage
+        run: nix develop --command uv run --frozen --with coverage==7.10.7 coverage run --branch --source=src -m pytest
+
+      - name: Write coverage reports
+        run: |
+          nix develop --command uv run --frozen --with coverage==7.10.7 coverage report
+          nix develop --command uv run --frozen --with coverage==7.10.7 coverage xml -o coverage.xml
+          nix develop --command uv run --frozen --with coverage==7.10.7 coverage html
+
+      - name: Upload coverage evidence
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: branch-coverage-${{ github.sha }}
+          path: |
+            coverage.xml
+            htmlcov/
+          if-no-files-found: error

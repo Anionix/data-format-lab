@@ -453,15 +453,23 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
                 },
                 "summary": {
                     "PASS": 1,
-                    "FAIL": 0,
+                    "FAIL": 1,
                     "NOT_APPLICABLE": 0,
                     "INCOMPLETE": 0,
                 },
+                # A pre-mutation-metrics summary must be refreshed from persisted cases.
+                "target_summary": {"csv": {"tier": "CORE"}},
                 "cases": [
                     {
                         "target": "csv", "tier": "CORE", "details": {"engine": "coverage-guided"}, "case_id": "rows-1",
                         "expectation": "MUST_ROUNDTRIP",
                         "observed": "ROUNDTRIP_EQUAL", "verdict": "PASS",
+                    },
+                    {
+                        "target": "csv", "tier": "CORE", "case_id": "mutation-000",
+                        "mutation": {"recipe_id": "recipe-000", "operation": "truncate"},
+                        "expectation": "MUST_NOT_CRASH",
+                        "observed": "CRASHED", "verdict": "FAIL",
                     },
                 ],
             }
@@ -482,4 +490,6 @@ def test_robustness_report_separates_case_contract_and_is_deterministic(
     reported = json.loads((tmp_path / "results.json").read_text())
     assert reported["results"]["robustness_v1"]["state"] == "REPORTED"
     assert reported["results"]["robustness_v1"]["target_summary"]["csv"]["pass"] == 1
+    assert "### Artifact Mutation Coverage" in first
+    assert "| csv | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 100.0 |" in first
     assert render_report(tmp_path).read_text() == first
