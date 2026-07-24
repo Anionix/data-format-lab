@@ -52,6 +52,15 @@ class FalseVerificationAdapter(CsvAdapter):
         return {"passed": False}
 
 
+class RecordingVerificationAdapter(CsvAdapter):
+    def __init__(self) -> None:
+        self.verification_calls = 0
+
+    def verify_roundtrip(self, path: Path, manifest: dict) -> dict:
+        self.verification_calls += 1
+        return {"passed": True}
+
+
 class UnsafeFormatAdapter(CsvAdapter):
     def __init__(self, name: str, extension: str = ".unsafe") -> None:
         self.unsafe_name = name
@@ -85,6 +94,39 @@ class SymlinkArtifactAdapter(CsvAdapter):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.symlink_to(self.target, target_is_directory=True)
         return Artifact(path, 1, 1, 0.0)
+
+
+def _minimal_verification_manifest(
+    input_manifest: str, artifact: str = "artifacts/csv.csv"
+) -> dict[str, object]:
+    return {
+        "input": {"manifest": input_manifest},
+        "formats": [
+            {
+                "format": "csv",
+                "artifact": artifact,
+                "state": "ENCODED",
+            }
+        ],
+        "state": "ENCODED",
+    }
+
+
+def _assert_verification_rejected(
+    run_dir: Path,
+    raw: str,
+    message: str,
+    error_type: type[Exception] = ValueError,
+) -> None:
+    manifest_path = run_dir / "manifest.json"
+    manifest_path.write_text(raw, encoding="utf-8")
+    adapter = RecordingVerificationAdapter()
+
+    with pytest.raises(error_type, match=message):
+        verify_run(run_dir, {"csv": adapter})
+
+    assert adapter.verification_calls == 0
+    assert manifest_path.read_text(encoding="utf-8") == raw
 
 
 def test_prepare_and_verify_fixture_record_relative_evidence(tmp_path: Path) -> None:
@@ -396,6 +438,108 @@ def test_verify_run_rejects_false_verification_result(tmp_path: Path) -> None:
     assert manifest["state"] == "FAILED"
     assert manifest["formats"][0]["state"] == "FAILED"
     assert "did not pass" in manifest["formats"][0]["failure_reason"]
+
+
+def test_verify_run_rejects_duplicate_input_manifest_keys_before_adapter(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    raw = (
+        '{"input":{"manifest":"input/manifest.json","manifest":'
+        f"{json.dumps(str(outside))}"
+        '},"formats":[{"format":"csv","artifact":"artifacts/csv.csv",'
+        '"state":"ENCODED"}],"state":"ENCODED"}'
+    )
+    _assert_verification_rejected(
+        run_dir,
+        raw,
+        "duplicate JSON object key",
+        json.JSONDecodeError,
+    )
+
+
+@pytest.mark.parametrize("path_kind", ["absolute", "parent", "symlink"])
+def test_verify_run_rejects_escaped_input_manifest_before_adapter(
+    tmp_path: Path, path_kind: str
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}", encoding="utf-8")
+    if path_kind == "absolute":
+        input_manifest = str(outside)
+    elif path_kind == "parent":
+        input_manifest = "../outside.json"
+    else:
+        input_dir = run_dir / "input"
+        input_dir.mkdir()
+        (input_dir / "manifest.json").symlink_to(outside)
+        input_manifest = "input/manifest.json"
+    manifest = _minimal_verification_manifest(input_manifest)
+    raw = json.dumps(manifest)
+    _assert_verification_rejected(run_dir, raw, "input manifest must be run-relative")
+
+
+@pytest.mark.parametrize("path_kind", ["absolute", "parent", "symlink"])
+def test_verify_run_rejects_escaped_artifact_before_adapter(
+    tmp_path: Path, path_kind: str
+) -> None:
+    run_dir = tmp_path / "run"
+    input_dir = run_dir / "input"
+    input_dir.mkdir(parents=True)
+    (input_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    outside = tmp_path / "outside.csv"
+    outside.write_text("outside", encoding="utf-8")
+    if path_kind == "absolute":
+        artifact = str(outside)
+    elif path_kind == "parent":
+        artifact = "../outside.csv"
+    else:
+        artifact_dir = run_dir / "artifacts"
+        artifact_dir.mkdir()
+        (artifact_dir / "csv.csv").symlink_to(outside)
+        artifact = "artifacts/csv.csv"
+    raw = json.dumps(_minimal_verification_manifest("input/manifest.json", artifact))
+    _assert_verification_rejected(run_dir, raw, "artifact path must be run-relative")
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    ["input/source.csv", "artifacts/../input/source.csv", "artifacts"],
+)
+def test_verify_run_rejects_artifact_outside_artifact_namespace(
+    tmp_path: Path, artifact: str
+) -> None:
+    run_dir = tmp_path / "run"
+    input_dir = run_dir / "input"
+    input_dir.mkdir(parents=True)
+    (input_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (input_dir / "source.csv").write_text("not encoded output", encoding="utf-8")
+    raw = json.dumps(_minimal_verification_manifest("input/manifest.json", artifact))
+    _assert_verification_rejected(run_dir, raw, "artifact path must be below artifacts")
+
+
+def test_verify_run_rejects_non_object_manifest(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    _assert_verification_rejected(run_dir, "[]", "run manifest must be an object")
+
+
+def test_verify_run_rejects_malformed_size_observations_before_adapter(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).parents[1]
+    run_dir = tmp_path / "run"
+    adapter = RecordingVerificationAdapter()
+    prepare_run(root, DATASET, run_dir, fixture=True, selected=(adapter,))
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["formats"][0]["size_observations"] = []
+    raw = json.dumps(manifest)
+    _assert_verification_rejected(run_dir, raw, "size_observations must be an object")
 
 
 def test_prepare_validates_dataset_before_creating_destination(tmp_path: Path) -> None:

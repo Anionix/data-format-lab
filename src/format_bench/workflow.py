@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Literal, NotRequired, TypedDict
+from typing import Iterable
 
 from .artifact_digest import artifact_sha256
 from .canonical import canonical_hash, query_counts, read_csv, verify_table
@@ -15,28 +14,18 @@ from .json_contract import strict_json_dumps
 from .model import ExecutionState, transition
 from .registry import adapter_map, adapters
 from .runner import environment_info
-
-
-class SizeAttempt(TypedDict):
-    index: int
-    status: Literal["MEASURED", "FAILED"]
-    native_bytes: NotRequired[int]
-    transport_zstd_bytes: NotRequired[int]
-    artifact_sha256: NotRequired[str]
-    roundtrip_verified: NotRequired[bool]
-    failure_reason: NotRequired[str]
-
-
-class SizeObservations(TypedDict):
-    contract_version: Literal["1"]
-    resampling_unit: Literal["same_process_encode_invocation"]
-    attempted: int
-    completed: int
-    attempts: list[SizeAttempt]
+from .workflow_contract import (
+    SizeAttempt,
+    SizeObservations,
+    json_object,
+    load_verification_contract,
+)
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(strict_json_dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        strict_json_dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -219,9 +208,13 @@ def prepare_run(
                     )
                     try:
                         repeated = adapter.encode(table, repeated_path)
-                        verification = adapter.verify_roundtrip(repeated_path, effective)
+                        verification = adapter.verify_roundtrip(
+                            repeated_path, effective
+                        )
                         if verification.get("passed") is not True:
-                            raise ValueError("repeated encoding round-trip did not pass")
+                            raise ValueError(
+                                "repeated encoding round-trip did not pass"
+                            )
                         observations["attempts"].append(
                             _measured_size_attempt(
                                 attempt_index,
@@ -291,10 +284,9 @@ def prepare_run(
 
 def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) -> Path:
     manifest_path = run_dir / "manifest.json"
-    run_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    dataset_manifest = json.loads(
-        (run_dir / run_manifest["input"]["manifest"]).read_text(encoding="utf-8")
-    )
+    contract = load_verification_contract(run_dir)
+    run_manifest = contract.manifest
+    dataset_manifest = contract.dataset_manifest
     registered = selected or adapter_map()
     if not run_manifest["formats"]:
         # LLM contract: empty verification selection transitions ENCODED -> FAILED with a failure reason.
@@ -305,20 +297,25 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
         _write_json(manifest_path, run_manifest)
         return manifest_path
     # LLM contract: only ENCODED evidence can advance to ROUNDTRIP_VERIFIED here.
-    for entry in run_manifest["formats"]:
+    for entry, artifact_path in zip(
+        run_manifest["formats"], contract.artifact_paths, strict=True
+    ):
         if entry["state"] != ExecutionState.ENCODED:
             continue
         try:
             verification = registered[entry["format"]].verify_roundtrip(
-                run_dir / entry["artifact"], dataset_manifest
+                artifact_path, dataset_manifest
             )
-            entry["verification"] = verification
-            if verification.get("passed") is not True:
+            normalized_verification = json_object(
+                verification, "round-trip verification"
+            )
+            entry["verification"] = normalized_verification
+            if normalized_verification.get("passed") is not True:
                 raise ValueError("round-trip verification did not pass")
             if "size_observations" in entry:
                 first_attempt = entry["size_observations"]["attempts"][0]
                 if first_attempt.get("artifact_sha256") != artifact_sha256(
-                    run_dir / entry["artifact"]
+                    artifact_path
                 ):
                     raise ValueError(
                         "verified artifact differs from encoded size evidence"
@@ -348,8 +345,7 @@ def verify_run(run_dir: Path, selected: dict[str, FormatAdapter] | None = None) 
         ):
             run_manifest["state"] = ExecutionState.ROUNDTRIP_VERIFIED
         elif any(
-            entry["state"] == ExecutionState.FAILED
-            for entry in run_manifest["formats"]
+            entry["state"] == ExecutionState.FAILED for entry in run_manifest["formats"]
         ):
             run_manifest["state"] = ExecutionState.FAILED
         else:
