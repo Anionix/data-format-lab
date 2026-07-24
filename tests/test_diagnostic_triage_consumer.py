@@ -107,6 +107,7 @@ def test_observation_outputs_do_not_pollute_repository_identity() -> None:
     evidence_names = (
         "diagnostic-triage-report.json",
         "diagnostic-triage-observer.jsonl",
+        "github-actions-run.json",
     )
     evidence_lines = [
         line
@@ -114,7 +115,22 @@ def test_observation_outputs_do_not_pollute_repository_identity() -> None:
         if any(name in line for name in evidence_names)
     ]
 
-    assert len(evidence_lines) == 5
+    assert len(evidence_lines) == 8
     assert all(
         "RUNNER_TEMP" in line or "runner.temp" in line for line in evidence_lines
     )
+
+
+def test_completed_ci_observation_uses_trusted_code_and_explicit_input() -> None:
+    workflow = (
+        ROOT / ".github" / "workflows" / "diagnostic-triage-observe.yml"
+    ).read_text()
+
+    assert "workflow_run:" in workflow
+    assert "workflows: [CI]" in workflow
+    assert "actions: read" in workflow
+    assert "ref: ${{ github.event.repository.default_branch }}" in workflow
+    assert "github.event.workflow_run.head_sha" not in workflow
+    assert '"repos/$GITHUB_REPOSITORY/actions/runs/$OBSERVED_RUN_ID"' in workflow
+    assert '--input "$input"' in workflow
+    assert "github.event.workflow_run.id || github.ref" in workflow
