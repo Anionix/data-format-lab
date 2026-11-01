@@ -1,0 +1,33 @@
+name: Web Atomic native formats
+
+on:
+  pull_request:
+    paths:
+      - "benchmarks/web_atomic/**"
+      - ".github/workflows/web-atomic-native-formats.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native libraries
+        run: python -m pip install --only-binary=:all: "vortex-data>=0.36,<1" "pyarrow>=20,<25" "brotli>=1,<2"
+      - name: Run actual native formats
+        run: python benchmarks/web_atomic/native_formats_ci.py
+      - name: Save audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-atomic-native-results
+          path: web_atomic_native_results/
+          if-no-files-found: warn
+          retention-days: 14
